@@ -20,9 +20,9 @@ class PostgresSettings(BaseSettings):
     # PostgreSQL Connection
     PG_HOST: str = "localhost"
     PG_PORT: int = 5433
-    PG_USER: str = "viren"
-    PG_PASSWORD: str = "Viren_password1!"
-    PG_DATABASE: str = "viren_langgraph"
+    PG_USER: str = "vox"
+    PG_PASSWORD: str = "Vox_password1!"
+    PG_DATABASE: str = "vox_langgraph"
     PG_SSLMODE: str = "disable"
 
     @property

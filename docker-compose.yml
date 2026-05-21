@@ -1,0 +1,62 @@
+services:
+  # =====================
+  # Databases
+  # =====================
+  postgres:
+    image: postgres:16-alpine
+    container_name: vox-postgres
+    environment:
+      POSTGRES_DB: ${PG_DB:-vox_langgraph}
+      POSTGRES_USER: ${PG_USER:-vox}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-Vox_password1!}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-vox} -d ${PG_DB:-vox_langgraph}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: vox-chroma
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    environment:
+      IS_PERSISTENT: "TRUE"
+      PERSIST_DIRECTORY: /chroma/chroma
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - chroma_data:/data
+
+
+  messagebroker:
+    image: rabbitmq:management
+    container_name: vox-mq
+    hostname: vox-mq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_connectivity"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # =====================
+  # Python Agents (FastAPI)
+  # =====================
+  
+volumes:
+  postgres_data:
+  chroma_data:

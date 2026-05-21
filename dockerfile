@@ -29,7 +29,7 @@ WORKDIR /app/src
 
 CMD ["uv", "run", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 
-#docker build -t duythong2/virenagents:latest .
-#docker build --no-cache -t duythong2/virenagents:latest .
-#docker push duythong2/virenagents:latest
+#docker build -t duythong2/voxagents:latest .
+#docker build --no-cache -t duythong2/voxagents:latest .
+#docker push duythong2/voxagents:latest
 

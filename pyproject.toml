@@ -42,6 +42,12 @@ dependencies = [
     "langgraph-checkpoint-postgres>=3.0.3",
     "uuid-utils>=0.13.0",
     "chromadb>=1.4.1",
+    "aiortc>=1.9.0",
+    "opencv-python-headless>=4.10.0",
+    "mediapipe>=0.10.14",
+    "ultralytics>=8.3.0",
+    "numpy>=1.26.0",
+    "pydantic>=2.8.0",
 ]
 
 [dependency-groups]

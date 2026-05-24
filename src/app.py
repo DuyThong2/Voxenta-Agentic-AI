@@ -26,6 +26,10 @@ from langgraph.checkpoint.postgres import PostgresSaver
 import psycopg
 from psycopg_pool import ConnectionPool
 
+from utils import load_root_dotenv
+
+load_root_dotenv()
+
 from controller import router
 from node.graphConfig import build_graph
 from config.postgresDB_config import settings as pg_settings

@@ -9,6 +9,7 @@ class SpeakingInput(BaseModel):
     # Có reference_text thì scripted.
     # Không có reference_text thì unscripted.
     reference_text: Optional[str] = None
+    corrected_transcript: Optional[str] = None
 
     mode: Literal["scripted", "unscripted"] = "unscripted"
     language: str = "en-US"

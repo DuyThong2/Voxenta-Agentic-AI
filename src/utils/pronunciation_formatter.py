@@ -5,7 +5,12 @@ into frontend-friendly API responses.
 
 from typing import Any, Dict, List, Optional
 
-from node.state_models import PronunciationAssessmentResult, WordFeedback, PhonemeFeedback
+from node.state_models import (
+    FormattedPronunciationResult,
+    PronunciationAssessmentResult,
+    WordFeedback,
+    PhonemeFeedback,
+)
 
 
 RED_THRESHOLD = 60
@@ -245,7 +250,7 @@ def format_pronunciation_api_response(
     mode: str,
     reference_text: Optional[str] = None,
     include_raw: bool = False,
-) -> Dict[str, Any]:
+) -> FormattedPronunciationResult:
     """
     Format pronunciation result for frontend.
 
@@ -289,4 +294,4 @@ def format_pronunciation_api_response(
     if include_raw:
         response["raw_result"] = result.raw_result
 
-    return response
+    return FormattedPronunciationResult.parse_obj(response)

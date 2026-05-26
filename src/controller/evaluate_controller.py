@@ -10,7 +10,6 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 
 from node.state_models import SpeakingInput
-from utils.pronunciation_formatter import format_pronunciation_api_response
 
 
 router = APIRouter(prefix="/evaluate", tags=["Evaluate"])
@@ -73,15 +72,6 @@ def evaluate_pronunciation_sample(
 
     pronunciation_result = result.get("pronunciation_result")
 
-    formatted_result = None
-    if pronunciation_result:
-        formatted_result = format_pronunciation_api_response(
-            pronunciation_result,
-            mode=mode,
-            reference_text=reference_text if mode == "scripted" else None,
-            include_raw=False,
-        )
-
     return jsonable_encoder(
         {
             "status": result.get("status"),
@@ -89,7 +79,7 @@ def evaluate_pronunciation_sample(
             "audio_path": str(audio_path),
             "mode": mode,
             "reference_text": reference_text if mode == "scripted" else None,
-            "result": formatted_result,
+            "result": pronunciation_result,
             "metadata": result.get("metadata", {}),
         }
     )

@@ -5,7 +5,7 @@ from langgraph.graph.message import add_messages
 
 from .state_models import (
     SpeakingInput,
-    PronunciationAssessmentResult,
+    FormattedPronunciationResult,
 )
 
 
@@ -13,7 +13,9 @@ class GraphState(TypedDict, total=False):
     messages: Annotated[List[BaseMessage], add_messages]
 
     speaking_input: SpeakingInput
-    pronunciation_result: PronunciationAssessmentResult
+    pronunciation_result: FormattedPronunciationResult
+
+    corrected_transcript: Optional[str]
 
     status: Literal["idle", "processing", "completed", "error"]
     error: Optional[str]

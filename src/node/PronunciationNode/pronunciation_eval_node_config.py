@@ -4,25 +4,25 @@ Pronunciation Evaluation Node using Azure Speech Pronunciation Assessment.
 This node:
 - Receives SpeakingInput from GraphState
 - Calls Azure Speech Pronunciation Assessment
-- Returns PronunciationAssessmentResult into GraphState
-
-Supported modes:
-- scripted: reference_text is provided
+    - Returns formatted pronunciation result into GraphState
 - unscripted: reference_text is None or empty
 """
 
 import json
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 import azure.cognitiveservices.speech as speechsdk
 
 from utils import load_root_dotenv
 from node.state_models.pronunciation import (
+    FormattedPronunciationResult,
     PhonemeFeedback,
     PronunciationAssessmentResult,
     WordFeedback,
 )
+from utils.pronunciation_formatter import format_pronunciation_api_response
 
 load_root_dotenv()
 
@@ -38,6 +38,16 @@ def score_to_color(score: Optional[float]) -> str:
     if score < 80:
         return "yellow"
     return "green"
+
+
+def normalize_text(text: Optional[str]) -> Optional[str]:
+    if text is None:
+        return None
+
+    normalized = text.lower()
+    normalized = re.sub(r"[^\w\s']", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized or None
 
 
 def build_speech_config() -> speechsdk.SpeechConfig:
@@ -153,8 +163,16 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     audio_path = speaking_input.audio_path
-    reference_text = speaking_input.reference_text or ""
     language = speaking_input.language or "en-US"
+    
+    # Use corrected transcript if available (from correction_node or speaking_input)
+    corrected_transcript = state.get("corrected_transcript") or speaking_input.corrected_transcript
+    
+    # For unscripted mode, use corrected transcript; for scripted, use normalized reference_text.
+    if speaking_input.mode == "unscripted" and corrected_transcript:
+        reference_text = corrected_transcript
+    else:
+        reference_text = normalize_text(speaking_input.reference_text or "") or ""
 
     if not audio_path:
         return {
@@ -237,9 +255,16 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             raw_result=data,
         )
 
+        formatted_result = format_pronunciation_api_response(
+            pronunciation_result,
+            mode=speaking_input.mode,
+            reference_text=reference_text if reference_text else None,
+            include_raw=False,
+        )
+
         return {
             **state,
-            "pronunciation_result": pronunciation_result,
+            "pronunciation_result": formatted_result,
             "status": "completed",
             "error": None,
         }

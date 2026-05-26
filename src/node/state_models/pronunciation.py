@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional,Dict, Any
 
 from pydantic import BaseModel, Field
 
@@ -30,3 +30,15 @@ class PronunciationAssessmentResult(BaseModel):
 
     # Để debug, lúc production có thể bỏ/lưu DB riêng
     raw_result: Optional[dict] = None
+
+
+class FormattedPronunciationResult(BaseModel):
+    recognized_text: Optional[str] = None
+    reference_text: Optional[str] = None
+    mode: Optional[str] = None
+    overall: Dict[str, Optional[float]] = Field(default_factory=dict)
+    criteria: Dict[str, Any] = Field(default_factory=dict)
+    correction_summary: Dict[str, Any] = Field(default_factory=dict)
+    word_feedback: List[Dict[str, Any]] = Field(default_factory=list)
+    notes: List[str] = Field(default_factory=list)
+    raw_result: Optional[Dict[str, Any]] = None

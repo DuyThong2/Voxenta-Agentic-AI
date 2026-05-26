@@ -3,17 +3,23 @@
 from langgraph.graph import END, START, StateGraph
 
 from node.GraphState import GraphState
+from node.CorrectionNode.correction_node_config import correction_node
 from node.PronunciationNode.pronunciation_eval_node_config import (
     pronunciation_eval_node,
 )
+from node.StartNode.start_node_config import start_node
 
 
 def build_graph(checkpointer=None):
     g = StateGraph(GraphState)
 
+    g.add_node("start", start_node)
+    g.add_node("correction", correction_node)
     g.add_node("pronunciation_eval", pronunciation_eval_node)
 
-    g.add_edge(START, "pronunciation_eval")
+    g.add_edge(START, "start")
+    g.add_edge("start", "correction")
+    g.add_edge("correction", "pronunciation_eval")
     g.add_edge("pronunciation_eval", END)
 
     if checkpointer is not None:

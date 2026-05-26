@@ -19,12 +19,20 @@ logging.basicConfig(
 logging.getLogger("infra.rabbit_consumer").setLevel(logging.INFO)
 logging.getLogger("vector.indexer").setLevel(logging.INFO)
 
+from utils import load_root_dotenv
+
+load_root_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from langgraph.checkpoint.postgres import PostgresSaver
 import psycopg
 from psycopg_pool import ConnectionPool
+
+from config.langsmith_config import setup_langsmith, get_langsmith_status
+
+setup_langsmith()
 
 from controller import router
 from node.graphConfig import build_graph
@@ -42,6 +50,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("[app] Starting up...")
+    logger.info(f"[langsmith] {get_langsmith_status()}")
 
     # 1) Setup checkpointer
     with psycopg.connect(pg_settings.PG_URI, autocommit=True) as conn:

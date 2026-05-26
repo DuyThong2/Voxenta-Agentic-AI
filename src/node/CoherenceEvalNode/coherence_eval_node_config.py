@@ -1,34 +1,70 @@
 """Coherence evaluation node using LLM to assess logical flow and connected discourse."""
 
 import json
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from node.CoherenceEvalNode.coherence_eval_prompt import SYSTEM_PROMPT
+from node.state_models import SpeakingInput
 
 
-def build_user_prompt(transcript: str, reference_text: str | None, mode: str) -> str:
-    parts = [f"Mode: {mode}", f'Transcript: "{transcript}"']
+def build_question_context(speaking_input: SpeakingInput) -> str:
+    """Build question/topic context block for the LLM prompt."""
+    parts = []
+
+    if speaking_input.question_text:
+        parts.append(f'Question: "{speaking_input.question_text}"')
+
+    if speaking_input.question_type:
+        parts.append(f"Question type: {speaking_input.question_type}")
+
+    if speaking_input.difficulty_level:
+        parts.append(f"Difficulty: {speaking_input.difficulty_level}")
+
+    if speaking_input.duration_seconds is not None:
+        parts.append(f"Expected duration: {speaking_input.duration_seconds}s")
+
+    if speaking_input.topic_name:
+        parts.append(f"Topic: {speaking_input.topic_name}")
+
+    if speaking_input.topic_description:
+        parts.append(f"Topic description: {speaking_input.topic_description}")
+
+    return "\n".join(parts) if parts else "No question context provided."
+
+
+def build_user_prompt(speaking_input: SpeakingInput, transcript: str, reference_text: Optional[str]) -> str:
+    mode = speaking_input.mode or "unscripted"
+    question_context = build_question_context(speaking_input)
+
+    parts = [
+        "## Question Context",
+        question_context,
+        "",
+        "## Speaker's Answer",
+        f"Mode: {mode}",
+        f'Transcript: "{transcript}"',
+    ]
 
     if reference_text:
         parts.append(f'Reference text: "{reference_text}"')
 
     if mode == "scripted":
-        parts.append("\nThe speaker was reading the reference text aloud. Evaluate coherence based on natural flow and rhythm.")
+        parts.append("\nThis is a scripted read-aloud test. Coherence scores are diagnostic only.")
     else:
-        parts.append("\nThe speaker was speaking freely. Evaluate coherence based on logical structure and connected discourse.")
+        parts.append("\nEvaluate whether the answer is relevant to the question and topic, then assess coherence.")
 
     return "\n".join(parts)
 
 
-def call_llm(transcript: str, reference_text: str | None, mode: str) -> Dict[str, Any]:
+def call_llm(speaking_input: SpeakingInput, transcript: str, reference_text: Optional[str]) -> Dict[str, Any]:
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=build_user_prompt(transcript, reference_text, mode)),
+        HumanMessage(content=build_user_prompt(speaking_input, transcript, reference_text)),
     ]
 
     response = llm.invoke(messages)
@@ -57,7 +93,7 @@ def merge_coherence_score(pronunciation_result: Any, llm_response: Dict[str, Any
         fc["score"] = round((fluency_score + coherence_score) / 2, 1)
 
     fc["subscores"] = subscores
-    fc["note"] = "Fluency from audio assessment. Coherence from LLM transcript analysis."
+    fc["note"] = llm_response.get("note", "Fluency from audio. Coherence from LLM analysis.")
     criteria["fluency_and_coherence"] = fc
 
     pronunciation_result.criteria = criteria
@@ -91,10 +127,9 @@ def coherence_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
         return {**state, "status": "error", "error": "No transcript available for coherence evaluation"}
 
     reference_text = speaking_input.reference_text
-    mode = speaking_input.mode or "unscripted"
 
     try:
-        llm_response = call_llm(transcript, reference_text, mode)
+        llm_response = call_llm(speaking_input, transcript, reference_text)
         updated_result = merge_coherence_score(pronunciation_result, llm_response)
 
         return {**state, "pronunciation_result": updated_result, "status": "processing", "error": None}

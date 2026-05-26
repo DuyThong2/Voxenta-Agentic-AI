@@ -21,3 +21,16 @@ class SpeakingInput(BaseModel):
 
     mode: Literal["scripted", "unscripted"] = "unscripted"
     language: str = "en-US"
+
+    # Question context — được truyền từ .NET backend khi evaluate.
+    # LLM evaluator dùng để chấm điểm chính xác hơn.
+    question_id: Optional[int] = None
+    question_text: Optional[str] = None
+    question_type: Optional[str] = None  # read_aloud, short_answer, long_answer, opinion, description
+    difficulty_level: Optional[str] = None  # easy, medium, hard
+    duration_seconds: Optional[int] = None
+
+    # Topic context
+    topic_id: Optional[int] = None
+    topic_name: Optional[str] = None
+    topic_description: Optional[str] = None

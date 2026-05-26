@@ -40,20 +40,34 @@ def correction_node(state: Dict[str, Any]) -> Dict[str, Any]:
     
     Expected state:
     {
-        "speaking_input": SpeakingInput(...),
-        "transcribed_text": str
+        "speaking_input": SpeakingInput(...)
     }
     
     Returns state with:
     {
         "speaking_input": SpeakingInput updated with corrected_transcript,
-        "corrected_transcript": str,
         "status": "processing"
     }
+    
+    If reference_text is already present, this node is skipped because the
+    final pronunciation node compares audio directly against reference_text.
     """
     
     speaking_input = state.get("speaking_input")
-    transcribed_text = state.get("transcribed_text")
+
+    if speaking_input and speaking_input.reference_text:
+        return {
+            **state,
+            "speaking_input": speaking_input,
+            "status": "processing",
+            "metadata": {
+                **state.get("metadata", {}),
+                "correction_skipped": True,
+                "correction_reason": "reference_text provided",
+            },
+        }
+
+    transcribed_text = speaking_input.transcribed_text if speaking_input else None
     
     if not transcribed_text:
         return {
@@ -68,19 +82,16 @@ def correction_node(state: Dict[str, Any]) -> Dict[str, Any]:
         if speaking_input:
             speaking_input.corrected_transcript = corrected_transcript
 
-        next_state = {k: v for k, v in state.items() if k not in ("transcribed_text", "formatted_reference_text")}
-        next_state.update({
+        return {
+            **state,
             "speaking_input": speaking_input,
-            "corrected_transcript": corrected_transcript,
             "status": "processing",
             "metadata": {
                 **state.get("metadata", {}),
                 "original_transcript": transcribed_text,
                 "correction_applied": corrected_transcript != transcribed_text,
             },
-        })
-
-        return next_state
+        }
     
     except Exception as exc:
         return {

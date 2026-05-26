@@ -165,14 +165,21 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
     audio_path = speaking_input.audio_path
     language = speaking_input.language or "en-US"
     
-    # Use corrected transcript if available (from correction_node or speaking_input)
-    corrected_transcript = state.get("corrected_transcript") or speaking_input.corrected_transcript
-    
-    # For unscripted mode, use corrected transcript; for scripted, use normalized reference_text.
-    if speaking_input.mode == "unscripted" and corrected_transcript:
-        reference_text = corrected_transcript
-    else:
+    # If reference_text is available, compare audio directly against it.
+    # Otherwise, for unscripted mode, use corrected_transcript when available,
+    # or fallback to raw transcribed_text.
+    corrected_transcript = speaking_input.corrected_transcript
+
+    if speaking_input.mode == "scripted":
         reference_text = normalize_text(speaking_input.reference_text or "") or ""
+        if not reference_text:
+            return {
+                **state,
+                "status": "error",
+                "error": "reference_text is required for scripted pronunciation evaluation",
+            }
+    else:
+        reference_text = corrected_transcript or speaking_input.transcribed_text or ""
 
     if not audio_path:
         return {

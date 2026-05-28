@@ -27,6 +27,9 @@ Use these score ranges based on the category:
 - For short_answer questions, short responses are acceptable and should not be penalized for brevity if they answer directly.
 - For long_answer / opinion / description questions, underdeveloped or too-short responses should lose coherence points because they are not fully developed.
 - If the answer is short but still directly answers a short-answer prompt, do not lower coherence for length alone.
+ - Use answer_length_metrics as soft evidence for expected answer development.
+ - If answer_length_metrics.length_category is too_short for description/opinion/long_answer, reduce coherence because the answer is underdeveloped.
+ - If a coherence_cap is provided, score should usually not exceed that cap.
 
 ### 3. Coherence Quality
 After relevance and length, judge connection and organization:

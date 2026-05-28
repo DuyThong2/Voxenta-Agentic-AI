@@ -24,13 +24,10 @@ Judge grammar based on form and clarity, not whether the answer is on-topic.
 - long_answer / opinion / description: expect some variety and complexity. Penalize if structure is too basic for the difficulty, but only when grammar is accurate and understandable.
 
 ### 3. Grammar Quality
-- 80-100: accurate grammar, appropriate structure, and only minor errors. Simple correct sentences can still earn a high score.
-- 60-79: accurate overall, but structure is limited or a few small mistakes appear.
-- 40-59: frequent grammar issues or limited structure that sometimes affects meaning.
-- 0-39: serious grammatical errors, fragmented speech, or unclear meaning.
+ - Use answer_length_metrics as soft evidence for expected grammatical range and structural development.
+ - If answer_length_metrics.length_category is too_short, the range subscore should be lower, but do not lower accuracy if the grammar is correct.
+ - If a grammar_range_cap is provided, range should usually not exceed that cap.
 
-Subscores:
-- range (0-100): variety and complexity of sentence structures used
 - accuracy (0-100): correctness of grammar
 
 ### 4. Calibration Notes

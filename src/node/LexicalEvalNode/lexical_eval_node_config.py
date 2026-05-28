@@ -51,6 +51,14 @@ def build_user_prompt(speaking_input: SpeakingInput, transcript: str, reference_
     if reference_text:
         parts.append(f'Reference text: "{reference_text}"')
 
+    if speaking_input.answer_length_metrics:
+        parts.append("\n## Answer Length Metrics")
+        parts.append(f"Word count: {speaking_input.answer_length_metrics.get('word_count')}")
+        parts.append(f"Sentence count: {speaking_input.answer_length_metrics.get('sentence_count')}")
+        parts.append(f"Length category: {speaking_input.answer_length_metrics.get('length_category')}")
+        parts.append(f"Expected min words: {speaking_input.answer_length_metrics.get('expected_min_words')}")
+        parts.append(f"Lexical range cap: {speaking_input.answer_length_metrics.get('lexical_range_cap')}")
+
     if mode == "scripted":
         parts.append("\nThis is a scripted read-aloud test. Vocabulary scores are diagnostic only.")
     else:

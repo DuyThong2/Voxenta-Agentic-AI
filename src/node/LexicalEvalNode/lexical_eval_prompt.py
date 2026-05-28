@@ -24,6 +24,9 @@ Consider three internal dimensions when judging vocabulary:
 - vocabulary_range: is the vocabulary varied and rich?
 - topic_vocabulary: does the response use words related to the question/topic?
 Use these to guide the final score and note, but do not add new output fields.
+ - Use answer_length_metrics as soft evidence for vocabulary range and topic development only.
+ - If answer_length_metrics.length_category is too_short, vocabulary range should usually be lower, but accuracy can remain high if words are correct.
+ - If a lexical_range_cap is provided, range should usually not exceed that cap.
 
 ### 3. Question Type Handling
 - read_aloud / scripted: vocabulary is diagnostic only. Compare word accuracy against reference text and say "diagnostic only" in the note.

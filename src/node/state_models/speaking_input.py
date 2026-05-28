@@ -30,6 +30,9 @@ class SpeakingInput(BaseModel):
     difficulty_level: Optional[str] = None  # easy, medium, hard
     duration_seconds: Optional[int] = None
 
+    # Answer length analysis for development scoring.
+    answer_length_metrics: Optional[dict] = None
+
     # Topic context
     topic_id: Optional[int] = None
     topic_name: Optional[str] = None

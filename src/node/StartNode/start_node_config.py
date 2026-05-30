@@ -96,15 +96,14 @@ def start_node(state: GraphState) -> dict:
         normalized_transcript = normalize_text(transcript)
 
         if speaking_input.mode == "scripted":
+            # For scripted mode, reference_text is authoritative and should be normalized.
             speaking_input.reference_text = normalize_text(speaking_input.reference_text)
-        else:
-            # For unscripted mode, keep a normalized transcript as the reference_text until correction finishes.
-            speaking_input.reference_text = normalized_transcript
+
+        speaking_input.transcribed_text = transcript
 
         return {
             **state,
             "speaking_input": speaking_input,
-            "transcribed_text": transcript,
             "status": "processing",
             "metadata": {
                 **state.get("metadata", {}),

@@ -11,6 +11,7 @@ from node.state_models import (
     WordFeedback,
     PhonemeFeedback,
 )
+from schemas.scoring import CriteriaScores, CriterionScore
 
 
 RED_THRESHOLD = 60
@@ -202,46 +203,44 @@ def build_correction_summary(words: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def build_ielts_like_scores(result: PronunciationAssessmentResult) -> Dict[str, Any]:
+def build_criteria_scores(result: PronunciationAssessmentResult) -> CriteriaScores:
     """
-    This is not official IELTS scoring.
-    It only formats the system's internal criteria in an IELTS-like structure.
+    Build CriteriaScores aligned with schemas.scoring.CriteriaScores:
+    pronunciation, fluency, grammar, vocabulary, coherence.
 
-    Future expansion:
-    - pronunciation: Azure
-    - fluency_and_coherence: Azure fluency + LLM coherence
-    - lexical_resource: LLM vocabulary
-    - grammatical_range_and_accuracy: LLM grammar
+    - pronunciation: Azure speech assessment
+    - fluency: Azure fluency score
+    - coherence: LLM (added by coherence_eval_node)
+    - vocabulary: LLM (added by lexical_eval_node)
+    - grammar: LLM (added by grammar_eval_node)
     """
 
-    return {
-        "pronunciation": {
-            "score": round_score(result.pron_score or result.accuracy_score),
-            "subscores": {
+    return CriteriaScores(
+        pronunciation=CriterionScore(
+            score=round_score(result.pron_score or result.accuracy_score),
+            subscores={
                 "accuracy": round_score(result.accuracy_score),
                 "prosody": round_score(result.prosody_score),
             },
-            "note": "Based on pronunciation accuracy and prosody from speech assessment.",
-        },
-        "fluency_and_coherence": {
-            "score": round_score(result.fluency_score),
-            "subscores": {
+            note="Based on pronunciation accuracy and prosody from speech assessment.",
+        ),
+        fluency=CriterionScore(
+            score=round_score(result.fluency_score),
+            subscores={
                 "fluency": round_score(result.fluency_score),
-                "coherence": None,
             },
-            "note": "Current version only includes fluency from audio. Coherence will be added from transcript analysis.",
-        },
-        "lexical_resource": {
-            "score": None,
-            "subscores": {},
-            "note": "Not evaluated yet. This will be evaluated from transcript by the LLM module.",
-        },
-        "grammatical_range_and_accuracy": {
-            "score": None,
-            "subscores": {},
-            "note": "Not evaluated yet. This will be evaluated from transcript by the LLM module.",
-        },
-    }
+            note="Azure speech fluency assessment score.",
+        ),
+        coherence=CriterionScore(
+            note="Not evaluated yet. This will be evaluated from transcript by the LLM module.",
+        ),
+        vocabulary=CriterionScore(
+            note="Not evaluated yet. This will be evaluated from transcript by the LLM module.",
+        ),
+        grammar=CriterionScore(
+            note="Not evaluated yet. This will be evaluated from transcript by the LLM module.",
+        ),
+    )
 
 
 def format_pronunciation_api_response(
@@ -256,7 +255,10 @@ def format_pronunciation_api_response(
 
     Frontend should use:
     - criteria.pronunciation
-    - criteria.fluency_and_coherence
+    - criteria.fluency
+    - criteria.coherence
+    - criteria.vocabulary
+    - criteria.grammar
     - correction_summary.weak_words
     - word_feedback
     """
@@ -281,7 +283,7 @@ def format_pronunciation_api_response(
                 else None
             ),
         },
-        "criteria": build_ielts_like_scores(result),
+        "criteria": build_criteria_scores(result),
         "correction_summary": build_correction_summary(words),
         "word_feedback": words,
         "notes": [

@@ -1,6 +1,8 @@
-from typing import List, Literal, Optional,Dict, Any
+from typing import List, Literal, Optional, Dict, Any
 
 from pydantic import BaseModel, Field
+
+from schemas.scoring import CriteriaScores
 
 
 class PhonemeFeedback(BaseModel):
@@ -37,7 +39,9 @@ class FormattedPronunciationResult(BaseModel):
     reference_text: Optional[str] = None
     mode: Optional[str] = None
     overall: Dict[str, Optional[float]] = Field(default_factory=dict)
-    criteria: Dict[str, Any] = Field(default_factory=dict)
+    criteria: CriteriaScores = Field(default_factory=lambda: CriteriaScores(
+        pronunciation={}, fluency={}, grammar={}, vocabulary={}, coherence={},
+    ))
     correction_summary: Dict[str, Any] = Field(default_factory=dict)
     word_feedback: List[Dict[str, Any]] = Field(default_factory=list)
     notes: List[str] = Field(default_factory=list)

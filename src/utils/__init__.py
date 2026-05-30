@@ -4,12 +4,15 @@ import uuid
 from datetime import datetime, timezone
 
 from .env import get_project_root, load_root_dotenv
+from .transcript_selector import select_text_for_language_scoring, build_scoring_metadata
 
 __all__ = [
     "new_id",
     "now_iso",
     "get_project_root",
     "load_root_dotenv",
+    "select_text_for_language_scoring",
+    "build_scoring_metadata",
 ]
 
 

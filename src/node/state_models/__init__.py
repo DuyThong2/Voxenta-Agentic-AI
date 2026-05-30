@@ -5,7 +5,7 @@ from .pronunciation import (
     FormattedPronunciationResult,
 )
 
-from .speaking_input import SpeakingInput
+from .speaking_input import SpeakingInput, QuestionContext, TopicContext
 
 __all__ = [
     "PhonemeFeedback",
@@ -13,4 +13,6 @@ __all__ = [
     "PronunciationAssessmentResult",
     "FormattedPronunciationResult",
     "SpeakingInput",
+    "QuestionContext",
+    "TopicContext",
 ]

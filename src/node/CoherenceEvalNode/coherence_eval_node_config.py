@@ -1,13 +1,21 @@
-"""Coherence evaluation node using LLM to assess logical flow and connected discourse."""
+"""Coherence evaluation node using LLM to assess logical flow and connected discourse.
+
+This node evaluates coherence based on the student's actual speech output
+(transcribed_text), NOT the Azure reference text or scripted model answer.
+
+Transcript priority: transcribed_text > corrected_transcript > reference_text (fallback).
+See utils.transcript_selector for details.
+"""
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from node.CoherenceEvalNode.coherence_eval_prompt import SYSTEM_PROMPT
 from node.state_models import SpeakingInput
+from utils.transcript_selector import select_text_for_language_scoring, build_scoring_metadata
 
 
 def build_question_context(speaking_input: SpeakingInput) -> str:
@@ -35,7 +43,7 @@ def build_question_context(speaking_input: SpeakingInput) -> str:
     return "\n".join(parts) if parts else "No question context provided."
 
 
-def build_user_prompt(speaking_input: SpeakingInput, transcript: str, reference_text: Optional[str]) -> str:
+def build_user_prompt(speaking_input: SpeakingInput, transcript: str) -> str:
     mode = speaking_input.mode or "unscripted"
     question_context = build_question_context(speaking_input)
 
@@ -47,9 +55,6 @@ def build_user_prompt(speaking_input: SpeakingInput, transcript: str, reference_
         f"Mode: {mode}",
         f'Transcript: "{transcript}"',
     ]
-
-    if reference_text:
-        parts.append(f'Reference text: "{reference_text}"')
 
     if speaking_input.answer_length_metrics:
         parts.append("\n## Answer Length Metrics")
@@ -67,12 +72,12 @@ def build_user_prompt(speaking_input: SpeakingInput, transcript: str, reference_
     return "\n".join(parts)
 
 
-def call_llm(speaking_input: SpeakingInput, transcript: str, reference_text: Optional[str]) -> Dict[str, Any]:
+def call_llm(speaking_input: SpeakingInput, transcript: str) -> Dict[str, Any]:
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=build_user_prompt(speaking_input, transcript, reference_text)),
+        HumanMessage(content=build_user_prompt(speaking_input, transcript)),
     ]
 
     response = llm.invoke(messages)
@@ -125,22 +130,23 @@ def coherence_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
     if pronunciation_result is None:
         return {**state, "status": "error", "error": "pronunciation_result is required. Run pronunciation_eval first."}
 
-    transcript = (
-        speaking_input.corrected_transcript
-        or speaking_input.transcribed_text
-        or pronunciation_result.recognized_text
-    )
+    # Select transcript: transcribed_text > corrected_transcript > reference_text (fallback).
+    # Do NOT use Azure reference_text as the primary scoring input.
+    transcript, source = select_text_for_language_scoring(speaking_input)
 
-    if not transcript:
+    if transcript is None:
         return {**state, "status": "error", "error": "No transcript available for coherence evaluation"}
 
-    reference_text = speaking_input.reference_text
+    scoring_meta = build_scoring_metadata(source, speaking_input.mode)
 
     try:
-        llm_response = call_llm(speaking_input, transcript, reference_text)
+        llm_response = call_llm(speaking_input, transcript)
         updated_result = merge_coherence_score(pronunciation_result, llm_response)
 
-        return {**state, "pronunciation_result": updated_result, "status": "processing", "error": None}
+        existing_meta = state.get("metadata") or {}
+        merged_meta = {**existing_meta, **scoring_meta}
+
+        return {**state, "pronunciation_result": updated_result, "metadata": merged_meta, "status": "completed", "error": None}
 
     except json.JSONDecodeError as exc:
         return {**state, "status": "error", "error": f"LLM returned invalid JSON: {str(exc)}"}

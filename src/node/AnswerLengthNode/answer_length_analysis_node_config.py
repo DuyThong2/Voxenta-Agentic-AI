@@ -7,6 +7,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from node.AnswerLengthNode.answer_length_analysis_prompt import SYSTEM_PROMPT
 from node.state_models import SpeakingInput
+from utils.transcript_selector import select_text_for_language_scoring, build_scoring_metadata
 
 
 def get_expected_min_words(question_type: Optional[str], duration_seconds: Optional[int]) -> int:
@@ -114,11 +115,9 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
     if speaking_input is None:
         return {**state, "status": "error", "error": "speaking_input is required for answer_length_analysis_node"}
 
-    transcript = (
-        speaking_input.corrected_transcript
-        or speaking_input.transcribed_text
-        or ""
-    )
+    # Select transcript: transcribed_text > corrected_transcript > reference_text (fallback).
+    transcript, _source = select_text_for_language_scoring(speaking_input)
+    transcript = transcript or ""
 
     words = re.findall(r"\b\w+\b", transcript or "")
     word_count = len(words)

@@ -14,12 +14,22 @@ from node.AnswerLengthNode.answer_length_analysis_node_config import (
     answer_length_analysis_node,
 )
 from node.StartNode.start_node_config import start_node
+from node.ValidityNode.validity_node_config import validity_node
+
+
+def route_after_validity(state: GraphState) -> str:
+    """Route to END if validity rejects, otherwise continue to correction."""
+    validity = state.get("validity") or {}
+    if validity.get("action") == "reject_or_zero":
+        return "end"
+    return "continue"
 
 
 def build_graph(checkpointer=None):
     g = StateGraph(GraphState)
 
     g.add_node("start", start_node)
+    g.add_node("strict_validity_check", validity_node)
     g.add_node("correction", correction_node)
     g.add_node("pronunciation_eval", pronunciation_eval_node)
     g.add_node("answer_length_analysis", answer_length_analysis_node)
@@ -28,7 +38,17 @@ def build_graph(checkpointer=None):
     g.add_node("grammar_eval", grammar_eval_node)
 
     g.add_edge(START, "start")
-    g.add_edge("start", "correction")
+    g.add_edge("start", "strict_validity_check")
+
+    g.add_conditional_edges(
+        "strict_validity_check",
+        route_after_validity,
+        {
+            "end": END,
+            "continue": "correction",
+        },
+    )
+
     g.add_edge("correction", "pronunciation_eval")
     g.add_edge("pronunciation_eval", "answer_length_analysis")
     g.add_edge("answer_length_analysis", "coherence_eval")

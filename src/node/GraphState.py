@@ -18,3 +18,4 @@ class GraphState(TypedDict, total=False):
     status: Literal["idle", "processing", "completed", "error"]
     error: Optional[str]
     metadata: Dict[str, Any]
+    validity: Optional[Dict[str, Any]]

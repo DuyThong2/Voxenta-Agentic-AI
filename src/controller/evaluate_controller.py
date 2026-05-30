@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 
 from node.state_models import SpeakingInput
+from utils.assessment_response_adapter import adapt_current_response_to_ui_response
 
 
 router = APIRouter(prefix="/evaluate", tags=["Evaluate"])
@@ -62,17 +63,39 @@ def _invoke_graph(
 
     result = graph.invoke(initial_state, config=graph_config)
 
-    return jsonable_encoder(
-        {
-            "status": result.get("status"),
-            "error": result.get("error"),
-            "audio_path": str(audio_path),
-            "mode": mode,
-            "reference_text": reference_text if mode == "scripted" else None,
-            "result": result.get("pronunciation_result"),
-            "metadata": result.get("metadata", {}),
-        }
-    )
+    old_response = {
+        "status": result.get("status"),
+        "error": result.get("error"),
+        "audio_path": str(audio_path),
+        "mode": mode,
+        "reference_text": reference_text if mode == "scripted" else None,
+
+        "question_id": question_id,
+        "question_text": question_text,
+        "question_type": question_type,
+        "difficulty_level": difficulty_level,
+        "duration_seconds": duration_seconds,
+
+        "topic_id": topic_id,
+        "topic_name": topic_name,
+        "topic_description": topic_description,
+
+        "result": result.get("pronunciation_result"),
+        "metadata": {
+            **result.get("metadata", {}),
+            "question_id": question_id,
+            "question_text": question_text,
+            "question_type": question_type,
+            "difficulty_level": difficulty_level,
+            "duration_seconds": duration_seconds,
+            "topic_id": topic_id,
+            "topic_name": topic_name,
+            "topic_description": topic_description,
+        },
+    }
+
+    ui_response = adapt_current_response_to_ui_response(old_response)
+    return jsonable_encoder(ui_response)
 
 
 # ---------------------------------------------------------------------------

@@ -29,6 +29,8 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from node.state_models import SpeakingInput
 from node.ValidityNode.validity_eval_prompt import SYSTEM_PROMPT
+from utils.length_utils import get_expected_min_words
+from utils.schema_mapper import build_validity_result_from_rules, normalize_rule_result
 
 
 # ---------------------------------------------------------------------------
@@ -43,32 +45,6 @@ STRICT_ZERO_ON_TOO_SHORT = False
 # ---------------------------------------------------------------------------
 # Expected min words (same logic as AnswerLengthNode)
 # ---------------------------------------------------------------------------
-
-
-def get_expected_min_words(question_type: Optional[str], duration_seconds: Optional[int]) -> int:
-    if question_type == "short_answer":
-        return 3
-    if duration_seconds is None:
-        return 10
-    if question_type == "description":
-        if duration_seconds <= 30:
-            return 15
-        if duration_seconds <= 60:
-            return 35
-        return 50
-    if question_type == "opinion":
-        if duration_seconds <= 30:
-            return 15
-        if duration_seconds <= 60:
-            return 30
-        return 45
-    if question_type == "long_answer":
-        if duration_seconds <= 30:
-            return 20
-        if duration_seconds <= 60:
-            return 40
-        return 60
-    return 10
 
 
 # ---------------------------------------------------------------------------
@@ -179,14 +155,14 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     mode: Optional[str] = getattr(speaking_input, "mode", None)
     difficulty_level: Optional[str] = getattr(speaking_input, "difficulty_level", None)
 
-    triggered_rules: List[Dict[str, Any]] = []
+    rule_results: List[Dict[str, Any]] = []
 
     # ------------------------------------------------------------------
     # Pure logic rule 1: no_speech (always reject)
     # ------------------------------------------------------------------
 
     if word_count == 0:
-        triggered_rules.append({
+        rule_results.append(normalize_rule_result({
             "rule_id": "audio.no_speech",
             "category": "audio",
             "severity": "critical",
@@ -195,7 +171,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "message": "No speech detected in audio.",
             "evidence": {"word_count": 0},
             "target_criteria": [],
-        })
+        }))
 
     # ------------------------------------------------------------------
     # Pure logic rule 2: too_short (conditional)
@@ -205,7 +181,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
         expected_min = get_expected_min_words(question_type, duration_seconds)
         if word_count < expected_min:
             if STRICT_ZERO_ON_TOO_SHORT:
-                triggered_rules.append({
+                rule_results.append(normalize_rule_result({
                     "rule_id": "answer_length.too_short",
                     "category": "length",
                     "severity": "critical",
@@ -217,10 +193,10 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
                         "expected_min_words": expected_min,
                     },
                     "target_criteria": ["grammar", "vocabulary", "coherence"],
-                })
+                }))
             else:
                 # Non-blocking — scored with penalty downstream
-                triggered_rules.append({
+                rule_results.append(normalize_rule_result({
                     "rule_id": "answer_length.too_short",
                     "category": "length",
                     "severity": "medium",
@@ -232,12 +208,12 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
                         "expected_min_words": expected_min,
                     },
                     "target_criteria": ["grammar", "vocabulary", "coherence"],
-                })
+                }))
 
     # If pure logic already has a blocking reject, skip LLM call
     has_blocking_reject = any(
         r.get("blocking") and r.get("action") == "reject_or_zero"
-        for r in triggered_rules
+        for r in rule_results
     )
 
     # ------------------------------------------------------------------
@@ -258,18 +234,18 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
             # Merge LLM-triggered rules
             for rule in llm_response.get("rules", []):
                 if rule.get("triggered"):
-                    triggered_rules.append({
-                        "rule_id": rule["rule_id"],
-                        "category": rule["rule_id"].split(".")[0],
+                    rule_results.append(normalize_rule_result({
+                        "rule_id": rule.get("rule_id", "unknown_rule"),
+                        "category": str(rule.get("rule_id", "")).split(".")[0],
                         "severity": rule.get("severity", "critical"),
                         "action": rule.get("action", "reject_or_zero"),
                         "blocking": rule.get("blocking", True),
                         "message": rule.get("message", ""),
                         "evidence": rule.get("evidence", {}),
-                        "target_criteria": [],
-                    })
+                        "target_criteria": rule.get("target_criteria", []),
+                    }))
 
-        except (json.JSONDecodeError, Exception) as exc:
+        except (json.JSONDecodeError, Exception):
             # LLM failure is non-blocking — pure logic checks have already
             # passed, so the transcript is at least minimally valid.
             pass
@@ -278,39 +254,11 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # Aggregate: only blocking=true + reject_or_zero routes to END
     # ------------------------------------------------------------------
 
-    has_blocking_reject = any(
-        r.get("blocking") and r.get("action") == "reject_or_zero"
-        for r in triggered_rules
+    validity = build_validity_result_from_rules(
+        rule_entries=rule_results,
+        transcript_source="transcribed_text",
+        transcript_word_count=word_count,
     )
-
-    if has_blocking_reject:
-        validity = {
-            "valid_for_scoring": False,
-            "action": "reject_or_zero",
-            "overall_severity": "critical",
-            "blocking": True,
-            "triggered_rules": triggered_rules,
-            "score_caps": {
-                "pronunciation_max": 0,
-                "fluency_max": 0,
-                "grammar_max": 0,
-                "vocabulary_max": 0,
-                "coherence_max": 0,
-            },
-            "transcript_source": "transcribed_text",
-            "transcript_word_count": word_count,
-        }
-    else:
-        validity = {
-            "valid_for_scoring": True,
-            "action": "score",
-            "overall_severity": "none",
-            "blocking": False,
-            "triggered_rules": triggered_rules,
-            "score_caps": {},
-            "transcript_source": "transcribed_text",
-            "transcript_word_count": word_count,
-        }
 
     return {
         **state,

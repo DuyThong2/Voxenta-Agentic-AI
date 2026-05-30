@@ -7,38 +7,8 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from node.AnswerLengthNode.answer_length_analysis_prompt import SYSTEM_PROMPT
 from node.state_models import SpeakingInput
+from utils.length_utils import get_expected_min_words
 from utils.transcript_selector import select_text_for_language_scoring, build_scoring_metadata
-
-
-def get_expected_min_words(question_type: Optional[str], duration_seconds: Optional[int]) -> int:
-    if question_type == "short_answer":
-        return 3
-
-    if duration_seconds is None:
-        return 10
-
-    if question_type == "description":
-        if duration_seconds <= 30:
-            return 15
-        if duration_seconds <= 60:
-            return 35
-        return 50
-
-    if question_type == "opinion":
-        if duration_seconds <= 30:
-            return 15
-        if duration_seconds <= 60:
-            return 30
-        return 45
-
-    if question_type == "long_answer":
-        if duration_seconds <= 30:
-            return 20
-        if duration_seconds <= 60:
-            return 40
-        return 60
-
-    return 10
 
 
 def build_user_prompt(

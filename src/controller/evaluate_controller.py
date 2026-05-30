@@ -92,6 +92,7 @@ def _invoke_graph(
             "topic_name": topic_name,
             "topic_description": topic_description,
         },
+        "validity": result.get("validity"),
     }
 
     ui_response = adapt_current_response_to_ui_response(old_response)

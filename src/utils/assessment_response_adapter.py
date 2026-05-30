@@ -2,6 +2,16 @@
 
 from typing import Any, Dict, List, Optional
 
+from schemas.scoring import CriteriaScores
+from schemas.ui_response import UIResponse
+from utils.schema_mapper import (
+    build_validity_result_from_metrics,
+    build_validity_result_from_payload,
+    normalize_rule_result,
+    safe_score,
+    safe_text,
+)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -19,21 +29,6 @@ def level_from_score(score: Optional[float]) -> str:
     if score >= 40:
         return "limited"
     return "needs_improvement"
-
-
-def safe_score(value: Any) -> Optional[float]:
-    if value is None:
-        return None
-    try:
-        return round(float(value), 1)
-    except (TypeError, ValueError):
-        return None
-
-
-def safe_text(value: Any) -> Optional[str]:
-    if value is None:
-        return None
-    return str(value)
 
 
 def format_phoneme_list(phonemes: List[str]) -> str:
@@ -57,11 +52,19 @@ def normalize_criterion(item: Any, default_source: str = "unknown") -> Dict[str,
         item = {}
 
     score = safe_score(item.get("score"))
+    status_value = item.get("status")
+    if status_value not in {"scored", "not_scored", "zeroed", "capped"}:
+        status_value = "scored" if score is not None else "not_scored"
+
+    source_value = item.get("source")
+    if source_value not in {"azure", "llm", "rule", "system"}:
+        source_value = default_source if default_source in {"azure", "llm", "rule", "system"} else "system"
+
     result = {
         "score": score,
         "level": level_from_score(score),
-        "status": item.get("status") or ("scored" if score is not None else "not_scored"),
-        "source": item.get("source") or default_source,
+        "status": status_value,
+        "source": source_value,
         "subscores": item.get("subscores") or {},
         "note": item.get("note") or "",
         "suggestion": item.get("suggestion") or "",
@@ -145,13 +148,17 @@ def build_default_criteria(result: Dict[str, Any]) -> Dict[str, Any]:
     vocabulary = normalize_criterion(lexical_resource, default_source="llm")
     grammar = normalize_criterion(grammatical_range_and_accuracy, default_source="llm")
 
-    return {
+    fluency["note"] = fluency.get("note") or "Azure speech fluency assessment score."
+
+    criteria = {
         "pronunciation": pronunciation,
         "fluency": fluency,
         "grammar": grammar,
         "vocabulary": vocabulary,
         "coherence": coherence,
     }
+
+    return CriteriaScores.parse_obj(criteria).model_dump()
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +343,7 @@ def build_pronunciation_summary(words: List[Dict[str, Any]]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 def _build_too_short_rule_result(metrics: Dict[str, Any]) -> Dict[str, Any]:
-    """Build a rule_result for answer_length.too_short."""
+    """Build a typed rule_result for answer_length.too_short."""
     word_count = metrics.get("word_count")
     expected_min = metrics.get("expected_min_words")
     length_ratio = None
@@ -354,12 +361,13 @@ def _build_too_short_rule_result(metrics: Dict[str, Any]) -> Dict[str, Any]:
         if val is not None:
             score_caps[out_key] = val
 
-    return {
+    return normalize_rule_result({
         "rule_id": "answer_length.too_short",
         "category": "length",
         "status": "triggered",
         "severity": "medium",
         "action": "score_with_penalty",
+        "blocking": False,
         "target_criteria": ["coherence", "vocabulary", "grammar"],
         "message": safe_text(metrics.get("note")) or safe_text(metrics.get("length_note")) or "Answer is too short for the task.",
         "evidence": {
@@ -372,78 +380,14 @@ def _build_too_short_rule_result(metrics: Dict[str, Any]) -> Dict[str, Any]:
         "score_caps": score_caps,
         "penalties": [],
         "suggestion": "Expand your answer to include more details so coherence can be scored more accurately.",
-    }
+    })
 
 
-def build_validity(metrics: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    if not isinstance(metrics, dict):
-        return {
-            "valid_for_scoring": True,
-            "action": "score_normally",
-            "overall_severity": "none",
-            "rule_results": [],
-            "flags": [],
-            "score_caps": {},
-            "penalties": [],
-            "notes": [],
-        }
+def build_validity(validity_payload: Optional[Dict[str, Any]], metrics: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if isinstance(validity_payload, dict):
+        return build_validity_result_from_payload(validity_payload)
 
-    length_category = safe_text(metrics.get("length_category"))
-    flags: List[Dict[str, Any]] = []
-    penalties: List[Dict[str, Any]] = []
-    notes: List[str] = []
-    rule_results: List[Dict[str, Any]] = []
-    score_caps = {
-        "coherence_max": safe_score(metrics.get("coherence_cap")),
-        "vocabulary_max": safe_score(metrics.get("lexical_range_cap")),
-        "grammar_max": safe_score(metrics.get("grammar_range_cap")),
-    }
-
-    if length_category == "too_short":
-        message = safe_text(metrics.get("note")) or safe_text(metrics.get("length_note")) or "Answer is too short for the task."
-        flags.append({
-            "code": "too_short",
-            "severity": "medium",
-            "target": "coherence",
-            "message": message,
-        })
-        notes.append(message)
-        rule_results.append(_build_too_short_rule_result(metrics))
-        return {
-            "valid_for_scoring": True,
-            "action": "score_with_penalty",
-            "overall_severity": "medium",
-            "rule_results": rule_results,
-            "flags": flags,
-            "score_caps": score_caps,
-            "penalties": penalties,
-            "notes": notes,
-        }
-
-    if any(flags):
-        action = "score_with_penalty"
-        overall_severity = "medium"
-    else:
-        action = "score_normally"
-        overall_severity = "none"
-
-    if safe_text(metrics.get("score_penalty")):
-        penalties.append({
-            "code": "length_penalty",
-            "severity": "low",
-            "message": safe_text(metrics.get("score_penalty")),
-        })
-
-    return {
-        "valid_for_scoring": True,
-        "action": action,
-        "overall_severity": overall_severity,
-        "rule_results": rule_results,
-        "flags": flags,
-        "score_caps": score_caps,
-        "penalties": penalties,
-        "notes": notes,
-    }
+    return build_validity_result_from_metrics(metrics)
 
 
 # ---------------------------------------------------------------------------
@@ -472,7 +416,7 @@ def build_topic_relevance(metadata: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     return {
         "score": safe_score(topic.get("score")),
-        "status": topic.get("status") or "",
+        "status": topic.get("status") or "not_evaluated",
         "question_text": topic.get("question_text") or "",
         "topic_name": topic.get("topic_name") or "",
         "matched_keywords": topic.get("matched_keywords") or [],
@@ -583,12 +527,12 @@ def adapt_current_response_to_ui_response(current: Dict[str, Any]) -> Dict[str, 
     elif isinstance(result.get("word_feedback"), dict):
         word_feedback_raw = [result.get("word_feedback")]
 
-    # 0-based index for words
-    word_feedback = [format_word_feedback(word, idx) for idx, word in enumerate(word_feedback_raw)]
+    word_feedback = [format_word_feedback(word, idx) for idx, word in enumerate(word_feedback_raw, start=1)]
     pronunciation_summary = build_pronunciation_summary(word_feedback)
     details_length = metadata.get("answer_length_metrics") if isinstance(metadata.get("answer_length_metrics"), dict) else {}
 
-    validity = build_validity(details_length)
+    validity_payload = current.get("validity") if isinstance(current.get("validity"), dict) else None
+    validity = build_validity(validity_payload, details_length)
     topic_relevance = build_topic_relevance(metadata)
     language_details = build_language_details(metadata)
     criteria = build_default_criteria(result)
@@ -611,9 +555,18 @@ def adapt_current_response_to_ui_response(current: Dict[str, Any]) -> Dict[str, 
     topic_matched = topic_relevance.get("matched_keywords") if topic_relevance else []
     topic_missing = topic_relevance.get("missing_optional_keywords") if topic_relevance else []
 
-    return {
-        "status": current.get("status"),
-        "error": current.get("error"),
+    # When validity has flags, override status to "error"
+    validity_has_flags = bool(validity.get("flags"))
+    response_status = "error" if validity_has_flags else current.get("status")
+    response_error = None
+    if validity_has_flags:
+        # Use the first flag message as the error detail
+        first_flag = validity.get("flags", [{}])[0]
+        response_error = first_flag.get("message") or "Response did not pass validity checks."
+
+    ui_payload = {
+        "status": response_status,
+        "error": response_error or current.get("error"),
         "meta": {
             "audio_path": current.get("audio_path"),
             "mode": current.get("mode"),
@@ -667,3 +620,4 @@ def adapt_current_response_to_ui_response(current: Dict[str, Any]) -> Dict[str, 
             "raw_llm_result": metadata.get("raw_llm_result"),
         },
     }
+    return UIResponse.parse_obj(ui_payload).model_dump()

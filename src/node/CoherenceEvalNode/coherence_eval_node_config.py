@@ -7,15 +7,9 @@ Transcript priority: transcribed_text > corrected_transcript > reference_text (f
 See utils.transcript_selector for details.
 """
 
-import json
-from typing import Any, Dict
-
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage
-
 from node.CoherenceEvalNode.coherence_eval_prompt import SYSTEM_PROMPT
 from node.state_models import SpeakingInput
-from utils.transcript_selector import select_text_for_language_scoring, build_scoring_metadata
+from utils.eval_node_helper import run_eval_node
 from utils.question_context_helper import build_question_context
 
 
@@ -48,84 +42,5 @@ def build_user_prompt(speaking_input: SpeakingInput, transcript: str) -> str:
     return "\n".join(parts)
 
 
-def call_llm(speaking_input: SpeakingInput, transcript: str) -> Dict[str, Any]:
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
-
-    messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=build_user_prompt(speaking_input, transcript)),
-    ]
-
-    response = llm.invoke(messages)
-    content = response.content.strip()
-
-    if content.startswith("```"):
-        lines = content.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        content = "\n".join(lines).strip()
-
-    return json.loads(content)
-
-
-def merge_coherence_score(pronunciation_result: Any, llm_response: Dict[str, Any]) -> Any:
-    """Merge coherence score into pronunciation_result.criteria.fluency_and_coherence."""
-    criteria = dict(pronunciation_result.criteria)
-
-    fc = dict(criteria.get("fluency_and_coherence", {}))
-    subscores = dict(fc.get("subscores", {}))
-
-    coherence_score = llm_response["score"]
-    subscores["coherence"] = coherence_score
-
-    fluency_score = subscores.get("fluency")
-    if fluency_score is not None:
-        fc["score"] = round((fluency_score + coherence_score) / 2, 1)
-
-    fc["subscores"] = subscores
-    fc["note"] = llm_response.get("note", "Fluency from audio. Coherence from LLM analysis.")
-    criteria["fluency_and_coherence"] = fc
-
-    pronunciation_result.criteria = criteria
-    return pronunciation_result
-
-
-def coherence_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    LangGraph node to evaluate coherence using LLM.
-
-    Reads: speaking_input, pronunciation_result
-    Updates: pronunciation_result.criteria.fluency_and_coherence.coherence
-    """
-
-    speaking_input = state.get("speaking_input")
-    pronunciation_result = state.get("pronunciation_result")
-
-    if speaking_input is None:
-        return {**state, "status": "error", "error": "speaking_input is required for coherence_eval_node"}
-
-    if pronunciation_result is None:
-        return {**state, "status": "error", "error": "pronunciation_result is required. Run pronunciation_eval first."}
-
-    # Select transcript: transcribed_text > corrected_transcript > reference_text (fallback).
-    # Do NOT use Azure reference_text as the primary scoring input.
-    transcript, source = select_text_for_language_scoring(speaking_input)
-
-    if transcript is None:
-        return {**state, "status": "error", "error": "No transcript available for coherence evaluation"}
-
-    scoring_meta = build_scoring_metadata(source, speaking_input.mode)
-
-    try:
-        llm_response = call_llm(speaking_input, transcript)
-        updated_result = merge_coherence_score(pronunciation_result, llm_response)
-
-        existing_meta = state.get("metadata") or {}
-        merged_meta = {**existing_meta, **scoring_meta}
-
-        return {**state, "pronunciation_result": updated_result, "metadata": merged_meta, "status": "completed", "error": None}
-
-    except json.JSONDecodeError as exc:
-        return {**state, "status": "error", "error": f"LLM returned invalid JSON: {str(exc)}"}
-
-    except Exception as exc:
-        return {**state, "status": "error", "error": f"Coherence evaluation failed: {str(exc)}"}
+def coherence_eval_node(state: dict) -> dict:
+    return run_eval_node(state, "coherence", SYSTEM_PROMPT, build_user_prompt, "coherence")

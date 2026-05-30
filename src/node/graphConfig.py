@@ -19,8 +19,8 @@ from node.ValidityNode.validity_node_config import validity_node
 
 def route_after_validity(state: GraphState) -> str:
     """Route to END if validity rejects, otherwise continue to correction."""
-    validity = state.get("validity") or {}
-    if validity.get("action") == "reject_or_zero":
+    validity = state.get("validity")
+    if validity and getattr(validity, "action", None) == "reject_or_zero":
         return "end"
     return "continue"
 

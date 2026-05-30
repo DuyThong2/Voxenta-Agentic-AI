@@ -7,6 +7,7 @@ from .state_models import (
     SpeakingInput,
     FormattedPronunciationResult,
 )
+from schemas.validity import ValidityResult
 
 
 class GraphState(TypedDict, total=False):
@@ -18,4 +19,4 @@ class GraphState(TypedDict, total=False):
     status: Literal["idle", "processing", "completed", "error"]
     error: Optional[str]
     metadata: Dict[str, Any]
-    validity: Optional[Dict[str, Any]]
+    validity: Optional[ValidityResult]

@@ -40,7 +40,7 @@ def normalize_target_criteria(targets: Any) -> List[str]:
     return [str(item) for item in targets if str(item) in VALID_CRITERIA]
 
 
-def normalize_rule_result(entry: Any) -> Dict[str, Any]:
+def normalize_rule_result(entry: Any) -> RuleResult:
     if not isinstance(entry, dict):
         entry = {}
 
@@ -57,13 +57,13 @@ def normalize_rule_result(entry: Any) -> Dict[str, Any]:
         score_caps={k: safe_score(v) for k, v in (entry.get("score_caps") or {}).items() if safe_score(v) is not None},
         penalties=entry.get("penalties") if isinstance(entry.get("penalties"), list) else [],
         suggestion=safe_text(entry.get("suggestion")),
-    ).model_dump()
+    )
 
 
-def build_validity_result_from_rules(rule_entries: List[Any], transcript_source: str, transcript_word_count: int) -> Dict[str, Any]:
+def build_validity_result_from_rules(rule_entries: List[Any], transcript_source: str, transcript_word_count: int) -> ValidityResult:
     rule_results = [normalize_rule_result(entry) for entry in rule_entries]
     has_blocking_reject = any(
-        r.get("blocking") and r.get("action") == "reject_or_zero"
+        r.blocking and r.action == "reject_or_zero"
         for r in rule_results
     )
 
@@ -85,7 +85,7 @@ def build_validity_result_from_rules(rule_entries: List[Any], transcript_source:
             notes=[],
             transcript_source=transcript_source,
             transcript_word_count=transcript_word_count,
-        ).model_dump()
+        )
 
     return ValidityResult(
         valid_for_scoring=True,
@@ -98,10 +98,10 @@ def build_validity_result_from_rules(rule_entries: List[Any], transcript_source:
         notes=[],
         transcript_source=transcript_source,
         transcript_word_count=transcript_word_count,
-    ).model_dump()
+    )
 
 
-def build_validity_result_from_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+def build_validity_result_from_payload(payload: Dict[str, Any]) -> ValidityResult:
     rule_entries = payload.get("rule_results") or payload.get("triggered_rules") or []
     rule_results = [normalize_rule_result(entry) for entry in rule_entries]
     action = payload.get("action") or "score"
@@ -123,12 +123,12 @@ def build_validity_result_from_payload(payload: Dict[str, Any]) -> Dict[str, Any
         notes=payload.get("notes") if isinstance(payload.get("notes"), list) else [],
         transcript_source=safe_text(payload.get("transcript_source")) or "transcribed_text",
         transcript_word_count=int(payload.get("transcript_word_count") or 0),
-    ).model_dump()
+    )
 
 
-def build_validity_result_from_metrics(metrics: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def build_validity_result_from_metrics(metrics: Optional[Dict[str, Any]]) -> ValidityResult:
     if not isinstance(metrics, dict):
-        return ValidityResult().model_dump()
+        return ValidityResult()
 
     score_caps = {
         "coherence_max": safe_score(metrics.get("coherence_cap")),
@@ -159,7 +159,7 @@ def build_validity_result_from_metrics(metrics: Optional[Dict[str, Any]]) -> Dic
                 "score_caps": score_caps,
                 "penalties": [],
                 "suggestion": "Expand your answer to include more details so coherence can be scored more accurately.",
-            } )],
+            })],
             flags=[{
                 "code": "too_short",
                 "severity": "medium",
@@ -171,7 +171,7 @@ def build_validity_result_from_metrics(metrics: Optional[Dict[str, Any]]) -> Dic
             notes=[message],
             transcript_source="transcribed_text",
             transcript_word_count=word_count,
-        ).model_dump()
+        )
 
     penalties: List[Dict[str, Any]] = []
     if safe_text(metrics.get("score_penalty")):
@@ -192,4 +192,4 @@ def build_validity_result_from_metrics(metrics: Optional[Dict[str, Any]]) -> Dic
         notes=[],
         transcript_source="transcribed_text",
         transcript_word_count=word_count,
-    ).model_dump()
+    )

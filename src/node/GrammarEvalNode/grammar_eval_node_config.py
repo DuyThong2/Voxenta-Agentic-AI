@@ -7,15 +7,9 @@ Transcript priority: transcribed_text > corrected_transcript > reference_text (f
 See utils.transcript_selector for details.
 """
 
-import json
-from typing import Any, Dict
-
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage
-
 from node.GrammarEvalNode.grammar_eval_prompt import SYSTEM_PROMPT
 from node.state_models import SpeakingInput
-from utils.transcript_selector import select_text_for_language_scoring, build_scoring_metadata
+from utils.eval_node_helper import run_eval_node
 from utils.question_context_helper import build_question_context
 
 
@@ -48,77 +42,5 @@ def build_user_prompt(speaking_input: SpeakingInput, transcript: str) -> str:
     return "\n".join(parts)
 
 
-def call_llm(speaking_input: SpeakingInput, transcript: str) -> Dict[str, Any]:
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
-
-    messages = [
-        SystemMessage(content=SYSTEM_PROMPT),
-        HumanMessage(content=build_user_prompt(speaking_input, transcript)),
-    ]
-
-    response = llm.invoke(messages)
-    content = response.content.strip()
-
-    if content.startswith("```"):
-        lines = content.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        content = "\n".join(lines).strip()
-
-    return json.loads(content)
-
-
-def merge_grammar_score(pronunciation_result: Any, llm_response: Dict[str, Any]) -> Any:
-    """Merge grammatical range and accuracy score into pronunciation_result.criteria."""
-    criteria = dict(pronunciation_result.criteria)
-
-    criteria["grammatical_range_and_accuracy"] = {
-        "score": llm_response["score"],
-        "subscores": llm_response.get("subscores", {}),
-        "note": llm_response.get("note", "Evaluated by LLM based on transcript analysis."),
-    }
-
-    pronunciation_result.criteria = criteria
-    return pronunciation_result
-
-
-def grammar_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    LangGraph node to evaluate grammatical range and accuracy using LLM.
-
-    Reads: speaking_input, pronunciation_result
-    Updates: pronunciation_result.criteria.grammatical_range_and_accuracy
-    """
-
-    speaking_input = state.get("speaking_input")
-    pronunciation_result = state.get("pronunciation_result")
-
-    if speaking_input is None:
-        return {**state, "status": "error", "error": "speaking_input is required for grammar_eval_node"}
-
-    if pronunciation_result is None:
-        return {**state, "status": "error", "error": "pronunciation_result is required. Run pronunciation_eval first."}
-
-    # Select transcript: transcribed_text > corrected_transcript > reference_text (fallback).
-    # Do NOT use Azure reference_text as the primary scoring input.
-    transcript, source = select_text_for_language_scoring(speaking_input)
-
-    if transcript is None:
-        return {**state, "status": "error", "error": "No transcript available for grammar evaluation"}
-
-    scoring_meta = build_scoring_metadata(source, speaking_input.mode)
-
-    try:
-        llm_response = call_llm(speaking_input, transcript)
-        updated_result = merge_grammar_score(pronunciation_result, llm_response)
-
-        # Attach transcript source metadata so downstream knows which text was scored.
-        existing_meta = state.get("metadata") or {}
-        merged_meta = {**existing_meta, **scoring_meta}
-
-        return {**state, "pronunciation_result": updated_result, "metadata": merged_meta, "status": "completed", "error": None}
-
-    except json.JSONDecodeError as exc:
-        return {**state, "status": "error", "error": f"LLM returned invalid JSON: {str(exc)}"}
-
-    except Exception as exc:
-        return {**state, "status": "error", "error": f"Grammar evaluation failed: {str(exc)}"}
+def grammar_eval_node(state: dict) -> dict:
+    return run_eval_node(state, "grammar", SYSTEM_PROMPT, build_user_prompt, "grammar")

@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from schemas.scoring import CriteriaScores
 from schemas.ui_response import UIResponse
+from schemas.validity import ValidityResult
 from utils.schema_mapper import (
     build_validity_result_from_metrics,
     build_validity_result_from_payload,
@@ -73,89 +74,15 @@ def normalize_criterion(item: Any, default_source: str = "unknown") -> Dict[str,
 
 
 def build_default_criteria(result: Dict[str, Any]) -> Dict[str, Any]:
-    raw_criteria = result.get("criteria")
-    if not isinstance(raw_criteria, dict):
-        raw_criteria = {}
-
-    if not raw_criteria:
-        potential = {
-            key: result.get(key)
-            for key in [
-                "pronunciation",
-                "fluency_and_coherence",
-                "lexical_resource",
-                "grammatical_range_and_accuracy",
-            ]
-            if result.get(key) is not None
-        }
-        if potential:
-            raw_criteria = potential
-
-    pronunciation_raw = raw_criteria.get("pronunciation") or raw_criteria.get("pronunciation_score") or {}
-    fluency_and_coherence = raw_criteria.get("fluency_and_coherence") or {}
-    lexical_resource = raw_criteria.get("lexical_resource") or {}
-    grammatical_range_and_accuracy = raw_criteria.get("grammatical_range_and_accuracy") or {}
-
-    if isinstance(pronunciation_raw, dict) and not pronunciation_raw:
-        pronunciation_raw = raw_criteria.get("pronunciation")
-
-    # pronunciation & fluency are from Azure
-    pronunciation = normalize_criterion(pronunciation_raw, default_source="azure")
-    fluency = normalize_criterion(
-        {**(fluency_and_coherence if isinstance(fluency_and_coherence, dict) else {}),
-         "score": safe_score(
-             (fluency_and_coherence.get("subscores") or {}).get("fluency")
-             if isinstance(fluency_and_coherence, dict)
-             else None
-         ),
-         "subscores": {
-             "fluency": safe_score(
-                 (fluency_and_coherence.get("subscores") or {}).get("fluency")
-                 if isinstance(fluency_and_coherence, dict)
-                 else None
-             ),
-         },
-        },
-        default_source="azure",
-    )
-
-    # coherence is from LLM / content analysis
-    coherence_score = None
-    if isinstance(fluency_and_coherence, dict):
-        coherence_score = safe_score(
-            (fluency_and_coherence.get("subscores") or {}).get("coherence")
-            or fluency_and_coherence.get("score")
-        )
-    coherence_subscores: Dict[str, Any] = {}
-    if isinstance(fluency_and_coherence, dict):
-        fc_subs = fluency_and_coherence.get("subscores") or {}
-        for key in ("coherence", "task_achievement", "development"):
-            if fc_subs.get(key) is not None:
-                coherence_subscores[key] = safe_score(fc_subs[key])
-
-    coherence = normalize_criterion(
-        {
-            **(fluency_and_coherence if isinstance(fluency_and_coherence, dict) else {}),
-            "score": coherence_score,
-            "subscores": coherence_subscores,
-            "note": (fluency_and_coherence or {}).get("note", ""),
-            "suggestion": (fluency_and_coherence or {}).get("suggestion", ""),
-        },
-        default_source="llm",
-    )
-
-    # vocabulary & grammar are from LLM
-    vocabulary = normalize_criterion(lexical_resource, default_source="llm")
-    grammar = normalize_criterion(grammatical_range_and_accuracy, default_source="llm")
-
-    fluency["note"] = fluency.get("note") or "Azure speech fluency assessment score."
+    """Build criteria from pronunciation_result.criteria (schema-aligned keys)."""
+    raw_criteria = result.get("criteria") or {}
 
     criteria = {
-        "pronunciation": pronunciation,
-        "fluency": fluency,
-        "grammar": grammar,
-        "vocabulary": vocabulary,
-        "coherence": coherence,
+        "pronunciation": normalize_criterion(raw_criteria.get("pronunciation") or {}, default_source="azure"),
+        "fluency": normalize_criterion(raw_criteria.get("fluency") or {}, default_source="azure"),
+        "grammar": normalize_criterion(raw_criteria.get("grammar") or {}, default_source="llm"),
+        "vocabulary": normalize_criterion(raw_criteria.get("vocabulary") or {}, default_source="llm"),
+        "coherence": normalize_criterion(raw_criteria.get("coherence") or {}, default_source="llm"),
     }
 
     return CriteriaScores.parse_obj(criteria).model_dump()
@@ -383,7 +310,10 @@ def _build_too_short_rule_result(metrics: Dict[str, Any]) -> Dict[str, Any]:
     })
 
 
-def build_validity(validity_payload: Optional[Dict[str, Any]], metrics: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def build_validity(validity_payload: Any, metrics: Optional[Dict[str, Any]]) -> Any:
+    """Return ValidityResult model object. Accepts model or dict."""
+    if isinstance(validity_payload, ValidityResult):
+        return validity_payload
     if isinstance(validity_payload, dict):
         return build_validity_result_from_payload(validity_payload)
 
@@ -531,8 +461,8 @@ def adapt_current_response_to_ui_response(current: Dict[str, Any]) -> Dict[str, 
     pronunciation_summary = build_pronunciation_summary(word_feedback)
     details_length = metadata.get("answer_length_metrics") if isinstance(metadata.get("answer_length_metrics"), dict) else {}
 
-    validity_payload = current.get("validity") if isinstance(current.get("validity"), dict) else None
-    validity = build_validity(validity_payload, details_length)
+    validity_raw = current.get("validity")
+    validity = build_validity(validity_raw, details_length)
     topic_relevance = build_topic_relevance(metadata)
     language_details = build_language_details(metadata)
     criteria = build_default_criteria(result)
@@ -558,13 +488,12 @@ def adapt_current_response_to_ui_response(current: Dict[str, Any]) -> Dict[str, 
     topic_missing = topic_relevance.get("missing_optional_keywords") if topic_relevance else []
 
     # When validity has flags, override status to "error"
-    validity_has_flags = bool(validity.get("flags"))
+    validity_has_flags = bool(validity.flags) if hasattr(validity, "flags") else False
     response_status = "error" if validity_has_flags else current.get("status")
     response_error = None
     if validity_has_flags:
-        # Use the first flag message as the error detail
-        first_flag = validity.get("flags", [{}])[0]
-        response_error = first_flag.get("message") or "Response did not pass validity checks."
+        first_flag = validity.flags[0] if validity.flags else None
+        response_error = getattr(first_flag, "message", None) or "Response did not pass validity checks."
 
     ui_payload = {
         "status": response_status,

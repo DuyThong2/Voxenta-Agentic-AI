@@ -16,31 +16,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from node.LexicalEvalNode.lexical_eval_prompt import SYSTEM_PROMPT
 from node.state_models import SpeakingInput
 from utils.transcript_selector import select_text_for_language_scoring, build_scoring_metadata
-
-
-def build_question_context(speaking_input: SpeakingInput) -> str:
-    """Build question/topic context block for the LLM prompt."""
-    parts = []
-
-    if speaking_input.question_text:
-        parts.append(f'Question: "{speaking_input.question_text}"')
-
-    if speaking_input.question_type:
-        parts.append(f"Question type: {speaking_input.question_type}")
-
-    if speaking_input.difficulty_level:
-        parts.append(f"Difficulty: {speaking_input.difficulty_level}")
-
-    if speaking_input.duration_seconds is not None:
-        parts.append(f"Expected duration: {speaking_input.duration_seconds}s")
-
-    if speaking_input.topic_name:
-        parts.append(f"Topic: {speaking_input.topic_name}")
-
-    if speaking_input.topic_description:
-        parts.append(f"Topic description: {speaking_input.topic_description}")
-
-    return "\n".join(parts) if parts else "No question context provided."
+from utils.question_context_helper import build_question_context
 
 
 def build_user_prompt(speaking_input: SpeakingInput, transcript: str) -> str:

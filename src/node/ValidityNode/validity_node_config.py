@@ -149,11 +149,11 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     text = text.strip()
     word_count = _word_count(text)
 
-    question_text: Optional[str] = getattr(speaking_input, "question_text", None)
-    question_type: Optional[str] = getattr(speaking_input, "question_type", None)
-    duration_seconds: Optional[int] = getattr(speaking_input, "duration_seconds", None)
+    question_text: Optional[str] = speaking_input.question.question_text if speaking_input.question else None
+    question_type: Optional[str] = speaking_input.question.question_type if speaking_input.question else None
+    duration_seconds: Optional[int] = speaking_input.question.duration_seconds if speaking_input.question else None
     mode: Optional[str] = getattr(speaking_input, "mode", None)
-    difficulty_level: Optional[str] = getattr(speaking_input, "difficulty_level", None)
+    difficulty_level: Optional[str] = speaking_input.question.difficulty_level if speaking_input.question else None
 
     rule_results: List[Dict[str, Any]] = []
 

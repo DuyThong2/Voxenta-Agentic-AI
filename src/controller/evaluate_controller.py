@@ -9,7 +9,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 
-from node.state_models import SpeakingInput
+from node.state_models import SpeakingInput, QuestionContext, TopicContext
 from utils.assessment_response_adapter import adapt_current_response_to_ui_response
 
 
@@ -36,20 +36,27 @@ def _invoke_graph(
 ):
     graph = request.app.state.graph
 
+    question_ctx = QuestionContext(
+        question_id=question_id,
+        question_text=question_text,
+        question_type=question_type,
+        difficulty_level=difficulty_level,
+        duration_seconds=duration_seconds,
+    )
+    topic_ctx = TopicContext(
+        topic_id=topic_id,
+        topic_name=topic_name,
+        topic_description=topic_description,
+    )
+
     initial_state = {
         "speaking_input": SpeakingInput(
             audio_path=str(audio_path),
             reference_text=reference_text if mode == "scripted" else None,
             mode=mode,
             language="en-US",
-            question_id=question_id,
-            question_text=question_text,
-            question_type=question_type,
-            difficulty_level=difficulty_level,
-            duration_seconds=duration_seconds,
-            topic_id=topic_id,
-            topic_name=topic_name,
-            topic_description=topic_description,
+            question=question_ctx,
+            topic=topic_ctx,
         ),
         "status": "idle",
         "metadata": {},
@@ -70,15 +77,18 @@ def _invoke_graph(
         "mode": mode,
         "reference_text": reference_text if mode == "scripted" else None,
 
-        "question_id": question_id,
-        "question_text": question_text,
-        "question_type": question_type,
-        "difficulty_level": difficulty_level,
-        "duration_seconds": duration_seconds,
-
-        "topic_id": topic_id,
-        "topic_name": topic_name,
-        "topic_description": topic_description,
+        "question": {
+            "question_id": question_id,
+            "question_text": question_text,
+            "question_type": question_type,
+            "difficulty_level": difficulty_level,
+            "duration_seconds": duration_seconds,
+        },
+        "topic": {
+            "topic_id": topic_id,
+            "topic_name": topic_name,
+            "topic_description": topic_description,
+        },
 
         "result": result.get("pronunciation_result"),
         "metadata": {

@@ -3,6 +3,22 @@ from typing import Literal, Optional
 from pydantic import BaseModel
 
 
+class QuestionContext(BaseModel):
+    """Question context — được truyền từ .NET backend khi evaluate."""
+    question_id: Optional[int] = None
+    question_text: Optional[str] = None
+    question_type: Optional[str] = None  # read_aloud, short_answer, long_answer, opinion, description
+    difficulty_level: Optional[str] = None  # easy, medium, hard
+    duration_seconds: Optional[int] = None
+
+
+class TopicContext(BaseModel):
+    """Topic context for evaluation."""
+    topic_id: Optional[int] = None
+    topic_name: Optional[str] = None
+    topic_description: Optional[str] = None
+
+
 class SpeakingInput(BaseModel):
     audio_path: str
 
@@ -22,18 +38,9 @@ class SpeakingInput(BaseModel):
     mode: Literal["scripted", "unscripted"] = "unscripted"
     language: str = "en-US"
 
-    # Question context — được truyền từ .NET backend khi evaluate.
-    # LLM evaluator dùng để chấm điểm chính xác hơn.
-    question_id: Optional[int] = None
-    question_text: Optional[str] = None
-    question_type: Optional[str] = None  # read_aloud, short_answer, long_answer, opinion, description
-    difficulty_level: Optional[str] = None  # easy, medium, hard
-    duration_seconds: Optional[int] = None
+    # Nested question/topic context
+    question: Optional[QuestionContext] = None
+    topic: Optional[TopicContext] = None
 
     # Answer length analysis for development scoring.
     answer_length_metrics: Optional[dict] = None
-
-    # Topic context
-    topic_id: Optional[int] = None
-    topic_name: Optional[str] = None
-    topic_description: Optional[str] = None

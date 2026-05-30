@@ -537,15 +537,17 @@ def adapt_current_response_to_ui_response(current: Dict[str, Any]) -> Dict[str, 
     language_details = build_language_details(metadata)
     criteria = build_default_criteria(result)
 
-    # Question context: current (controller) → metadata fallback
-    q_id = current.get("question_id") or metadata.get("question_id")
-    q_text = current.get("question_text") or metadata.get("question_text")
-    q_type = current.get("question_type") or metadata.get("question_type")
-    q_diff = current.get("difficulty_level") or metadata.get("difficulty_level")
-    q_dur = current.get("duration_seconds") or metadata.get("duration_seconds")
-    t_id = current.get("topic_id") or metadata.get("topic_id")
-    t_name = current.get("topic_name") or metadata.get("topic_name")
-    t_desc = current.get("topic_description") or metadata.get("topic_description")
+    # Question context: current.question → metadata fallback
+    q = current.get("question") if isinstance(current.get("question"), dict) else {}
+    t = current.get("topic") if isinstance(current.get("topic"), dict) else {}
+    q_id = q.get("question_id") or metadata.get("question_id")
+    q_text = q.get("question_text") or metadata.get("question_text")
+    q_type = q.get("question_type") or metadata.get("question_type")
+    q_diff = q.get("difficulty_level") or metadata.get("difficulty_level")
+    q_dur = q.get("duration_seconds") or metadata.get("duration_seconds")
+    t_id = t.get("topic_id") or metadata.get("topic_id")
+    t_name = t.get("topic_name") or metadata.get("topic_name")
+    t_desc = t.get("topic_description") or metadata.get("topic_description")
 
     # Expected word counts from length metrics if available
     expected_min = details_length.get("expected_min_words") if isinstance(details_length, dict) else None

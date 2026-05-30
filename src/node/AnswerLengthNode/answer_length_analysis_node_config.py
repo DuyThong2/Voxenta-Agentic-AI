@@ -8,6 +8,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from node.AnswerLengthNode.answer_length_analysis_prompt import SYSTEM_PROMPT
 from node.state_models import SpeakingInput
 from utils.length_utils import get_expected_min_words
+from utils.question_context_helper import build_question_context
 from utils.transcript_selector import select_text_for_language_scoring, build_scoring_metadata
 
 
@@ -19,22 +20,7 @@ def build_user_prompt(
     expected_min_words: int,
     length_ratio: Optional[float],
 ) -> str:
-    parts = []
-
-    if speaking_input.question_text:
-        parts.append(f'Question: "{speaking_input.question_text}"')
-    if speaking_input.question_type:
-        parts.append(f"Question type: {speaking_input.question_type}")
-    if speaking_input.difficulty_level:
-        parts.append(f"Difficulty: {speaking_input.difficulty_level}")
-    if speaking_input.duration_seconds is not None:
-        parts.append(f"Expected duration: {speaking_input.duration_seconds}s")
-    if speaking_input.topic_name:
-        parts.append(f"Topic: {speaking_input.topic_name}")
-    if speaking_input.topic_description:
-        parts.append(f"Topic description: {speaking_input.topic_description}")
-
-    question_context = "\n".join(parts) if parts else "No question context provided."
+    question_context = build_question_context(speaking_input)
 
     return (
         "## Question Context\n"
@@ -94,9 +80,9 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
     sentences = [s.strip() for s in re.split(r"[.!?]+", transcript) if s.strip()]
     sentence_count = len(sentences)
 
-    question_type = speaking_input.question_type or "unknown"
-    difficulty_level = speaking_input.difficulty_level or "unknown"
-    duration_seconds = speaking_input.duration_seconds
+    question_type = (speaking_input.question.question_type if speaking_input.question else None) or "unknown"
+    difficulty_level = (speaking_input.question.difficulty_level if speaking_input.question else None) or "unknown"
+    duration_seconds = speaking_input.question.duration_seconds if speaking_input.question else None
     expected_min_words = get_expected_min_words(question_type, duration_seconds)
 
     length_ratio = word_count / expected_min_words if expected_min_words > 0 else None

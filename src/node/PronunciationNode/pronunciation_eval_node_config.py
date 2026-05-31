@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional
 
 import azure.cognitiveservices.speech as speechsdk
 
+from schemas.enums import ScoreColor, SpeakingMode
 from utils import load_root_dotenv
 from node.state_models.pronunciation import (
     FormattedPronunciationResult,
@@ -28,16 +29,6 @@ load_root_dotenv()
 
 AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY")
 AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION")
-
-
-def score_to_color(score: Optional[float]) -> str:
-    if score is None:
-        return "gray"
-    if score < 60:
-        return "red"
-    if score < 80:
-        return "yellow"
-    return "green"
 
 
 def normalize_text(text: Optional[str]) -> Optional[str]:
@@ -99,7 +90,7 @@ def extract_phoneme_feedback(phonemes: List[Dict[str, Any]]) -> List[PhonemeFeed
             PhonemeFeedback(
                 phoneme=phoneme.get("Phoneme", ""),
                 accuracy_score=score,
-                color=score_to_color(score),
+                color=ScoreColor.from_score(score),
             )
         )
 
@@ -129,7 +120,7 @@ def extract_word_feedback(data: Dict[str, Any]) -> List[WordFeedback]:
                 word=word.get("Word", ""),
                 accuracy_score=word_score,
                 error_type=assessment.get("ErrorType"),
-                color=score_to_color(word_score),
+                color=ScoreColor.from_score(word_score),
                 phonemes=extract_phoneme_feedback(phoneme_items),
             )
         )
@@ -170,7 +161,7 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # or fallback to raw transcribed_text.
     corrected_transcript = speaking_input.corrected_transcript
 
-    if speaking_input.mode == "scripted":
+    if speaking_input.mode == SpeakingMode.SCRIPTED:
         reference_text = normalize_text(speaking_input.reference_text or "") or ""
         if not reference_text:
             return {

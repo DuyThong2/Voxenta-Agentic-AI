@@ -13,6 +13,7 @@ Priority:
 from typing import Optional, Tuple
 
 from node.state_models import SpeakingInput
+from schemas.enums import SpeakingMode
 
 
 def select_text_for_language_scoring(
@@ -58,7 +59,7 @@ def build_scoring_metadata(
         )
         meta["language_scoring_status"] = "diagnostic_only"
 
-    if mode == "scripted" and source != "transcribed_text":
+    if mode == SpeakingMode.SCRIPTED and source != "transcribed_text":
         meta["language_scoring_note"] = (
             "Scripted mode: LLM score is diagnostic only. "
             "Official scoring uses Azure pronunciation assessment."

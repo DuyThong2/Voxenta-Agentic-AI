@@ -8,6 +8,7 @@ import azure.cognitiveservices.speech as speechsdk
 
 from node.GraphState import GraphState
 from node.state_models import SpeakingInput
+from schemas.enums import SpeakingMode
 from utils import load_root_dotenv
 
 
@@ -75,7 +76,7 @@ def start_node(state: GraphState) -> dict:
         result = recognizer.recognize_once()
         transcript = result.text if result.reason == speechsdk.ResultReason.RecognizedSpeech else None
 
-        if speaking_input.mode == "unscripted" and not transcript:
+        if speaking_input.mode == SpeakingMode.UNSCRIPTED and not transcript:
             cancellation = None
             if result.reason == speechsdk.ResultReason.Canceled:
                 cancellation = speechsdk.CancellationDetails.from_result(result)
@@ -95,7 +96,7 @@ def start_node(state: GraphState) -> dict:
 
         normalized_transcript = normalize_text(transcript)
 
-        if speaking_input.mode == "scripted":
+        if speaking_input.mode == SpeakingMode.SCRIPTED:
             # For scripted mode, reference_text is authoritative and should be normalized.
             speaking_input.reference_text = normalize_text(speaking_input.reference_text)
 

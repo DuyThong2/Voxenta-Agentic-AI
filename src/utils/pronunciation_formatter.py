@@ -11,21 +11,12 @@ from node.state_models import (
     WordFeedback,
     PhonemeFeedback,
 )
+from schemas.enums import ScoreColor, SpeakingMode
 from schemas.scoring import CriteriaScores, CriterionScore
 
 
 RED_THRESHOLD = 60
 YELLOW_THRESHOLD = 80
-
-
-def score_color(score: Optional[float]) -> str:
-    if score is None:
-        return "gray"
-    if score < RED_THRESHOLD:
-        return "red"
-    if score < YELLOW_THRESHOLD:
-        return "yellow"
-    return "green"
 
 
 def score_level(score: Optional[float]) -> str:
@@ -117,7 +108,7 @@ def format_phoneme_feedback(phoneme: PhonemeFeedback) -> Dict[str, Any]:
     return {
         "phoneme": phoneme.phoneme,
         "score": score,
-        "color": score_color(score),
+        "color": ScoreColor.from_score(score),
         "level": score_level(score),
         "note": explain_phoneme_issue(phoneme.phoneme, score),
     }
@@ -150,7 +141,7 @@ def format_word_feedback(word: WordFeedback) -> Dict[str, Any]:
         "word": word.word,
         "azure_score": azure_word_score,
         "effective_score": effective_score,
-        "color": score_color(effective_score),
+        "color": ScoreColor.from_score(effective_score),
         "level": score_level(effective_score),
         "error_type": word.error_type,
         "error_note": explain_error_type(word.error_type),
@@ -279,7 +270,7 @@ def format_pronunciation_api_response(
             "prosody_score": round_score(result.prosody_score),
             "completeness_score": (
                 round_score(result.completeness_score)
-                if mode == "scripted"
+                if mode == SpeakingMode.SCRIPTED
                 else None
             ),
         },

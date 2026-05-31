@@ -1,21 +1,22 @@
-from typing import List, Literal, Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 
 from pydantic import BaseModel, Field
 
+from schemas.enums import ScoreColor
 from schemas.scoring import CriteriaScores
 
 
 class PhonemeFeedback(BaseModel):
     phoneme: str
     accuracy_score: Optional[float] = None
-    color: Optional[Literal["red", "yellow", "green", "gray"]] = None
+    color: Optional[ScoreColor] = None
 
 
 class WordFeedback(BaseModel):
     word: str
     accuracy_score: Optional[float] = None
     error_type: Optional[str] = None
-    color: Optional[Literal["red", "yellow", "green", "gray"]] = None
+    color: Optional[ScoreColor] = None
     phonemes: List[PhonemeFeedback] = Field(default_factory=list)
 
 

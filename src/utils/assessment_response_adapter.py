@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
+from schemas.enums import LengthCategory, ScoreColor
 from schemas.scoring import CriteriaScores
 from schemas.ui_response import UIResponse
 from schemas.validity import ValidityResult
@@ -114,7 +115,7 @@ def format_phoneme(phoneme: Dict[str, Any], index: int) -> Dict[str, Any]:
         "index": index,
         "phoneme": phoneme_symbol,
         "score": score,
-        "color": phoneme.get("color") or ("red" if score is not None and score < 60 else "yellow" if score is not None and score < 80 else "green" if score is not None else "gray"),
+        "color": phoneme.get("color") or ScoreColor.from_score(score),
         "level": level_from_score(score),
         "note": note,
         "suggestion": suggestion,
@@ -170,7 +171,7 @@ def format_word_feedback(word_obj: Dict[str, Any], index: int) -> Dict[str, Any]
         "word": safe_text(word_obj.get("word")),
         "raw_azure_score": raw_azure_score,
         "effective_score": effective_score,
-        "color": word_obj.get("color") or ("red" if effective_score is not None and effective_score < 60 else "yellow" if effective_score is not None and effective_score < 80 else "green" if effective_score is not None else "gray"),
+        "color": word_obj.get("color") or ScoreColor.from_score(effective_score),
         "level": level_from_score(effective_score),
         "error_type": error_type,
         "error_note": error_note,
@@ -195,7 +196,7 @@ def make_priority_words(words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         return (
             0 if word.get("error_type") == "Omission" else 1,
             0 if word.get("error_type") == "Mispronunciation" else 1,
-            0 if word.get("color") == "red" else 1,
+            0 if word.get("color") == ScoreColor.RED else 1,
             word.get("effective_score") if word.get("effective_score") is not None else 100,
         )
 
@@ -214,7 +215,7 @@ def make_priority_words(words: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             reason = "This word was pronounced differently from the expected pronunciation."
         elif weak_phoneme_symbols:
             reason = f"Weak sounds: {format_phoneme_list(weak_phoneme_symbols)}."
-        elif word.get("color") == "red":
+        elif word.get("color") == ScoreColor.RED:
             reason = "Low pronunciation accuracy."
         else:
             reason = "Needs further practice."
@@ -391,7 +392,7 @@ def build_feedback(
     elif pronunciation_score is not None:
         areas_to_improve.append("Pronunciation could be clearer in some words.")
 
-    if length_metrics and safe_text(length_metrics.get("length_category")) == "too_short":
+    if length_metrics and safe_text(length_metrics.get("length_category")) == LengthCategory.TOO_SHORT:
         areas_to_improve.append("The answer is too short for the task.")
         suggestions.append({
             "target": "coherence",

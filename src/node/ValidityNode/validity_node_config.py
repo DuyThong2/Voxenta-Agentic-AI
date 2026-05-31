@@ -29,6 +29,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from node.state_models import SpeakingInput
 from node.ValidityNode.validity_eval_prompt import SYSTEM_PROMPT
+from schemas.enums import DifficultyLevel, SpeakingMode
 from utils.length_utils import get_expected_min_words
 from utils.schema_mapper import build_validity_result_from_rules, normalize_rule_result
 
@@ -177,7 +178,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # Pure logic rule 2: too_short (conditional)
     # ------------------------------------------------------------------
 
-    if mode != "scripted" and word_count > 0:
+    if mode != SpeakingMode.SCRIPTED and word_count > 0:
         expected_min = get_expected_min_words(question_type, duration_seconds)
         if word_count < expected_min:
             if STRICT_ZERO_ON_TOO_SHORT:

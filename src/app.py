@@ -35,6 +35,7 @@ from config.langsmith_config import setup_langsmith, get_langsmith_status
 setup_langsmith()
 
 from controller import router
+from controller.webrtc import close_all_connections
 from node.graphConfig import build_graph
 from config.postgresDB_config import settings as pg_settings
 from infra.message_broker.rabbit_consumer import start_outbox_consumer
@@ -77,6 +78,7 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        await close_all_connections()
         consumer_task.cancel()
         await mq_connection.close()
         pool.close()

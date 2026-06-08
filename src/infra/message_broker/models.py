@@ -1,7 +1,7 @@
-"""Pydantic models for RabbitMQ message payloads.
+"""Pydantic models for message broker payloads.
 
 Property names use snake_case internally.  When serialising to JSON for
-RabbitMQ we emit camelCase keys (``by_alias=True``) so that .NET
+Kafka we emit camelCase keys (``by_alias=True``) so that .NET
 MassTransit consumers can deserialise without extra mapping.
 """
 

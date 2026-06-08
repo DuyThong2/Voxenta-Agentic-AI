@@ -9,12 +9,13 @@ See utils.transcript_selector for details.
 
 from node.GrammarEvalNode.grammar_eval_prompt import SYSTEM_PROMPT
 from node.state_models import SpeakingInput
+from schemas.enums import SpeakingMode
 from utils.eval_node_helper import run_eval_node
 from utils.question_context_helper import build_question_context
 
 
 def build_user_prompt(speaking_input: SpeakingInput, transcript: str) -> str:
-    mode = speaking_input.mode or "unscripted"
+    mode = speaking_input.mode or SpeakingMode.UNSCRIPTED
     question_context = build_question_context(speaking_input)
 
     parts = [
@@ -34,7 +35,7 @@ def build_user_prompt(speaking_input: SpeakingInput, transcript: str) -> str:
         parts.append(f"Expected min words: {speaking_input.answer_length_metrics.get('expected_min_words')}")
         parts.append(f"Grammar range cap: {speaking_input.answer_length_metrics.get('grammar_range_cap')}")
 
-    if mode == "scripted":
+    if mode == SpeakingMode.SCRIPTED:
         parts.append("\nThis is a scripted read-aloud test. Grammar scores are diagnostic only.")
     else:
         parts.append("\nEvaluate grammar quality in the context of the question and difficulty level.")

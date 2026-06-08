@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
 
 from node.state_models import SpeakingInput, QuestionContext, TopicContext
+from schemas.enums import DifficultyLevel, QuestionType, SpeakingMode
 from utils.assessment_response_adapter import adapt_current_response_to_ui_response
 
 
@@ -23,12 +24,12 @@ def _invoke_graph(
     request: Request,
     audio_path: Path,
     *,
-    mode: str,
+    mode: SpeakingMode,
     reference_text: Optional[str] = None,
     question_id: Optional[int] = None,
     question_text: Optional[str] = None,
-    question_type: Optional[str] = None,
-    difficulty_level: Optional[str] = None,
+    question_type: Optional[QuestionType] = None,
+    difficulty_level: Optional[DifficultyLevel] = None,
     duration_seconds: Optional[int] = None,
     topic_id: Optional[int] = None,
     topic_name: Optional[str] = None,
@@ -52,7 +53,7 @@ def _invoke_graph(
     initial_state = {
         "speaking_input": SpeakingInput(
             audio_path=str(audio_path),
-            reference_text=reference_text if mode == "scripted" else None,
+            reference_text=reference_text if mode == SpeakingMode.SCRIPTED else None,
             mode=mode,
             language="en-US",
             question=question_ctx,
@@ -75,7 +76,7 @@ def _invoke_graph(
         "error": result.get("error"),
         "audio_path": str(audio_path),
         "mode": mode,
-        "reference_text": reference_text if mode == "scripted" else None,
+        "reference_text": reference_text if mode == SpeakingMode.SCRIPTED else None,
 
         "question": {
             "question_id": question_id,
@@ -121,11 +122,11 @@ def evaluate_pronunciation_sample(
         default="I usually go to school by bus.",
         description="Reference sentence for scripted assessment.",
     ),
-    mode: str = Query(default="scripted", description="scripted or unscripted"),
+    mode: SpeakingMode = Query(default=SpeakingMode.SCRIPTED, description="scripted or unscripted"),
     question_id: Optional[int] = Query(default=None),
     question_text: Optional[str] = Query(default=None),
-    question_type: Optional[str] = Query(default=None),
-    difficulty_level: Optional[str] = Query(default=None),
+    question_type: Optional[QuestionType] = Query(default=None),
+    difficulty_level: Optional[DifficultyLevel] = Query(default=None),
     duration_seconds: Optional[int] = Query(default=None),
     topic_id: Optional[int] = Query(default=None),
     topic_name: Optional[str] = Query(default=None),
@@ -136,9 +137,7 @@ def evaluate_pronunciation_sample(
 
     if not audio_path.exists():
         raise HTTPException(status_code=404, detail=f"Audio file not found: {audio_path}")
-    if mode not in ["scripted", "unscripted"]:
-        raise HTTPException(status_code=400, detail="mode must be 'scripted' or 'unscripted'")
-    if mode == "scripted" and not reference_text:
+    if mode == SpeakingMode.SCRIPTED and not reference_text:
         raise HTTPException(status_code=400, detail="reference_text is required when mode='scripted'")
 
     return _invoke_graph(
@@ -166,7 +165,7 @@ AUDIO_FILES = [
 ]
 
 
-def _run_scenario(request: Request, *, mode: str = "unscripted", reference_text: Optional[str] = None, **kwargs):
+def _run_scenario(request: Request, *, mode: SpeakingMode = SpeakingMode.UNSCRIPTED, reference_text: Optional[str] = None, **kwargs):
     """Run a scenario against all 3 audio files and return comparison results."""
     results = {}
     for label, filename in AUDIO_FILES:
@@ -188,8 +187,8 @@ def test_on_topic_easy(request: Request):
         request,
         question_id=1,
         question_text="How do you usually go to school?",
-        question_type="short_answer",
-        difficulty_level="easy",
+        question_type=QuestionType.SHORT_ANSWER,
+        difficulty_level=DifficultyLevel.EASY,
         duration_seconds=10,
         topic_id=1,
         topic_name="Transportation",
@@ -204,8 +203,8 @@ def test_off_topic(request: Request):
         request,
         question_id=2,
         question_text="What is your favorite food and why do you like it?",
-        question_type="long_answer",
-        difficulty_level="easy",
+        question_type=QuestionType.LONG_ANSWER,
+        difficulty_level=DifficultyLevel.EASY,
         duration_seconds=30,
         topic_id=2,
         topic_name="Food and Cuisine",
@@ -220,8 +219,8 @@ def test_too_short(request: Request):
         request,
         question_id=3,
         question_text="Describe in detail how you commute to school every day, including what you see and experience along the way.",
-        question_type="description",
-        difficulty_level="medium",
+        question_type=QuestionType.DESCRIPTION,
+        difficulty_level=DifficultyLevel.MEDIUM,
         duration_seconds=60,
         topic_id=1,
         topic_name="Transportation",
@@ -236,8 +235,8 @@ def test_hard_opinion(request: Request):
         request,
         question_id=4,
         question_text="Do you think governments should invest more in public transportation infrastructure? Why or why not?",
-        question_type="opinion",
-        difficulty_level="hard",
+        question_type=QuestionType.OPINION,
+        difficulty_level=DifficultyLevel.HARD,
         duration_seconds=90,
         topic_id=1,
         topic_name="Transportation",
@@ -250,12 +249,12 @@ def test_scripted(request: Request):
     """Scripted read_aloud. All LLM scores should be DIAGNOSTIC ONLY."""
     return _run_scenario(
         request,
-        mode="scripted",
+        mode=SpeakingMode.SCRIPTED,
         reference_text="I usually go to school by bus",
         question_id=5,
         question_text="Read the following sentence aloud.",
-        question_type="read_aloud",
-        difficulty_level="easy",
+        question_type=QuestionType.READ_ALOUD,
+        difficulty_level=DifficultyLevel.EASY,
         duration_seconds=15,
         topic_id=1,
         topic_name="Transportation",
@@ -270,8 +269,8 @@ def test_related_topic(request: Request):
         request,
         question_id=6,
         question_text="What do you think about the traffic situation in your city?",
-        question_type="opinion",
-        difficulty_level="medium",
+        question_type=QuestionType.OPINION,
+        difficulty_level=DifficultyLevel.MEDIUM,
         duration_seconds=45,
         topic_id=1,
         topic_name="Transportation",

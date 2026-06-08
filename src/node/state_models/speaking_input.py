@@ -1,14 +1,16 @@
-from typing import Literal, Optional
+from typing import Optional
 
 from pydantic import BaseModel
+
+from schemas.enums import DifficultyLevel, QuestionType, SpeakingMode
 
 
 class QuestionContext(BaseModel):
     """Question context — được truyền từ .NET backend khi evaluate."""
     question_id: Optional[int] = None
     question_text: Optional[str] = None
-    question_type: Optional[str] = None  # read_aloud, short_answer, long_answer, opinion, description
-    difficulty_level: Optional[str] = None  # easy, medium, hard
+    question_type: Optional[QuestionType] = None
+    difficulty_level: Optional[DifficultyLevel] = None
     duration_seconds: Optional[int] = None
 
 
@@ -35,7 +37,7 @@ class SpeakingInput(BaseModel):
     # Chỉ dùng khi không có reference_text (unscripted mode).
     corrected_transcript: Optional[str] = None
 
-    mode: Literal["scripted", "unscripted"] = "unscripted"
+    mode: SpeakingMode = SpeakingMode.UNSCRIPTED
     language: str = "en-US"
 
     # Nested question/topic context

@@ -30,6 +30,7 @@ from langgraph.checkpoint.postgres import PostgresSaver
 import psycopg
 from psycopg_pool import ConnectionPool
 
+from auth import get_current_user_from_request, set_current_user_context
 from config.langsmith_config import setup_langsmith, get_langsmith_status
 
 setup_langsmith()
@@ -102,5 +103,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def bind_current_user_context(request, call_next):
+    request.state.current_user = None
+    request.state.current_user_id = None
+    set_current_user_context(None)
+
+    try:
+        user = get_current_user_from_request(request, required=False)
+        if user is not None:
+            request.state.current_user = user
+            request.state.current_user_id = user.user_id
+    except Exception:
+        logger.exception("[auth] failed to bind current user context")
+
+    try:
+        response = await call_next(request)
+    finally:
+        set_current_user_context(None)
+
+    return response
 
 app.include_router(router)

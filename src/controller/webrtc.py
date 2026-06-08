@@ -12,7 +12,6 @@ import os
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Dict, List, Optional, Set
 
 from aiortc import RTCPeerConnection, RTCSessionDescription
@@ -97,18 +96,6 @@ async def process_video_track(track, session_id: str):
                 100 * non_zero / total,
                 frame.pts, frame.time_base, frame.format.name, (frame.width, frame.height),
             )
-
-        # Save first frame as debug image to verify video is not black/corrupt
-        if frame_count == FRAME_SKIP:
-            debug_dir = Path("debug_frames")
-            debug_dir.mkdir(exist_ok=True)
-            debug_path = debug_dir / f"frame_{session_id[:8]}.png"
-            try:
-                import cv2
-                cv2.imwrite(str(debug_path), img)
-                logger.info("[YOLO_DEBUG] Saved debug frame to %s", debug_path)
-            except Exception as exc:
-                logger.warning("[YOLO_DEBUG] Failed to save frame: %s", exc)
 
         # Log frame info every 50 processed frames for debugging
         if frame_count % (FRAME_SKIP * 5) == 0:

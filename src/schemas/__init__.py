@@ -7,6 +7,13 @@ from .common import (
     ScoreStatus,
     Severity,
 )
+from .enums import (
+    DifficultyLevel,
+    LengthCategory,
+    QuestionType,
+    ScoreColor,
+    SpeakingMode,
+)
 from .scoring import CriterionScore, CriteriaScores
 from .validity import RuleResult, ValidityResult
 from .ui_response import Scores, UIResponse
@@ -17,6 +24,11 @@ __all__ = [
     "CriterionSource",
     "ScoreStatus",
     "Severity",
+    "DifficultyLevel",
+    "LengthCategory",
+    "QuestionType",
+    "ScoreColor",
+    "SpeakingMode",
     "CriterionScore",
     "CriteriaScores",
     "RuleResult",

@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
+from schemas.enums import LengthCategory
 from schemas.validity import RuleResult, ValidityResult
 
 VALID_ACTIONS = {"score", "score_with_penalty", "teacher_review", "reject_or_zero"}
@@ -138,7 +139,7 @@ def build_validity_result_from_metrics(metrics: Optional[Dict[str, Any]]) -> Val
     word_count = metrics.get("word_count") or 0
     length_category = safe_text(metrics.get("length_category"))
 
-    if length_category == "too_short":
+    if length_category == LengthCategory.TOO_SHORT:
         message = safe_text(metrics.get("note")) or safe_text(metrics.get("length_note")) or "Answer is too short for the task."
         return ValidityResult(
             valid_for_scoring=True,

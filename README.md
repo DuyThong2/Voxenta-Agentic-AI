@@ -27,16 +27,16 @@ d:/semester9/agents/
 │   ├── config/
 │   │   ├── chroma_config.py           # Vector DB configuration
 │   │   ├── postgresDB_config.py       # PostgreSQL configuration
-│   │   └── rabbitMq_config.py         # RabbitMQ configuration
+│   │   └── kafka_config.py            # Kafka configuration
 │   │
 │   ├── controller/
 │   │   └── controller.py    # API routes controller
 │   │
 │   ├── infra/
 │   │   └── message_broker/
-│   │       ├── connection.py          # RabbitMQ connection manager (singleton)
+│   │       ├── connection.py          # Kafka connection manager (singleton)
 │   │       ├── publisher.py           # Message publisher
-│   │       ├── rabbit_consumer.py     # Message consumer
+│   │       ├── kafka_consumer.py      # Message consumer
 │   │       └── models.py              # Message schemas
 │   │
 │   ├── node/
@@ -80,7 +80,7 @@ d:/semester9/agents/
 - **psycopg-pool** - Database connection pooling
 
 ### Message Queue & Async
-- **RabbitMQ** - Message broker (aio-pika)
+- **Kafka** - Message broker (aiokafka)
 - **AsyncIO** - Asynchronous operations
 
 ### Development & Deployment
@@ -94,7 +94,7 @@ d:/semester9/agents/
 - Python 3.12+
 - UV package manager (`pip install uv`)
 - PostgreSQL instance running
-- RabbitMQ instance running
+- Kafka instance running
 - ChromaDB instance (local or remote)
 
 ### 2. Installation
@@ -115,13 +115,14 @@ Create a `.env` file in the root directory with the following variables:
 # PostgreSQL
 POSTGRESQL_URI=postgresql+asyncpg://user:password@localhost:5432/voxenta
 
-# RabbitMQ
-RABBITMQ_URI=amqp://guest:guest@localhost:5672/
-RABBITMQ_HEARTBEAT=1200
-RABBITMQ_COMPLETED_EXCHANGE=EventSourcing.Events.Lab:PaperIngestionCompletedEvent
-RABBITMQ_INGEST_EXCHANGE=EventSourcing.Events.Lab:PaperIngestionEvent
-RABBITMQ_INGEST_QUEUE=paper-ingestion
-VECTOR_INDEX_QUEUE=vector-indexing
+# Kafka
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+KAFKA_CLIENT_ID=vox-agents
+KAFKA_CONSUMER_GROUP=vector-indexing
+KAFKA_AUTO_OFFSET_RESET=earliest
+KAFKA_COMPLETED_TOPIC=paper-ingestion-completed
+KAFKA_INGEST_TOPIC=paper-ingestion
+KAFKA_VECTOR_INDEX_TOPIC=vector-indexing
 
 # ChromaDB
 CHROMA_HOST=localhost
@@ -187,9 +188,9 @@ Each node processes the conversation state and enriches it with:
 ```
 Application
    ↓ (Publish)
-RabbitMQ Exchange (PaperIngestionCompletedEvent)
+Kafka Topic (paper-ingestion-completed)
    ↓ (Consume)
-RabbitConsumer
+KafkaConsumer
    ↓
 Vector Indexer (ChromaDB)
 ```

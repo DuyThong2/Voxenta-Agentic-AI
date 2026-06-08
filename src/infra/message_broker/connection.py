@@ -1,54 +1,58 @@
-"""RabbitMQ connection manager using aio-pika.
-
-Provides a singleton-style async connection that is created once during
-application startup and closed on shutdown.
-"""
+"""Kafka connection manager for async producer and consumer clients."""
 
 import logging
 from typing import Optional
 
-import aio_pika
-from aio_pika.abc import AbstractRobustConnection, AbstractChannel
+from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
-from config.rabbitMq_config import settings
+from config.kafka_config import settings
 
 logger = logging.getLogger(__name__)
 
-_connection: Optional[AbstractRobustConnection] = None
-_channel: Optional[AbstractChannel] = None
+_producer: Optional[AIOKafkaProducer] = None
+_consumer: Optional[AIOKafkaConsumer] = None
 
 
-async def connect() -> AbstractRobustConnection:
-    """Establish (or return existing) robust connection to RabbitMQ."""
-    global _connection
-    if _connection is None or _connection.is_closed:
-        logger.info("Connecting to RabbitMQ")
-        _connection = await aio_pika.connect_robust(
-            settings.RABBITMQ_URI,
-            heartbeat=1200,  
+async def get_producer() -> AIOKafkaProducer:
+    """Return a started Kafka producer singleton."""
+    global _producer
+    if _producer is None:
+        logger.info("Connecting Kafka producer")
+        _producer = AIOKafkaProducer(
+            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+            client_id=settings.KAFKA_CLIENT_ID,
+            acks="all",
         )
-        logger.info("RabbitMQ connection established.")
-    return _connection
+        await _producer.start()
+        logger.info("Kafka producer established.")
+    return _producer
 
 
-async def get_channel() -> AbstractChannel:
-    """Return a channel, creating one if necessary."""
-    global _channel
-    conn = await connect()
-    if _channel is None or _channel.is_closed:
-        _channel = await conn.channel()
-        # Fair dispatch – one unacknowledged message at a time per consumer.
-        await _channel.set_qos(prefetch_count=1)
-    return _channel
+async def get_consumer(topic: str) -> AIOKafkaConsumer:
+    """Return a started Kafka consumer singleton for the given topic."""
+    global _consumer
+    if _consumer is None:
+        logger.info("Connecting Kafka consumer topic=%s", topic)
+        _consumer = AIOKafkaConsumer(
+            topic,
+            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+            client_id=settings.KAFKA_CLIENT_ID,
+            group_id=settings.KAFKA_CONSUMER_GROUP,
+            enable_auto_commit=False,
+            auto_offset_reset=settings.KAFKA_AUTO_OFFSET_RESET,
+        )
+        await _consumer.start()
+        logger.info("Kafka consumer established.")
+    return _consumer
 
 
 async def close() -> None:
-    """Gracefully close channel and connection."""
-    global _channel, _connection
-    if _channel and not _channel.is_closed:
-        await _channel.close()
-        _channel = None
-    if _connection and not _connection.is_closed:
-        await _connection.close()
-        _connection = None
-    logger.info("RabbitMQ connection closed.")
+    """Gracefully close Kafka clients."""
+    global _producer, _consumer
+    if _consumer is not None:
+        await _consumer.stop()
+        _consumer = None
+    if _producer is not None:
+        await _producer.stop()
+        _producer = None
+    logger.info("Kafka clients closed.")

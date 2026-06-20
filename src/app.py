@@ -30,13 +30,15 @@ from langgraph.checkpoint.postgres import PostgresSaver
 import psycopg
 from psycopg_pool import ConnectionPool
 
+from auth import get_current_user_from_request, set_current_user_context
 from config.langsmith_config import setup_langsmith, get_langsmith_status
 
 setup_langsmith()
 
 from controller import router
 from controller.webrtc import close_all_connections
-from node.graphConfig import build_graph
+from node.followUpDecisionGraph.graphConfig import build_followup_graph
+from node.evalGraph.graphConfig import build_graph
 from config.postgresDB_config import settings as pg_settings
 from infra.message_broker.kafka_consumer import start_outbox_consumer
 from infra.message_broker import connection as mq_connection
@@ -63,6 +65,7 @@ async def lifespan(app: FastAPI):
 
     
     app.state.graph = build_graph(checkpointer)
+    app.state.followup_graph = build_followup_graph(checkpointer)
 
     # 2) Setup Chroma collection
     try:
@@ -102,5 +105,27 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def bind_current_user_context(request, call_next):
+    request.state.current_user = None
+    request.state.current_user_id = None
+    set_current_user_context(None)
+
+    try:
+        user = get_current_user_from_request(request, required=False)
+        if user is not None:
+            request.state.current_user = user
+            request.state.current_user_id = user.user_id
+    except Exception:
+        logger.exception("[auth] failed to bind current user context")
+
+    try:
+        response = await call_next(request)
+    finally:
+        set_current_user_context(None)
+
+    return response
 
 app.include_router(router)

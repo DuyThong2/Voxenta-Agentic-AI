@@ -1,7 +1,5 @@
-"""Kafka connection manager for async producer and consumer clients."""
-
 import logging
-from typing import Optional
+from typing import Dict, Optional
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
@@ -10,7 +8,7 @@ from config.kafka_config import settings
 logger = logging.getLogger(__name__)
 
 _producer: Optional[AIOKafkaProducer] = None
-_consumer: Optional[AIOKafkaConsumer] = None
+_consumers: Dict[str, AIOKafkaConsumer] = {}
 
 
 async def get_producer() -> AIOKafkaProducer:
@@ -29,11 +27,11 @@ async def get_producer() -> AIOKafkaProducer:
 
 
 async def get_consumer(topic: str) -> AIOKafkaConsumer:
-    """Return a started Kafka consumer singleton for the given topic."""
-    global _consumer
-    if _consumer is None:
+    """Return a started Kafka consumer singleton scoped by topic."""
+    consumer = _consumers.get(topic)
+    if consumer is None:
         logger.info("Connecting Kafka consumer topic=%s", topic)
-        _consumer = AIOKafkaConsumer(
+        consumer = AIOKafkaConsumer(
             topic,
             bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
             client_id=settings.KAFKA_CLIENT_ID,
@@ -41,17 +39,36 @@ async def get_consumer(topic: str) -> AIOKafkaConsumer:
             enable_auto_commit=False,
             auto_offset_reset=settings.KAFKA_AUTO_OFFSET_RESET,
         )
-        await _consumer.start()
+        await consumer.start()
+        _consumers[topic] = consumer
         logger.info("Kafka consumer established.")
-    return _consumer
+    return consumer
+
+
+async def get_topic_consumer(topic: str, *, group_id: str) -> AIOKafkaConsumer:
+    cache_key = f"{group_id}:{topic}"
+    consumer = _consumers.get(cache_key)
+    if consumer is None:
+        logger.info("Connecting Kafka consumer topic=%s group=%s", topic, group_id)
+        consumer = AIOKafkaConsumer(
+            topic,
+            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+            client_id=settings.KAFKA_CLIENT_ID,
+            group_id=group_id,
+            enable_auto_commit=False,
+            auto_offset_reset=settings.KAFKA_AUTO_OFFSET_RESET,
+        )
+        await consumer.start()
+        _consumers[cache_key] = consumer
+    return consumer
 
 
 async def close() -> None:
     """Gracefully close Kafka clients."""
-    global _producer, _consumer
-    if _consumer is not None:
-        await _consumer.stop()
-        _consumer = None
+    global _producer
+    for consumer in _consumers.values():
+        await consumer.stop()
+    _consumers.clear()
     if _producer is not None:
         await _producer.stop()
         _producer = None

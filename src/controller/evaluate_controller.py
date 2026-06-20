@@ -1,10 +1,5 @@
-"""
-Controller for evaluating speaking audio using LangGraph.
-"""
-
 from pathlib import Path
 from typing import Optional
-from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.encoders import jsonable_encoder
@@ -12,6 +7,7 @@ from fastapi.encoders import jsonable_encoder
 from node.state_models import SpeakingInput, QuestionContext, TopicContext
 from schemas.enums import DifficultyLevel, QuestionType, SpeakingMode
 from utils.assessment_response_adapter import adapt_current_response_to_ui_response
+from utils.exam_event_builder import build_completed_event
 
 
 router = APIRouter(prefix="/evaluate", tags=["Evaluate"])
@@ -20,13 +16,31 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data"
 
 
+def _stable_thread_id(
+    *,
+    exam_attempt_id: Optional[str],
+    answer_id: Optional[str],
+    question_id: Optional[str],
+    audio_path: Path,
+) -> str:
+    if exam_attempt_id and answer_id:
+        return f"eval-{exam_attempt_id}:{answer_id}"
+    if answer_id:
+        return f"eval-{answer_id}"
+    if question_id:
+        return f"eval-{question_id}"
+    return f"eval-{audio_path.stem}"
+
+
 def _invoke_graph(
     request: Request,
     audio_path: Path,
     *,
     mode: SpeakingMode,
     reference_text: Optional[str] = None,
-    question_id: Optional[int] = None,
+    exam_attempt_id: Optional[str] = None,
+    answer_id: Optional[str] = None,
+    question_id: Optional[str] = None,
     question_text: Optional[str] = None,
     question_type: Optional[QuestionType] = None,
     difficulty_level: Optional[DifficultyLevel] = None,
@@ -38,7 +52,6 @@ def _invoke_graph(
     graph = request.app.state.graph
 
     question_ctx = QuestionContext(
-        question_id=question_id,
         question_text=question_text,
         question_type=question_type,
         difficulty_level=difficulty_level,
@@ -52,6 +65,9 @@ def _invoke_graph(
 
     initial_state = {
         "speaking_input": SpeakingInput(
+            exam_attempt_id=exam_attempt_id,
+            answer_id=answer_id,
+            question_id=question_id,
             audio_path=str(audio_path),
             reference_text=reference_text if mode == SpeakingMode.SCRIPTED else None,
             mode=mode,
@@ -65,7 +81,12 @@ def _invoke_graph(
 
     graph_config = {
         "configurable": {
-            "thread_id": f"pronunciation-{uuid4()}",
+            "thread_id": _stable_thread_id(
+                exam_attempt_id=exam_attempt_id,
+                answer_id=answer_id,
+                question_id=question_id,
+                audio_path=audio_path,
+            ),
         }
     }
 
@@ -107,7 +128,16 @@ def _invoke_graph(
     }
 
     ui_response = adapt_current_response_to_ui_response(old_response)
-    return jsonable_encoder(ui_response)
+    exam_event = build_completed_event(
+        result,
+        result.get("speaking_input"),
+        audio_path=str(audio_path),
+    )
+
+    return jsonable_encoder({
+        "uiResponse": ui_response,
+        "examEvent": exam_event,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +153,9 @@ def evaluate_pronunciation_sample(
         description="Reference sentence for scripted assessment.",
     ),
     mode: SpeakingMode = Query(default=SpeakingMode.SCRIPTED, description="scripted or unscripted"),
-    question_id: Optional[int] = Query(default=None),
+    exam_attempt_id: Optional[str] = Query(default=None),
+    answer_id: Optional[str] = Query(default=None),
+    question_id: Optional[str] = Query(default=None),
     question_text: Optional[str] = Query(default=None),
     question_type: Optional[QuestionType] = Query(default=None),
     difficulty_level: Optional[DifficultyLevel] = Query(default=None),
@@ -143,6 +175,8 @@ def evaluate_pronunciation_sample(
     return _invoke_graph(
         request, audio_path,
         mode=mode, reference_text=reference_text,
+        exam_attempt_id=exam_attempt_id,
+        answer_id=answer_id,
         question_id=question_id, question_text=question_text,
         question_type=question_type, difficulty_level=difficulty_level,
         duration_seconds=duration_seconds, topic_id=topic_id,
@@ -185,7 +219,7 @@ def test_on_topic_easy(request: Request):
     """Answer matches question perfectly. Easy, short_answer. Expect HIGH scores across all 3 audios."""
     return _run_scenario(
         request,
-        question_id=1,
+        question_id="1",
         question_text="How do you usually go to school?",
         question_type=QuestionType.SHORT_ANSWER,
         difficulty_level=DifficultyLevel.EASY,
@@ -201,7 +235,7 @@ def test_off_topic(request: Request):
     """Answer is completely off-topic. Expect LOW coherence/content scores regardless of pronunciation quality."""
     return _run_scenario(
         request,
-        question_id=2,
+        question_id="2",
         question_text="What is your favorite food and why do you like it?",
         question_type=QuestionType.LONG_ANSWER,
         difficulty_level=DifficultyLevel.EASY,
@@ -217,7 +251,7 @@ def test_too_short(request: Request):
     """Answer is on-topic but too short for a description question. Expect penalized coherence/content."""
     return _run_scenario(
         request,
-        question_id=3,
+        question_id="3",
         question_text="Describe in detail how you commute to school every day, including what you see and experience along the way.",
         question_type=QuestionType.DESCRIPTION,
         difficulty_level=DifficultyLevel.MEDIUM,
@@ -233,7 +267,7 @@ def test_hard_opinion(request: Request):
     """Hard opinion question. Short answer expected to score lower on coherence/content."""
     return _run_scenario(
         request,
-        question_id=4,
+        question_id="4",
         question_text="Do you think governments should invest more in public transportation infrastructure? Why or why not?",
         question_type=QuestionType.OPINION,
         difficulty_level=DifficultyLevel.HARD,
@@ -251,7 +285,7 @@ def test_scripted(request: Request):
         request,
         mode=SpeakingMode.SCRIPTED,
         reference_text="I usually go to school by bus",
-        question_id=5,
+        question_id="5",
         question_text="Read the following sentence aloud.",
         question_type=QuestionType.READ_ALOUD,
         difficulty_level=DifficultyLevel.EASY,
@@ -267,7 +301,7 @@ def test_related_topic(request: Request):
     """Answer is related to topic but doesn't directly answer the question. Expect mixed scores."""
     return _run_scenario(
         request,
-        question_id=6,
+        question_id="6",
         question_text="What do you think about the traffic situation in your city?",
         question_type=QuestionType.OPINION,
         difficulty_level=DifficultyLevel.MEDIUM,

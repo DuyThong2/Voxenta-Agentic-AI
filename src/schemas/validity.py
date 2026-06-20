@@ -1,12 +1,12 @@
 from typing import Any, Dict, List, Optional
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from .common import AssessmentAction, CriterionName, Severity
+from .common import AssessmentAction, CriterionName, Severity, _CamelMessage
 
 
-class RuleResult(BaseModel):
+class RuleResult(_CamelMessage):
     rule_id: str
     category: str
     status: Literal["triggered", "not_triggered", "not_evaluated"] = "triggered"
@@ -21,7 +21,7 @@ class RuleResult(BaseModel):
     suggestion: str = ""
 
 
-class ValidityResult(BaseModel):
+class ValidityResult(_CamelMessage):
     valid_for_scoring: bool = True
     action: AssessmentAction = "score"
     overall_severity: Severity = "none"

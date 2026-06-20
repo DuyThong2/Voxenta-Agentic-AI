@@ -2,21 +2,28 @@ from typing import List, Optional, Dict, Any
 
 from pydantic import BaseModel, Field
 
+from schemas.common import _CamelMessage
 from schemas.enums import ScoreColor
 from schemas.scoring import CriteriaScores
 
 
-class PhonemeFeedback(BaseModel):
+class PhonemeFeedback(_CamelMessage):
     phoneme: str
     accuracy_score: Optional[float] = None
     color: Optional[ScoreColor] = None
+    level: Optional[str] = None
+    note: Optional[str] = None
 
 
-class WordFeedback(BaseModel):
+class WordFeedback(_CamelMessage):
     word: str
     accuracy_score: Optional[float] = None
+    effective_score: Optional[float] = None
     error_type: Optional[str] = None
     color: Optional[ScoreColor] = None
+    level: Optional[str] = None
+    error_note: Optional[str] = None
+    has_critical_issue: Optional[bool] = None
     phonemes: List[PhonemeFeedback] = Field(default_factory=list)
 
 

@@ -25,6 +25,12 @@ class KafkaSettings(BaseSettings):
     KAFKA_COMPLETED_TOPIC: str = "paper-ingestion-completed"
     KAFKA_INGEST_TOPIC: str = "paper-ingestion"
     KAFKA_VECTOR_INDEX_TOPIC: str = "vector-indexing"
+    # 2 topic cho cả luồng exam-evaluation — Failed dùng chung topic completed,
+    # phân biệt bằng EventEnvelope.event_type (xem src/dtos/), không cần thêm topic DLQ riêng.
+    KAFKA_EXAM_REQUEST_TOPIC: str = "exam-attempt-evaluation-requested"
+    KAFKA_EXAM_COMPLETED_TOPIC: str = "exam-attempt-evaluation-completed"
+    KAFKA_EXAM_CONSUMER_GROUP: str = "exam-attempt-evaluation"
+    KAFKA_MAX_RETRY: int = 3
 
 
 @lru_cache

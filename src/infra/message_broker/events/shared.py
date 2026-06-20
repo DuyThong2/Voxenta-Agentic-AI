@@ -1,0 +1,48 @@
+from typing import List, Optional
+
+from pydantic import Field
+
+from node.state_models.pronunciation import WordFeedback
+from schemas.common import _CamelMessage
+
+
+class TurnInput(_CamelMessage):
+    turn_order: int
+    turn_type: str
+    prompt_text: Optional[str] = None
+    audio_ref: str
+    transcript: Optional[str] = None
+
+
+class PronunciationOverallScores(_CamelMessage):
+    accuracy_score: Optional[float] = None
+    fluency_score: Optional[float] = None
+    prosody_score: Optional[float] = None
+    pron_score: Optional[float] = None
+    completeness_score: Optional[float] = None
+
+
+class TurnDetail(_CamelMessage):
+    turn_id: Optional[str] = None
+    turn_order: int
+    turn_type: str
+    prompt_text: Optional[str] = None
+    audio_url: str
+    transcript: str
+    word_count: int
+    duration_seconds: Optional[int] = None
+    asr_confidence: Optional[float] = None
+    pronunciation_overall: PronunciationOverallScores = Field(default_factory=PronunciationOverallScores)
+    word_feedback: List[WordFeedback] = Field(default_factory=list)
+
+
+class EvaluationSignals(_CamelMessage):
+    word_count: int
+    sentence_count: int
+    length_ratio: Optional[float] = None
+    expected_min_words: int
+    asr_confidence_avg: Optional[float] = None
+    topic_relevance_score: Optional[float] = None
+    off_topic_ratio: Optional[float] = None
+    speech_rate: Optional[float] = None
+    silence_ratio: Optional[float] = None

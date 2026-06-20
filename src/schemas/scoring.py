@@ -2,10 +2,10 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-from .common import CriterionSource, ScoreStatus
+from .common import CriterionSource, ScoreStatus, _CamelMessage
 
 
-class CriterionScore(BaseModel):
+class CriterionScore(_CamelMessage):
     score: Optional[float] = None
     level: str = "not_scored"
     status: ScoreStatus = "not_scored"

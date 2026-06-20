@@ -96,34 +96,21 @@ def build_default_criteria(result: Dict[str, Any]) -> Dict[str, Any]:
 def format_phoneme(phoneme: Dict[str, Any], index: int) -> Dict[str, Any]:
     score = safe_score(phoneme.get("accuracy_score") or phoneme.get("score"))
     phoneme_symbol = safe_text(phoneme.get("phoneme")) or ""
-    note = ""
-    suggestion = ""
-    if score is None:
-        note = "The sound could not be scored."
-        suggestion = "Listen to the target sound and try again."
-    elif score < 60:
-        note = f"The sound /{phoneme_symbol}/ needs clear improvement."
-        suggestion = "Practice this sound with focused drills."
-    elif score < 80:
-        note = f"The sound /{phoneme_symbol}/ is understandable but should be practiced more."
-        suggestion = "Repeat this sound with moderate emphasis."
-    else:
-        note = f"The sound /{phoneme_symbol}/ is good."
-        suggestion = "Continue using this sound correctly."
+    note = safe_text(phoneme.get("note"))
+    suggestion = "Listen to the target sound and try again." if score is None else "Continue practicing this sound."
 
     return {
         "index": index,
         "phoneme": phoneme_symbol,
         "score": score,
         "color": phoneme.get("color") or ScoreColor.from_score(score),
-        "level": level_from_score(score),
+        "level": phoneme.get("level") or level_from_score(score),
         "note": note,
         "suggestion": suggestion,
     }
 
 
 def format_word_feedback(word_obj: Dict[str, Any], index: int) -> Dict[str, Any]:
-    # raw_azure_score: fallback chain for backward compat
     raw_azure_score = safe_score(
         word_obj.get("raw_azure_score")
         or word_obj.get("azure_score")
@@ -135,36 +122,12 @@ def format_word_feedback(word_obj: Dict[str, Any], index: int) -> Dict[str, Any]
         if isinstance(phoneme_obj, dict):
             phoneme_items.append(format_phoneme(phoneme_obj, idx))
 
-    effective_score = raw_azure_score
-    if word_obj.get("error_type") in ["Omission", "Insertion"]:
-        effective_score = 0.0
-    elif raw_azure_score is None and phoneme_items:
-        scores = [p["score"] for p in phoneme_items if p["score"] is not None]
-        effective_score = min(scores) if scores else None
-    elif raw_azure_score is not None and phoneme_items:
-        phoneme_scores = [p["score"] for p in phoneme_items if p["score"] is not None]
-        if phoneme_scores:
-            effective_score = min(raw_azure_score, min(phoneme_scores))
-
-    effective_score = safe_score(effective_score)
+    effective_score = safe_score(word_obj.get("effective_score"))
     weak_phonemes = [p for p in phoneme_items if p["score"] is not None and p["score"] < 80]
-    has_critical_issue = (
-        word_obj.get("error_type") in ["Omission", "Insertion", "Mispronunciation"]
-        or any(p["score"] is not None and p["score"] < 60 for p in phoneme_items)
-    )
+    has_critical_issue = bool(word_obj.get("has_critical_issue"))
 
     error_type = safe_text(word_obj.get("error_type"))
-    if error_type == "Omission":
-        error_note = "This word was missing or not clearly spoken."
-    elif error_type == "Mispronunciation":
-        error_note = "This word was pronounced differently from the expected pronunciation."
-    elif error_type in ["None", None] and any(p["score"] is not None and p["score"] < 60 for p in phoneme_items):
-        low_phonemes = [p["phoneme"] for p in phoneme_items if p["score"] is not None and p["score"] < 60]
-        error_note = f"Some sounds in this word need improvement, especially {format_phoneme_list(low_phonemes)}."
-    elif error_type in ["None", None] and any(p["score"] is not None and p["score"] < 80 for p in phoneme_items):
-        error_note = "This word is mostly understandable, but some sounds should be practiced more."
-    else:
-        error_note = "No major pronunciation error detected."
+    error_note = safe_text(word_obj.get("error_note")) or "No major pronunciation error detected."
 
     return {
         "index": index,
@@ -172,7 +135,7 @@ def format_word_feedback(word_obj: Dict[str, Any], index: int) -> Dict[str, Any]
         "raw_azure_score": raw_azure_score,
         "effective_score": effective_score,
         "color": word_obj.get("color") or ScoreColor.from_score(effective_score),
-        "level": level_from_score(effective_score),
+        "level": word_obj.get("level") or level_from_score(effective_score),
         "error_type": error_type,
         "error_note": error_note,
         "has_critical_issue": has_critical_issue,

@@ -104,13 +104,16 @@ def explain_phoneme_issue(phoneme: str, score: Optional[float]) -> str:
 
 def format_phoneme_feedback(phoneme: PhonemeFeedback) -> Dict[str, Any]:
     score = round_score(phoneme.accuracy_score)
+    phoneme.color = ScoreColor.from_score(score)
+    phoneme.level = score_level(score)
+    phoneme.note = explain_phoneme_issue(phoneme.phoneme, score)
 
     return {
         "phoneme": phoneme.phoneme,
         "score": score,
-        "color": ScoreColor.from_score(score),
-        "level": score_level(score),
-        "note": explain_phoneme_issue(phoneme.phoneme, score),
+        "color": phoneme.color,
+        "level": phoneme.level,
+        "note": phoneme.note,
     }
 
 
@@ -137,15 +140,22 @@ def format_word_feedback(word: WordFeedback) -> Dict[str, Any]:
         )
     )
 
+    word.effective_score = effective_score
+    word.color = ScoreColor.from_score(effective_score)
+    word.level = score_level(effective_score)
+    word.error_note = explain_error_type(word.error_type)
+    word.has_critical_issue = has_critical_issue
+
     return {
         "word": word.word,
         "azure_score": azure_word_score,
-        "effective_score": effective_score,
-        "color": ScoreColor.from_score(effective_score),
-        "level": score_level(effective_score),
+        "accuracy_score": azure_word_score,
+        "effective_score": word.effective_score,
+        "color": word.color,
+        "level": word.level,
         "error_type": word.error_type,
-        "error_note": explain_error_type(word.error_type),
-        "has_critical_issue": has_critical_issue,
+        "error_note": word.error_note,
+        "has_critical_issue": word.has_critical_issue,
         "phonemes": formatted_phonemes,
         "weak_phonemes": weak_phonemes,
     }

@@ -37,7 +37,8 @@ setup_langsmith()
 
 from controller import router
 from controller.webrtc import close_all_connections
-from node.graphConfig import build_graph
+from node.followUpDecisionGraph.graphConfig import build_followup_graph
+from node.evalGraph.graphConfig import build_graph
 from config.postgresDB_config import settings as pg_settings
 from infra.message_broker.kafka_consumer import start_outbox_consumer
 from infra.message_broker import connection as mq_connection
@@ -64,6 +65,7 @@ async def lifespan(app: FastAPI):
 
     
     app.state.graph = build_graph(checkpointer)
+    app.state.followup_graph = build_followup_graph(checkpointer)
 
     # 2) Setup Chroma collection
     try:

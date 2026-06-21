@@ -74,6 +74,8 @@ beautifulsoup4==4.13.4
     #   wikipedia
 bs4==0.0.2
     # via agents (pyproject.toml)
+boto3==1.38.46
+    # via agents (pyproject.toml)
 certifi==2025.4.26
     # via
     #   httpcore

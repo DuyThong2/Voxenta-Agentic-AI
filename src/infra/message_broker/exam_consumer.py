@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 
 from config.kafka_config import settings
 from infra.message_broker.connection import get_topic_consumer
@@ -33,12 +34,13 @@ async def start_exam_attempt_consumer(app):
                 request_event = ExamAttemptEvaluationRequestedEvent.model_validate(payload)
                 request_payload = request_event.payload
                 main_turn = min(request_payload.turns, key=lambda turn: turn.turn_order)
+                local_audio_path = download_from_s3(main_turn.audio_ref)
                 initial_state = {
                     "speaking_input": SpeakingInput(
                         exam_attempt_id=request_event.exam_attempt_id,
                         answer_id=request_event.answer_id,
                         question_id=request_event.question_id,
-                        audio_path=download_from_s3(main_turn.audio_ref),
+                        audio_path=local_audio_path,
                         reference_text=request_payload.reference_text,
                         transcribed_text=main_turn.transcript,
                         mode=SpeakingMode(request_payload.mode),
@@ -61,11 +63,15 @@ async def start_exam_attempt_consumer(app):
                     "status": "idle",
                     "metadata": {"request_payload": payload},
                 }
-                await asyncio.to_thread(
-                    graph.invoke,
-                    initial_state,
-                    {"configurable": {"thread_id": f"{request_event.exam_attempt_id}:{request_event.answer_id}"}},
-                )
+                try:
+                    await asyncio.to_thread(
+                        graph.invoke,
+                        initial_state,
+                        {"configurable": {"thread_id": f"{request_event.exam_attempt_id}:{request_event.answer_id}"}},
+                    )
+                finally:
+                    if local_audio_path != main_turn.audio_ref and os.path.exists(local_audio_path):
+                        os.unlink(local_audio_path)
                 await consumer.commit()
                 break
             except Exception as exc:

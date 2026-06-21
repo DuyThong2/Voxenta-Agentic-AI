@@ -17,8 +17,16 @@ from infra.message_broker.events.shared import (
     TurnDetail,
     TurnInput,
 )
+from infra.message_broker.events.turn_recorded import (
+    AnswerTurnPayload,
+    AnswerTurnsRecordedEvent,
+    AnswerTurnsRecordedPayload,
+)
 
 __all__ = [
+    "AnswerTurnPayload",
+    "AnswerTurnsRecordedEvent",
+    "AnswerTurnsRecordedPayload",
     "EventEnvelope",
     "ExamAttemptEvaluationCompletedEvent",
     "ExamAttemptEvaluationCompletedPayload",

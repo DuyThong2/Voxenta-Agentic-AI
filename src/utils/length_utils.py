@@ -3,9 +3,16 @@ from typing import Optional
 from schemas.enums import QuestionType
 
 
-def get_expected_min_words(question_type: Optional[QuestionType], duration_seconds: Optional[int]) -> int:
+def get_expected_min_words(
+    question_type: Optional[QuestionType],
+    duration_seconds: Optional[int],
+    min_response_seconds: Optional[int] = None,
+) -> int:
     if question_type == QuestionType.SHORT_ANSWER:
         return 3
+
+    if min_response_seconds is not None:
+        return max(1, round(min_response_seconds * 2.5))
 
     if duration_seconds is None:
         return 10

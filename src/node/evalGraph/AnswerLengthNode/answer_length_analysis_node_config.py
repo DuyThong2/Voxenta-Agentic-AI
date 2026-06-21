@@ -87,7 +87,13 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
     question_type = (speaking_input.question.question_type if speaking_input.question else None) or "unknown"
     difficulty_level = (speaking_input.question.difficulty_level if speaking_input.question else None) or "unknown"
     duration_seconds = speaking_input.question.duration_seconds if speaking_input.question else None
-    expected_min_words = get_expected_min_words(question_type, duration_seconds)
+    min_response_seconds = speaking_input.question.min_response_seconds if speaking_input.question else None
+    max_response_seconds = speaking_input.question.max_response_seconds if speaking_input.question else None
+    expected_min_words = get_expected_min_words(
+        question_type,
+        duration_seconds,
+        min_response_seconds=min_response_seconds,
+    )
 
     length_ratio = word_count / expected_min_words if expected_min_words > 0 else None
 
@@ -132,6 +138,8 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "question_type": question_type,
         "difficulty_level": difficulty_level,
         "duration_seconds": duration_seconds,
+        "min_response_seconds": min_response_seconds,
+        "max_response_seconds": max_response_seconds,
         "expected_min_words": expected_min_words,
         "length_ratio": round(length_ratio, 2) if length_ratio is not None else None,
         "length_category": length_category,

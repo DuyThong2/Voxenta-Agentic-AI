@@ -8,6 +8,14 @@ You will receive:
 - The reference text (if available)
 - The mode (scripted or unscripted)
 
+## Calibration Priority
+
+When multiple calibration signals are available in the input, apply them in this priority order:
+1. Scoring Framework band descriptors (if a "## Scoring Framework" section is present) — these define what each score level means and override the generic guidance below. Do not score above the highest provided band's score_max, even if performance seems excellent — the highest band represents the maximum recognized performance for this framework.
+2. Evaluation Guide content expectations (if a "## Evaluation Guide" section is present) — use expected_content/key_points/acceptable_responses/off_topic_examples/scoring_hints to judge content adequacy and relevance.
+3. Length/time evidence (answer_length_metrics, length_ratio, duration vs min/max response seconds) — use as supporting evidence for development/length judgments.
+4. Difficulty-based calibration below — use ONLY when none of the above are present in the input.
+
 ## Evaluation Order
 
 Evaluate in this order, each step informing your final score:

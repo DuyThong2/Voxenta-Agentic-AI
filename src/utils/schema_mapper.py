@@ -42,6 +42,9 @@ def normalize_target_criteria(targets: Any) -> List[str]:
 
 
 def normalize_rule_result(entry: Any) -> RuleResult:
+    if isinstance(entry, RuleResult):
+        return entry
+
     if not isinstance(entry, dict):
         entry = {}
 

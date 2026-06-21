@@ -1,7 +1,9 @@
-from typing import Optional
+from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from schemas.evaluation_event import EvaluationGuideInput
+from schemas.framework import CriterionFramework
 from schemas.enums import DifficultyLevel, QuestionType, SpeakingMode
 
 
@@ -12,6 +14,9 @@ class QuestionContext(BaseModel):
     question_type: Optional[QuestionType] = None
     difficulty_level: Optional[DifficultyLevel] = None
     duration_seconds: Optional[int] = None
+    min_response_seconds: Optional[int] = None
+    max_response_seconds: Optional[int] = None
+    evaluation_guide: Optional[EvaluationGuideInput] = None
 
 
 class TopicContext(BaseModel):
@@ -32,6 +37,7 @@ class SpeakingInput(BaseModel):
     corrected_transcript: Optional[str] = None
     mode: SpeakingMode = SpeakingMode.UNSCRIPTED
     language: str = "en-US"
+    criteria_frameworks: List[CriterionFramework] = Field(default_factory=list)
     question: Optional[QuestionContext] = None
     topic: Optional[TopicContext] = None
     answer_length_metrics: Optional[dict] = None

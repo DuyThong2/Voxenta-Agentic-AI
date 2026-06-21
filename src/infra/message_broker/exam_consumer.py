@@ -43,11 +43,15 @@ async def start_exam_attempt_consumer(app):
                         transcribed_text=main_turn.transcript,
                         mode=SpeakingMode(request_payload.mode),
                         language=request_payload.language,
+                        criteria_frameworks=request_payload.criteria_frameworks,
                         question=QuestionContext(
                             question_text=request_payload.question_text,
                             question_type=request_payload.question_type,
                             difficulty_level=request_payload.difficulty_level,
                             duration_seconds=request_payload.duration_seconds,
+                            min_response_seconds=request_payload.min_response_seconds,
+                            max_response_seconds=request_payload.max_response_seconds,
+                            evaluation_guide=request_payload.evaluation_guide,
                         ),
                         topic=TopicContext(
                             topic_name=request_payload.topic_name,

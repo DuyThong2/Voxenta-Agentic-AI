@@ -11,21 +11,32 @@ from node.evalGraph.LexicalEvalNode.lexical_eval_prompt import SYSTEM_PROMPT
 from node.state_models import SpeakingInput
 from schemas.enums import SpeakingMode
 from utils.eval_node_helper import run_eval_node
+from utils.framework_context_helper import build_framework_criterion_context
 from utils.question_context_helper import build_question_context
 
 
 def build_user_prompt(speaking_input: SpeakingInput, transcript: str) -> str:
     mode = speaking_input.mode or SpeakingMode.UNSCRIPTED
     question_context = build_question_context(speaking_input)
+    framework_block = build_framework_criterion_context(speaking_input, "vocabulary")
 
     parts = [
         "## Question Context",
         question_context,
-        "",
-        "## Speaker's Answer",
-        f"Mode: {mode}",
-        f'Transcript: "{transcript}"',
     ]
+
+    if framework_block:
+        parts.append("")
+        parts.append(framework_block)
+
+    parts.extend(
+        [
+            "",
+            "## Speaker's Answer",
+            f"Mode: {mode}",
+            f'Transcript: "{transcript}"',
+        ]
+    )
 
     if speaking_input.answer_length_metrics:
         parts.append("\n## Answer Length Metrics")

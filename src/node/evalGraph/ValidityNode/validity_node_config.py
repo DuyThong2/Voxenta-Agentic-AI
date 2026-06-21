@@ -57,6 +57,12 @@ def _word_count(text: str) -> int:
     return len(re.findall(r"\b\w+\b", text))
 
 
+def _rule_attr(rule: Any, key: str) -> Any:
+    if isinstance(rule, dict):
+        return rule.get(key)
+    return getattr(rule, key, None)
+
+
 def _build_llm_prompt(
     text: str,
     question_text: Optional[str],
@@ -153,10 +159,11 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     question_text: Optional[str] = speaking_input.question.question_text if speaking_input.question else None
     question_type: Optional[str] = speaking_input.question.question_type if speaking_input.question else None
     duration_seconds: Optional[int] = speaking_input.question.duration_seconds if speaking_input.question else None
+    min_response_seconds: Optional[int] = speaking_input.question.min_response_seconds if speaking_input.question else None
     mode: Optional[str] = getattr(speaking_input, "mode", None)
     difficulty_level: Optional[str] = speaking_input.question.difficulty_level if speaking_input.question else None
 
-    rule_results: List[Dict[str, Any]] = []
+    rule_results: List[Any] = []
 
     # ------------------------------------------------------------------
     # Pure logic rule 1: no_speech (always reject)
@@ -179,7 +186,11 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # ------------------------------------------------------------------
 
     if mode != SpeakingMode.SCRIPTED and word_count > 0:
-        expected_min = get_expected_min_words(question_type, duration_seconds)
+        expected_min = get_expected_min_words(
+            question_type,
+            duration_seconds,
+            min_response_seconds=min_response_seconds,
+        )
         if word_count < expected_min:
             if STRICT_ZERO_ON_TOO_SHORT:
                 rule_results.append(normalize_rule_result({
@@ -213,7 +224,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     # If pure logic already has a blocking reject, skip LLM call
     has_blocking_reject = any(
-        r.get("blocking") and r.get("action") == "reject_or_zero"
+        _rule_attr(r, "blocking") and _rule_attr(r, "action") == "reject_or_zero"
         for r in rule_results
     )
 

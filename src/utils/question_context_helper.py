@@ -45,5 +45,7 @@ def build_question_context(speaking_input: "SpeakingInput") -> str:
             parts.append(f"Off-topic examples: {g.off_topic_examples}")
         if g.scoring_hints:
             parts.append(f"Scoring hints: {g.scoring_hints}")
+        if g.common_mistakes:
+            parts.append(f"Common mistakes for this question (supporting context, not exhaustive): {g.common_mistakes}")
 
     return "\n".join(parts) if parts else "No question context provided."

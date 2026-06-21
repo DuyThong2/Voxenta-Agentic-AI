@@ -70,6 +70,7 @@ def _build_llm_prompt(
     mode: Optional[str],
     difficulty_level: Optional[str],
     word_count: int,
+    off_topic_examples: Optional[str] = None,
 ) -> str:
     parts = [
         "## Transcript",
@@ -93,6 +94,11 @@ def _build_llm_prompt(
     if difficulty_level:
         parts.append(f"Difficulty: {difficulty_level}")
 
+    if off_topic_examples:
+        parts.append("")
+        parts.append("## Off-topic Examples (supporting reference, not exhaustive)")
+        parts.append(off_topic_examples)
+
     parts.append("")
     parts.append("Evaluate the transcript against all 4 rules and return the JSON result.")
 
@@ -100,10 +106,14 @@ def _build_llm_prompt(
 
 
 def _call_llm(text: str, question_text: Optional[str], question_type: Optional[str],
-              mode: Optional[str], difficulty_level: Optional[str], word_count: int) -> Dict[str, Any]:
+              mode: Optional[str], difficulty_level: Optional[str], word_count: int,
+              off_topic_examples: Optional[str] = None) -> Dict[str, Any]:
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
-    user_prompt = _build_llm_prompt(text, question_text, question_type, mode, difficulty_level, word_count)
+    user_prompt = _build_llm_prompt(
+        text, question_text, question_type, mode, difficulty_level, word_count,
+        off_topic_examples=off_topic_examples,
+    )
 
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
@@ -162,6 +172,11 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     min_response_seconds: Optional[int] = speaking_input.question.min_response_seconds if speaking_input.question else None
     mode: Optional[str] = getattr(speaking_input, "mode", None)
     difficulty_level: Optional[str] = speaking_input.question.difficulty_level if speaking_input.question else None
+    off_topic_examples: Optional[str] = (
+        speaking_input.question.evaluation_guide.off_topic_examples
+        if speaking_input.question and speaking_input.question.evaluation_guide
+        else None
+    )
 
     rule_results: List[Any] = []
 
@@ -241,6 +256,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 mode=mode,
                 difficulty_level=difficulty_level,
                 word_count=word_count,
+                off_topic_examples=off_topic_examples,
             )
 
             # Merge LLM-triggered rules

@@ -1,6 +1,6 @@
-from typing import List, Optional
+from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from schemas.evaluation_event import EvaluationGuideInput
 from schemas.framework import CriterionFramework
@@ -8,7 +8,14 @@ from schemas.enums import DifficultyLevel, QuestionType, SpeakingMode
 
 
 class QuestionContext(BaseModel):
-    """Question context carried through the evaluation graphs."""
+    """Question context carried through the evaluation graphs.
+
+    Question metadata is authored by school/teacher users on the Java side and
+    forwarded here as-is — treat it as untrusted input. Unrecognized enum
+    values are dropped to None rather than raising, and an inconsistent
+    response-time window (negative, zero, or min > max) is dropped entirely
+    rather than guessed at.
+    """
 
     question_text: Optional[str] = None
     question_type: Optional[QuestionType] = None
@@ -17,6 +24,41 @@ class QuestionContext(BaseModel):
     min_response_seconds: Optional[int] = None
     max_response_seconds: Optional[int] = None
     evaluation_guide: Optional[EvaluationGuideInput] = None
+
+    @field_validator("question_type", mode="before")
+    @classmethod
+    def _tolerant_question_type(cls, value: Any) -> Any:
+        if value is None or isinstance(value, QuestionType):
+            return value
+        try:
+            return QuestionType(value)
+        except ValueError:
+            return None
+
+    @field_validator("difficulty_level", mode="before")
+    @classmethod
+    def _tolerant_difficulty_level(cls, value: Any) -> Any:
+        if value is None or isinstance(value, DifficultyLevel):
+            return value
+        try:
+            return DifficultyLevel(value)
+        except ValueError:
+            return None
+
+    @model_validator(mode="after")
+    def _sanitize_response_window(self) -> "QuestionContext":
+        if self.min_response_seconds is not None and self.min_response_seconds <= 0:
+            self.min_response_seconds = None
+        if self.max_response_seconds is not None and self.max_response_seconds <= 0:
+            self.max_response_seconds = None
+        if (
+            self.min_response_seconds is not None
+            and self.max_response_seconds is not None
+            and self.min_response_seconds > self.max_response_seconds
+        ):
+            self.min_response_seconds = None
+            self.max_response_seconds = None
+        return self
 
 
 class TopicContext(BaseModel):

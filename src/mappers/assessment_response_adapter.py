@@ -2,17 +2,17 @@
 
 from typing import Any, Dict, List, Optional
 
-from schemas.enums import LengthCategory, ScoreColor
-from schemas.scoring import CriteriaScores
-from schemas.ui_response import UIResponse
-from schemas.validity import ValidityResult
-from utils.schema_mapper import (
+from dtos.response.ui_response import UIResponse
+from mappers.schema_mapper import (
     build_validity_result_from_metrics,
     build_validity_result_from_payload,
     normalize_rule_result,
     safe_score,
     safe_text,
 )
+from schemas.enums import LengthCategory, ScoreColor
+from schemas.scoring import CriteriaScores
+from schemas.validity import ValidityResult
 
 
 # ---------------------------------------------------------------------------

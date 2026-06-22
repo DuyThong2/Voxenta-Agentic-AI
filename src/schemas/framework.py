@@ -19,7 +19,7 @@ class CriterionFramework(_CamelMessage):
     # Plain str, not the CriterionName Literal: this is authored on the Java
     # side and forwarded as-is. An unrecognized key must not fail parsing of
     # the whole event — it simply won't match any node's lookup downstream
-    # (see utils.framework_context_helper.build_framework_criterion_context).
+    # (see each eval node's *_node_helper.build_framework_criterion_context).
     criterion_key: str
     framework_code: Optional[str] = None
     framework_criterion_name: Optional[str] = None

@@ -21,8 +21,8 @@ from node.state_models.pronunciation import (
     PronunciationAssessmentResult,
     WordFeedback,
 )
+from node.evalGraph.PronunciationNode.pronunciation_node_helper import format_pronunciation_api_response
 from utils import load_root_dotenv
-from utils.pronunciation_formatter import format_pronunciation_api_response
 from utils.speech_client import build_speech_config, normalize_text
 
 load_root_dotenv()

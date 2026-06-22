@@ -1,7 +1,7 @@
 from typing import List, Literal, Optional
 
-from infra.message_broker.events.envelope import EventEnvelope
-from infra.message_broker.events.shared import TurnInput
+from events.envelope import EventEnvelope
+from events.exam_attempt_evaluation_shared import TurnInput
 from pydantic import Field
 from schemas.framework import CriterionFramework
 from schemas.common import _CamelMessage

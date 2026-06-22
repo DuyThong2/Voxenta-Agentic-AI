@@ -4,16 +4,16 @@ import logging
 import os
 
 from config.kafka_config import settings
-from infra.message_broker.connection import get_topic_consumer
-from infra.message_broker.events import ExamAttemptEvaluationRequestedEvent
-from infra.message_broker.events.failed import (
+from events import ExamAttemptEvaluationRequestedEvent
+from events.exam_attempt_evaluation_failed import (
     ExamAttemptEvaluationFailedEvent,
     ExamAttemptEvaluationFailedPayload,
 )
-from infra.message_broker.exam_publisher import publish_exam_attempt_evaluation_failed
+from infra.message_broker.connection import get_topic_consumer
+from infra.message_broker.publishers.exam_publisher import publish_exam_attempt_evaluation_failed
+from infra.storage.audio_storage import download_from_s3
 from node.state_models import QuestionContext, SpeakingInput, TopicContext
 from schemas.enums import SpeakingMode
-from utils.audio_storage import download_from_s3
 
 logger = logging.getLogger(__name__)
 

@@ -1,7 +1,7 @@
 import logging
 
 from config.kafka_config import settings
-from infra.message_broker.events import (
+from events import (
     AnswerTurnsRecordedEvent,
     ExamAttemptEvaluationCompletedEvent,
     ExamAttemptEvaluationFailedEvent,

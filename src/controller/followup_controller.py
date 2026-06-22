@@ -3,16 +3,16 @@ import os
 from fastapi import APIRouter, Form, Request
 from fastapi.encoders import jsonable_encoder
 
-from infra.message_broker.events import (
+from dtos.response.follow_up import FollowUpAnswerTurn, FollowUpTurnResponse
+from events import (
     AnswerTurnPayload,
     AnswerTurnsRecordedEvent,
     AnswerTurnsRecordedPayload,
 )
-from infra.message_broker.exam_publisher import publish_answer_turns_recorded
+from infra.message_broker.publishers.exam_publisher import publish_answer_turns_recorded
+from infra.storage.audio_storage import download_from_s3
 from node.followUpDecisionGraph.constants import MAX_TURNS
 from node.state_models import QuestionContext
-from schemas.followup import FollowUpAnswerTurn, FollowUpTurnResponse
-from utils.audio_storage import download_from_s3
 
 
 router = APIRouter(prefix="/evaluate", tags=["FollowUp"])

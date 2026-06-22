@@ -1,27 +1,28 @@
-from infra.message_broker.events.completed import (
+from events.answer_turns_recorded import (
+    AnswerTurnPayload,
+    AnswerTurnsRecordedEvent,
+    AnswerTurnsRecordedPayload,
+)
+from events.envelope import EventEnvelope
+from events.exam_attempt_evaluation_completed import (
     ExamAttemptEvaluationCompletedEvent,
     ExamAttemptEvaluationCompletedPayload,
 )
-from infra.message_broker.events.envelope import EventEnvelope
-from infra.message_broker.events.failed import (
+from events.exam_attempt_evaluation_failed import (
     ExamAttemptEvaluationFailedEvent,
     ExamAttemptEvaluationFailedPayload,
 )
-from infra.message_broker.events.requested import (
+from events.exam_attempt_evaluation_requested import (
     ExamAttemptEvaluationRequestedEvent,
     ExamAttemptEvaluationRequestedPayload,
 )
-from infra.message_broker.events.shared import (
+from events.exam_attempt_evaluation_shared import (
     EvaluationSignals,
     PronunciationOverallScores,
     TurnDetail,
     TurnInput,
 )
-from infra.message_broker.events.turn_recorded import (
-    AnswerTurnPayload,
-    AnswerTurnsRecordedEvent,
-    AnswerTurnsRecordedPayload,
-)
+from events.paper_ingestion import PaperIngestionCompletedMessage, PaperIngestionMessage
 
 __all__ = [
     "AnswerTurnPayload",
@@ -38,4 +39,6 @@ __all__ = [
     "PronunciationOverallScores",
     "TurnDetail",
     "TurnInput",
+    "PaperIngestionMessage",
+    "PaperIngestionCompletedMessage",
 ]

@@ -1,6 +1,6 @@
 from typing import List, Literal, Optional
 
-from infra.message_broker.events.envelope import EventEnvelope
+from events.envelope import EventEnvelope
 from schemas.common import _CamelMessage
 
 

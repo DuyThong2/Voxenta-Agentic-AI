@@ -7,10 +7,12 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from node.evalGraph.AnswerLengthNode.answer_length_analysis_prompt import SYSTEM_PROMPT
+from node.evalGraph.AnswerLengthNode.answer_length_node_helper import (
+    build_question_context,
+    select_text_for_language_scoring,
+)
 from node.state_models import SpeakingInput
 from utils.length_utils import get_expected_min_words
-from utils.question_context_helper import build_question_context
-from utils.transcript_selector import select_text_for_language_scoring, build_scoring_metadata
 
 
 ENFORCE_CAP_IN_PYTHON = os.getenv("ENFORCE_CAP_IN_PYTHON", "true").lower() == "true"

@@ -4,15 +4,17 @@ This node evaluates coherence based on the student's actual speech output
 (transcribed_text), NOT the Azure reference text or scripted model answer.
 
 Transcript priority: transcribed_text > corrected_transcript > reference_text (fallback).
-See utils.transcript_selector for details.
+See coherence_eval_node_helper for details.
 """
 
+from node.evalGraph.CoherenceEvalNode.coherence_eval_node_helper import (
+    build_framework_criterion_context,
+    build_question_context,
+    run_eval_node,
+)
 from node.evalGraph.CoherenceEvalNode.coherence_eval_prompt import SYSTEM_PROMPT
 from node.state_models import SpeakingInput
 from schemas.enums import SpeakingMode
-from utils.eval_node_helper import run_eval_node
-from utils.framework_context_helper import build_framework_criterion_context
-from utils.question_context_helper import build_question_context
 
 
 def build_user_prompt(speaking_input: SpeakingInput, transcript: str) -> str:

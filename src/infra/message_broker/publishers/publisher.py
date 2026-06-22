@@ -3,8 +3,8 @@
 import logging
 
 from config.kafka_config import settings
+from events.paper_ingestion import PaperIngestionCompletedMessage
 from infra.message_broker import connection
-from infra.message_broker.models import PaperIngestionCompletedMessage
 
 logger = logging.getLogger(__name__)
 

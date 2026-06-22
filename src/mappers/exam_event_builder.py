@@ -1,11 +1,11 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from infra.message_broker.events.completed import (
+from events.exam_attempt_evaluation_completed import (
     ExamAttemptEvaluationCompletedEvent,
     ExamAttemptEvaluationCompletedPayload,
 )
-from infra.message_broker.events.shared import (
+from events.exam_attempt_evaluation_shared import (
     EvaluationSignals,
     PronunciationOverallScores,
     TurnDetail,

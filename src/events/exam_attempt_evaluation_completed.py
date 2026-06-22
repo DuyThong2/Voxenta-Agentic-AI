@@ -2,8 +2,8 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import Field
 
-from infra.message_broker.events.envelope import EventEnvelope
-from infra.message_broker.events.shared import EvaluationSignals, TurnDetail
+from events.envelope import EventEnvelope
+from events.exam_attempt_evaluation_shared import EvaluationSignals, TurnDetail
 from schemas.common import _CamelMessage
 from schemas.scoring import CriterionScore
 from schemas.validity import ValidityResult

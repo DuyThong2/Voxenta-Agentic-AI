@@ -2,8 +2,8 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-from .scoring import CriteriaScores
-from .validity import ValidityResult
+from schemas.scoring import CriteriaScores
+from schemas.validity import ValidityResult
 
 
 class Scores(BaseModel):

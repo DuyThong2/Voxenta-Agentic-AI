@@ -9,8 +9,8 @@ from node.state_models import SpeakingInput, QuestionContext, TopicContext
 from schemas.evaluation_event import EvaluationGuideInput
 from schemas.enums import DifficultyLevel, QuestionType, SpeakingMode
 from schemas.framework import CriterionFramework, FrameworkBand
-from utils.assessment_response_adapter import adapt_current_response_to_ui_response
-from utils.exam_event_builder import build_completed_event
+from mappers.assessment_response_adapter import adapt_current_response_to_ui_response
+from mappers.exam_event_builder import build_completed_event
 
 
 router = APIRouter(prefix="/evaluate", tags=["Evaluate"])

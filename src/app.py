@@ -16,7 +16,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
-logging.getLogger("infra.message_broker.kafka_consumer").setLevel(logging.INFO)
+logging.getLogger("infra.message_broker.external_events_handlers.kafka_consumer").setLevel(logging.INFO)
 logging.getLogger("vector.indexer").setLevel(logging.INFO)
 
 from utils import load_root_dotenv
@@ -40,7 +40,7 @@ from controller.webrtc import close_all_connections
 from node.followUpDecisionGraph.graphConfig import build_followup_graph
 from node.evalGraph.graphConfig import build_graph
 from config.postgresDB_config import settings as pg_settings
-from infra.message_broker.kafka_consumer import start_outbox_consumer
+from infra.message_broker.external_events_handlers.kafka_consumer import start_outbox_consumer
 from infra.message_broker import connection as mq_connection
 from vector.chroma_client import build_chroma_collection
 

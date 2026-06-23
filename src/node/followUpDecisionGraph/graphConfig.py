@@ -1,4 +1,7 @@
-from typing import Any, Dict
+import logging
+import wave
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 from langgraph.graph import END, START, StateGraph
 
@@ -11,6 +14,18 @@ from node.followUpDecisionGraph.SignalNode.signal_node_config import (
 from node.followUpDecisionGraph.GraphState import FollowUpGraphState
 from utils.text_utils import word_count
 from utils.speech_client import transcribe
+
+logger = logging.getLogger(__name__)
+
+
+def _wav_duration_seconds(audio_path: str) -> Optional[int]:
+    """WPF produces 16kHz mono PCM16 WAV files, so stdlib `wave` is enough."""
+    try:
+        with wave.open(audio_path, "rb") as f:
+            return round(f.getnframes() / f.getframerate())
+    except Exception:
+        logger.warning("[transcribe_turn_node] failed to read WAV duration for %s", audio_path, exc_info=True)
+        return None
 
 
 def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
@@ -28,8 +43,8 @@ def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
         "audio_url": state.get("audio_ref"),
         "transcript": transcript,
         "word_count": word_count(transcript),
-        "duration_seconds": None,
-        "answered_at": None,
+        "duration_seconds": _wav_duration_seconds(audio_path),
+        "answered_at": datetime.now(timezone.utc).isoformat(),
     }
 
     return {
@@ -65,4 +80,22 @@ def build_followup_graph(checkpointer=None):
 
     if checkpointer is not None:
         return g.compile(checkpointer=checkpointer)
+    return g.compile()
+
+
+def build_text_followup_graph():
+    """Text-only variant of the follow-up graph: skips transcribe_turn since
+    the caller (Tavus's /v1/chat/completions) already sends text, not audio.
+
+    No checkpointer: the caller resends the full message history every call,
+    so each invocation is stateless.
+    """
+    g = StateGraph(FollowUpGraphState)
+    g.add_node("prepare_turn_signals", prepare_turn_signals_node)
+    g.add_node("followup_decision", followup_decision_node)
+
+    g.add_edge(START, "prepare_turn_signals")
+    g.add_edge("prepare_turn_signals", "followup_decision")
+    g.add_edge("followup_decision", END)
+
     return g.compile()

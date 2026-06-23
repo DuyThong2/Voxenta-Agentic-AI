@@ -13,9 +13,12 @@ from infra.message_broker.publishers.exam_publisher import publish_answer_turns_
 from infra.storage.audio_storage import download_from_s3
 from node.followUpDecisionGraph.constants import MAX_TURNS
 from node.state_models import QuestionContext
+from utils.jsonl_logger import append_jsonl
 
 
 router = APIRouter(prefix="/evaluate", tags=["FollowUp"])
+
+FOLLOWUP_KAFKA_LOG_FILE = "followup_kafka_publish.jsonl"
 
 
 def _parse_question_payload(raw_value: str | None) -> QuestionContext | None:
@@ -97,15 +100,19 @@ async def evaluate_turn(
     turns = result.get("turns") or []
 
     if not decision.get("should_continue"):
-        await publish_answer_turns_recorded(
-            AnswerTurnsRecordedEvent(
-                answer_id=answer_id,
-                payload=AnswerTurnsRecordedPayload(
-                    turns=[_build_answer_turn_payload(turn, answer_id) for turn in turns],
-                    reason=decision.get("reason", ""),
-                ),
-            )
+        event = AnswerTurnsRecordedEvent(
+            answer_id=answer_id,
+            payload=AnswerTurnsRecordedPayload(
+                turns=[_build_answer_turn_payload(turn, answer_id) for turn in turns],
+                reason=decision.get("reason", ""),
+            ),
         )
+        append_jsonl(FOLLOWUP_KAFKA_LOG_FILE, {
+            "answer_id": answer_id,
+            "turn_order": turn_order,
+            "event": event.model_dump(by_alias=True),
+        })
+        await publish_answer_turns_recorded(event)
 
     response = FollowUpTurnResponse(
         turn_order=turn_order,

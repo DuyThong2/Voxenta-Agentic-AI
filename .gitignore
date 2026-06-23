@@ -58,6 +58,9 @@ cover/
 # Django stuff:
 *.log
 local_settings.py
+
+# Local debug logs (logs/*.jsonl from utils/jsonl_logger.py)
+/logs/
 db.sqlite3
 db.sqlite3-journal
 

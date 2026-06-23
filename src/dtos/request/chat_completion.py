@@ -3,9 +3,21 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel
 
 
+class ToolCallFunction(BaseModel):
+    name: str
+    arguments: str = "{}"
+
+
+class ToolCall(BaseModel):
+    id: str
+    type: Literal["function"] = "function"
+    function: ToolCallFunction
+
+
 class ChatMessage(BaseModel):
     role: Literal["system", "user", "assistant"]
     content: str
+    tool_calls: Optional[List[ToolCall]] = None
 
 
 class ChatCompletionRequest(BaseModel):

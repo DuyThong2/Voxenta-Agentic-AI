@@ -2,7 +2,7 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel
 
-from dtos.request.chat_completion import ChatMessage
+from dtos.request.chat_completion import ChatMessage, ToolCall
 
 
 class ChatCompletionChoice(BaseModel):
@@ -25,6 +25,7 @@ class ChatCompletionResponse(BaseModel):
 class ChatCompletionChunkDelta(BaseModel):
     role: Optional[Literal["assistant"]] = None
     content: Optional[str] = None
+    tool_calls: Optional[List[ToolCall]] = None
 
 
 class ChatCompletionChunkChoice(BaseModel):

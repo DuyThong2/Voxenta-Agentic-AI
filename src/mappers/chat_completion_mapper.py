@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import ValidationError
 
-from dtos.request.chat_completion import ChatMessage
+from dtos.request.chat_completion import ChatMessage, ToolCall, ToolCallFunction
 from dtos.response.chat_completion import (
     ChatCompletionChoice,
     ChatCompletionChunk,
@@ -23,6 +23,7 @@ from utils.text_utils import word_count
 CLOSING_REPLY = "Thank you, that's all for this question."
 
 _QUESTION_CONTEXT_MARKER = re.compile(r"<question_context>(.*?)</question_context>", re.DOTALL)
+_ANSWER_ID_MARKER = re.compile(r"<answer_id>(.*?)</answer_id>", re.DOTALL)
 
 
 def _extract_question_context(messages: List[ChatMessage]) -> Optional[QuestionContext]:
@@ -39,6 +40,21 @@ def _extract_question_context(messages: List[ChatMessage]) -> Optional[QuestionC
             return QuestionContext.model_validate_json(match.group(1).strip())
         except (ValueError, ValidationError):
             return None
+    return None
+
+
+def extract_answer_id(messages: List[ChatMessage]) -> Optional[str]:
+    """Pull the answer_id WPF embeds via <answer_id>{guid}</answer_id> next to
+    the question_context marker, so /v1/chat/completions can correlate this
+    conversation with the turns /turns/archive has been persisting. Not
+    prefixed with "_" like _extract_question_context: this one is called
+    from controller/tavus_controller.py, a different module."""
+    for message in messages:
+        if message.role != "system":
+            continue
+        match = _ANSWER_ID_MARKER.search(message.content)
+        if match:
+            return match.group(1).strip()
     return None
 
 
@@ -102,13 +118,26 @@ def resolve_reply_content(decision: Dict[str, Any]) -> str:
     return CLOSING_REPLY
 
 
-def build_chat_completion_response(model: Optional[str], reply_content: str) -> ChatCompletionResponse:
+def build_end_question_tool_call() -> ToolCall:
+    """Tavus relays tool_calls to the WPF client as an app-message instead of
+    executing them — this is the "question done" signal WPF listens for,
+    replacing the old approach of string-matching the spoken closing reply."""
+    return ToolCall(id=f"call_{uuid.uuid4().hex}", function=ToolCallFunction(name="end_question"))
+
+
+def build_chat_completion_response(
+    model: Optional[str],
+    reply_content: str,
+    tool_calls: Optional[List[ToolCall]] = None,
+) -> ChatCompletionResponse:
     return ChatCompletionResponse(
         id=f"chatcmpl-{uuid.uuid4().hex}",
         created=int(time.time()),
         model=model,
         choices=[
-            ChatCompletionChoice(message=ChatMessage(role="assistant", content=reply_content)),
+            ChatCompletionChoice(
+                message=ChatMessage(role="assistant", content=reply_content, tool_calls=tool_calls),
+            ),
         ],
     )
 
@@ -120,8 +149,13 @@ def build_chat_completion_chunk(
     *,
     content: Optional[str] = None,
     finish_reason: Optional[str] = None,
+    tool_calls: Optional[List[ToolCall]] = None,
 ) -> ChatCompletionChunk:
-    delta = ChatCompletionChunkDelta(role="assistant" if content is not None else None, content=content)
+    delta = ChatCompletionChunkDelta(
+        role="assistant" if (content is not None or tool_calls is not None) else None,
+        content=content,
+        tool_calls=tool_calls,
+    )
     return ChatCompletionChunk(
         id=chunk_id,
         created=created,

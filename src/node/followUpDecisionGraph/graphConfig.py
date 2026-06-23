@@ -18,6 +18,16 @@ from utils.speech_client import transcribe
 logger = logging.getLogger(__name__)
 
 
+def _state_without_turns(state: FollowUpGraphState) -> Dict[str, Any]:
+    """FollowUpGraphState.turns is Annotated[List, add]. Spreading **state
+    back out when a node doesn't intend to touch turns still re-submits
+    whatever turns already is as a "new" update, and the add reducer
+    appends it again — silently duplicating history across invokes on the
+    same thread_id. Strip it out of any return that isn't intentionally
+    appending exactly one new turn."""
+    return {k: v for k, v in state.items() if k != "turns"}
+
+
 def _wav_duration_seconds(audio_path: str) -> Optional[int]:
     """WPF produces 16kHz mono PCM16 WAV files, so stdlib `wave` is enough."""
     try:
@@ -31,7 +41,7 @@ def _wav_duration_seconds(audio_path: str) -> Optional[int]:
 def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
     audio_path = state.get("audio_path")
     if not audio_path:
-        return {**state, "status": "error", "error": "audio_path is required"}
+        return {**_state_without_turns(state), "status": "error", "error": "audio_path is required"}
 
     transcript = transcribe(audio_path, state.get("language", "en-US")) or ""
 
@@ -48,9 +58,21 @@ def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
     }
 
     return {
-        **state,
+        **_state_without_turns(state),
         "status": "processing",
         "current_turn": current_turn,
+    }
+
+
+def append_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
+    """Append the current turn to the checkpointed turns list for this
+    thread_id=answer_id. No decision logic — /v1/chat/completions is the
+    only decision-maker now (docs/single-decision-source-plan.md)."""
+    current_turn = state["current_turn"]
+    return {
+        **_state_without_turns(state),
+        "status": "archived",
+        "turns": [current_turn],
     }
 
 
@@ -60,11 +82,14 @@ def route_on_error(state: FollowUpGraphState) -> str:
     return "continue"
 
 
-def build_followup_graph(checkpointer=None):
+def build_archive_graph(checkpointer):
+    """Archive-only graph: transcribe the turn (reusing transcribe_turn_node
+    as-is) and append it to the Postgres-checkpointed turns list keyed by
+    thread_id=answer_id, for /v1/chat/completions to read back and publish
+    once the question is done."""
     g = StateGraph(FollowUpGraphState)
     g.add_node("transcribe_turn", transcribe_turn_node)
-    g.add_node("prepare_turn_signals", prepare_turn_signals_node)
-    g.add_node("followup_decision", followup_decision_node)
+    g.add_node("append_turn", append_turn_node)
 
     g.add_edge(START, "transcribe_turn")
     g.add_conditional_edges(
@@ -72,15 +97,12 @@ def build_followup_graph(checkpointer=None):
         route_on_error,
         {
             "end": END,
-            "continue": "prepare_turn_signals",
+            "continue": "append_turn",
         },
     )
-    g.add_edge("prepare_turn_signals", "followup_decision")
-    g.add_edge("followup_decision", END)
+    g.add_edge("append_turn", END)
 
-    if checkpointer is not None:
-        return g.compile(checkpointer=checkpointer)
-    return g.compile()
+    return g.compile(checkpointer=checkpointer)
 
 
 def build_text_followup_graph():

@@ -83,6 +83,15 @@ def _split_turn_history(turns: List[Dict[str, Any]], current_turn: Dict[str, Any
     return turns, current_turn
 
 
+def _state_without_turns(state: Dict[str, Any]) -> Dict[str, Any]:
+    """FollowUpGraphState.turns is Annotated[List, add]. Spreading **state
+    back out without touching turns still re-submits whatever turns already
+    is as a "new" update, and the add reducer appends it again — silently
+    duplicating history across invokes on the same thread_id. This node
+    never appends turns itself, so strip it from every return."""
+    return {k: v for k, v in state.items() if k != "turns"}
+
+
 def _build_prompt(state: Dict[str, Any]) -> str:
     current_turn = state["current_turn"]
     all_turns = list(state.get("turns", []))
@@ -115,7 +124,7 @@ def followup_decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
     current_turn = state.get("current_turn")
     if current_turn is None:
         return {
-            **state,
+            **_state_without_turns(state),
             "status": "error",
             "error": "current_turn is required for followup_decision_node",
         }
@@ -123,7 +132,7 @@ def followup_decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
     signals = state.get("signals") or {}
     if signals.get("hard_stop"):
         return {
-            **state,
+            **_state_without_turns(state),
             "status": "completed",
             "decision": {
                 "should_continue": False,
@@ -147,7 +156,7 @@ def followup_decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
         decision = json.loads(content)
     except Exception as exc:
         return {
-            **state,
+            **_state_without_turns(state),
             "status": "completed",
             "error": f"Follow-up decision failed: {exc}",
             "decision": {
@@ -175,7 +184,7 @@ def followup_decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
         next_prompt_text = None
 
     return {
-        **state,
+        **_state_without_turns(state),
         "status": "completed",
         "decision": {
             "should_continue": should_continue,

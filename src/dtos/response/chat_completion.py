@@ -8,7 +8,7 @@ from dtos.request.chat_completion import ChatMessage, ToolCall
 class ChatCompletionChoice(BaseModel):
     index: int = 0
     message: ChatMessage
-    finish_reason: Literal["stop"] = "stop"
+    finish_reason: Literal["stop", "tool_calls"] = "stop"
 
 
 class ChatCompletionResponse(BaseModel):
@@ -31,7 +31,7 @@ class ChatCompletionChunkDelta(BaseModel):
 class ChatCompletionChunkChoice(BaseModel):
     index: int = 0
     delta: ChatCompletionChunkDelta
-    finish_reason: Optional[Literal["stop"]] = None
+    finish_reason: Optional[Literal["stop", "tool_calls"]] = None
 
 
 class ChatCompletionChunk(BaseModel):

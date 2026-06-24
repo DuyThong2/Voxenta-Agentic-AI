@@ -17,6 +17,10 @@ Rules:
 - If should_continue=true, next_prompt_text MUST be anchored to a concrete
   detail from the student's latest turn. Do not ask a generic template
   follow-up that could fit any answer.
+- If the student asks to hear the question again, repeat it once in a calm,
+  supportive way instead of asking a new content follow-up.
+- If the student only hesitates or produces a very fragmentary start, prefer a
+  short supportive reprompt over a content-based follow-up.
 - Do not use scoring frameworks or band descriptors here. This task is only to
   decide whether one more follow-up would gather useful evidence.
 

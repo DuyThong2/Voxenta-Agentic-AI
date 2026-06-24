@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any, Dict, List
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -8,6 +9,18 @@ from node.followUpDecisionGraph.constants import MAX_TURNS
 from node.followUpDecisionGraph.FollowUpNode.followup_decision_prompt import SYSTEM_PROMPT
 from schemas.evaluation_event import EvaluationGuideInput
 from node.state_models import QuestionContext
+
+_REPEAT_REQUEST_PATTERNS = [
+    r"\b(can|could|would)\s+you\s+(please\s+)?(repeat|say)\b",
+    r"\b(please\s+)?repeat\s+(the\s+)?question\b",
+    r"\bsay\s+that\s+again\b",
+    r"\bi (didn't|did not|can't|cannot)\s+(hear|catch|understand)\b",
+    r"\bwhat\s+was\s+the\s+question\b",
+]
+_HESITATION_TOKENS = {
+    "uh", "um", "erm", "hmm", "ah", "eh", "like",
+}
+_QUESTION_REPEAT_PREFIX = "Sure, I'll repeat the question once."
 
 
 def _question_attr(question: QuestionContext | Dict[str, Any] | None, key: str) -> Any:
@@ -92,6 +105,115 @@ def _state_without_turns(state: Dict[str, Any]) -> Dict[str, Any]:
     return {k: v for k, v in state.items() if k != "turns"}
 
 
+def _normalize_transcript(text: str | None) -> str:
+    return re.sub(r"\s+", " ", (text or "").strip().lower())
+
+
+def _is_repeat_request(transcript: str | None) -> bool:
+    normalized = _normalize_transcript(transcript)
+    if not normalized:
+        return False
+    return any(re.search(pattern, normalized) for pattern in _REPEAT_REQUEST_PATTERNS)
+
+
+def _tokenize_words(text: str | None) -> List[str]:
+    return re.findall(r"[a-zA-Z']+", (text or "").lower())
+
+
+def _is_hesitation_only(transcript: str | None, word_count: int) -> bool:
+    words = _tokenize_words(transcript)
+    if not words:
+        return False
+    meaningful_words = [word for word in words if word not in _HESITATION_TOKENS]
+    if not meaningful_words:
+        return True
+    return word_count <= 4 and len(meaningful_words) <= 2
+
+
+def _has_used_repeat_once(turns: List[Dict[str, Any]]) -> bool:
+    for turn in turns:
+        prompt_text = str(turn.get("prompt_text") or "")
+        if prompt_text.startswith(_QUESTION_REPEAT_PREFIX):
+            return True
+    return False
+
+
+def _build_question_repeat_prompt(question: QuestionContext | Dict[str, Any] | None, fallback_prompt: str | None) -> str:
+    question_text = str(_question_attr(question, "question_text") or fallback_prompt or "").strip()
+    if not question_text:
+        return "Sure, I'll repeat the question once."
+    return f"{_QUESTION_REPEAT_PREFIX} {question_text}"
+
+
+def _build_hesitation_reprompt(question: QuestionContext | Dict[str, Any] | None) -> str:
+    question_type = _question_attr(question, "question_type")
+    question_type_value = getattr(question_type, "value", question_type)
+    if question_type_value == "short_answer":
+        return "Take your time. A short answer is fine."
+    return "Take your time. You can answer in one or two simple sentences first."
+
+
+def _handled_edge_case_decision(state: Dict[str, Any]) -> Dict[str, Any] | None:
+    current_turn = state["current_turn"]
+    all_turns = [*list(state.get("turns", [])), current_turn]
+    question = state.get("question")
+    transcript = current_turn.get("transcript")
+    word_count = int(current_turn.get("word_count") or 0)
+    signals = state.get("signals") or {}
+    repeated_once = _has_used_repeat_once(all_turns)
+
+    if _is_repeat_request(transcript):
+        if repeated_once:
+            return {
+                **_state_without_turns(state),
+                "status": "completed",
+                "decision": {
+                    "should_continue": True,
+                    "next_prompt_text": "I've repeated the question once. Please answer as best you can.",
+                    "reason": "repeat_question_already_used",
+                },
+            }
+        return {
+            **_state_without_turns(state),
+            "status": "completed",
+            "decision": {
+                "should_continue": True,
+                "next_prompt_text": _build_question_repeat_prompt(question, current_turn.get("prompt_text")),
+                "reason": "repeat_question_requested",
+            },
+        }
+
+    if signals.get("no_meaningful_speech"):
+        if repeated_once:
+            next_prompt_text = "Take your time. Please answer when you're ready."
+            reason = "no_meaningful_speech_after_repeat"
+        else:
+            next_prompt_text = _build_question_repeat_prompt(question, current_turn.get("prompt_text"))
+            reason = "no_meaningful_speech"
+        return {
+            **_state_without_turns(state),
+            "status": "completed",
+            "decision": {
+                "should_continue": True,
+                "next_prompt_text": next_prompt_text,
+                "reason": reason,
+            },
+        }
+
+    if _is_hesitation_only(transcript, word_count):
+        return {
+            **_state_without_turns(state),
+            "status": "completed",
+            "decision": {
+                "should_continue": True,
+                "next_prompt_text": _build_hesitation_reprompt(question),
+                "reason": "hesitation_reprompt",
+            },
+        }
+
+    return None
+
+
 def _build_prompt(state: Dict[str, Any]) -> str:
     current_turn = state["current_turn"]
     all_turns = list(state.get("turns", []))
@@ -140,6 +262,10 @@ def followup_decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 "reason": signals.get("hard_stop_reason", ""),
             },
         }
+
+    edge_case_decision = _handled_edge_case_decision(state)
+    if edge_case_decision is not None:
+        return edge_case_decision
 
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
     messages = [

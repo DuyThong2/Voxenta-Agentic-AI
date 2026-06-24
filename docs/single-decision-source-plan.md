@@ -4,6 +4,15 @@ Companion to `DesktopApp/VoxOralExam/docs/single-decision-source-plan.md` (WPF s
 for the full picture; this is the `agents`-side half. As before, this repo can't see the WPF
 source, so everything below is the verified contract WPF will call.
 
+✅ Implemented and import-verified. **Update:** WPF now keeps **one Tavus conversation for the
+whole exam** instead of one per question (recreating per question caused a UX flicker) — it sends
+`conversation.overwrite_llm_context` between questions instead. Consequence for this repo: the
+`messages` array `/v1/chat/completions` receives can now contain previous questions' turns too.
+Fixed in `mappers/chat_completion_mapper.py` — `_extract_question_context`/`extract_answer_id`
+now read the *most recent* system message (not the first), and `build_followup_state_from_messages`
+scopes turn-counting to whatever comes after that message, so turn_order/turns never bleed across
+questions. Verified with a multi-question synthetic `messages` list.
+
 ## Why this changes
 
 Today `/evaluate/turn` (`followup_controller.py`) makes its own follow-up decision using Azure

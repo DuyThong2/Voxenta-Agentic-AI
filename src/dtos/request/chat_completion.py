@@ -9,6 +9,7 @@ class ToolCallFunction(BaseModel):
 
 
 class ToolCall(BaseModel):
+    index: int = 0
     id: str
     type: Literal["function"] = "function"
     function: ToolCallFunction

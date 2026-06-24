@@ -33,13 +33,12 @@ def prepare_turn_signals_node(state: Dict[str, Any]) -> Dict[str, Any]:
     )
     cumulative_word_count = sum(int((turn or {}).get("word_count") or 0) for turn in all_turns)
     length_sufficient = cumulative_word_count >= expected_min_words
+    current_turn_word_count = int((current_turn or {}).get("word_count") or 0)
 
     turn_order = state.get("turn_order") or current_turn.get("turn_order") or 0
     hard_stop_reason = None
     if turn_order >= MAX_TURNS:
         hard_stop_reason = "max_turns_reached"
-    elif cumulative_word_count == 0:
-        hard_stop_reason = "no_speech"
 
     return {
         **state,
@@ -48,7 +47,9 @@ def prepare_turn_signals_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "signals": {
             "expected_min_words": expected_min_words,
             "cumulative_word_count": cumulative_word_count,
+            "current_turn_word_count": current_turn_word_count,
             "length_sufficient": length_sufficient,
+            "no_meaningful_speech": current_turn_word_count == 0,
             "hard_stop": hard_stop_reason is not None,
             "hard_stop_reason": hard_stop_reason,
         },

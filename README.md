@@ -13,57 +13,51 @@ Voxenta là một dự án AI Agent tiên tiến, được xây dựng để h�
 
 ## 🏗️ Kiến Trúc & Cấu Trúc Dự Án
 
+Tất cả đường dẫn dưới đây là tương đối so với thư mục `agents/` này (đây chính là project root cho Python/uv — không phải `d:\semester9`).
+
 ```
-d:/semester9/agents/
-├── dockerfile                 # Docker configuration
-├── pyproject.toml            # Project dependencies (UV)
-├── requirements.txt          # Python requirements
-├── .env.example              # Environment variables template
+agents/
+├── pyproject.toml / uv.lock     # Project dependencies (uv) — main venv (.venv)
+├── Dockerfile, docker-compose.yml
+├── .env / .env.example
 │
 ├── src/
-│   ├── app.py               # FastAPI entry point
-│   ├── auth.py              # Authentication logic
+│   ├── app.py                          # FastAPI entry point
+│   ├── auth.py
 │   │
-│   ├── config/
-│   │   ├── chroma_config.py           # Vector DB configuration
-│   │   ├── postgresDB_config.py       # PostgreSQL configuration
-│   │   └── kafka_config.py            # Kafka configuration
+│   ├── config/                         # chroma/kafka/langsmith/postgresDB/s3 config
+│   ├── controller/                     # FastAPI routers
+│   │   ├── archive_controller.py       # POST /turns/archive (turn upload + archival STT)
+│   │   ├── evaluate_controller.py      # answer evaluation endpoints
+│   │   ├── realtime_controller.py      # WS /realtime/attempts/{exam_attempt_id}
+│   │   └── webrtc.py                   # proctoring WebRTC (aiortc + YOLO)
 │   │
-│   ├── controller/
-│   │   └── controller.py    # API routes controller
+│   ├── realtime/                       # per-exam-attempt realtime session pipeline
+│   │   ├── attempt_connection.py       # one instance per exam attempt
+│   │   ├── session.py                  # one instance per question/answer
+│   │   └── turn_publisher.py           # idempotent archive + Kafka publish per turn
 │   │
-│   ├── infra/
-│   │   └── message_broker/
-│   │       ├── connection.py          # Kafka connection manager (singleton)
-│   │       ├── publisher.py           # Message publisher
-│   │       ├── kafka_consumer.py      # Message consumer
-│   │       └── models.py              # Message schemas
+│   ├── node/                           # LangGraph graphs
+│   │   ├── followUpDecisionGraph/      # decides next prompt / should_continue per turn
+│   │   ├── evalGraph/                  # grammar/lexical/coherence/pronunciation scoring
+│   │   └── state_models/
 │   │
-│   ├── node/
-│   │   ├── GraphState.py              # LangGraph state definition
-│   │   ├── graphConfig.py             # Graph workflow configuration
-│   │   ├── StartNode/                 # Entry node
-│   │   │   ├── start_node_config.py
-│   │   │   └── start_node_prompt.py
-│   │   ├── ElsaSpeakingNode/          # AI Speaking Node
-│   │   └── tools/                     # Available tools
-│   │       └── test_tools.py
-│   │
-│   ├── vector/
-│   │   ├── chroma_client.py           # Vector DB client
-│   │   └── indexer.py                 # Document indexing
-│   │
-│   └── dtos/                          # Data Transfer Objects
+│   ├── infra/                          # Kafka connection/publishers, S3 storage
+│   ├── events/                         # Kafka event payload schemas
+│   ├── mappers/, schemas/, dtos/, utils/, vector/, database/
 │
-├── data/
-│   └── [Training data & resources]
+├── spikes/                             # Phase 0 avatar pipeline PoC (LivePortrait + MuseTalk)
+│   ├── README.md                       # setup: HF weights, GitHub repos, GPU notes
+│   ├── voice_live_poc.py, avatar_render_poc.py
+│   ├── repos/                          # cloned LivePortrait/MuseTalk (gitignored)
+│   └── weights/                        # downloaded HF weights (gitignored)
 │
-├── notebook/
-│   └── testinitial.ipynb              # Development notebooks
-│
-└── setup/
-    └── diagnostics.py                 # Diagnostics tools
+├── vendor/                              # patched mmdet/mmpose wheels (see pyproject.toml)
+├── data/                                # sample audio/images for PoC scripts
+├── notebook/, setup/, docs/, logs/
 ```
+
+Chi tiết kiến trúc realtime/avatar pipeline (đang xây) nằm ở `docs/realtime-self-hosted-avatar-plan.md`. Phase 0 (avatar PoC, dependency setup) chạy ngay trong venv chính (`agents/.venv`) — xem `spikes/README.md` để biết cách lấy weights và clone repo.
 
 ## 💻 Công Nghệ Sử Dụng
 
@@ -91,19 +85,18 @@ d:/semester9/agents/
 ## 🚀 Cách Chạy Dự Án
 
 ### 1. Prerequisites
-- Python 3.12+
+- Python 3.11 (pinned via `.python-version` — required by the avatar-pipeline deps below, e.g. `tensorflow==2.12.0` has no Python 3.12 wheel)
 - UV package manager (`pip install uv`)
 - PostgreSQL instance running
 - Kafka instance running
 - ChromaDB instance (local or remote)
+- (Optional, for the avatar PoC in `spikes/`) NVIDIA GPU — see `spikes/README.md`
 
 ### 2. Installation
 
-```bash
-# Navigate to the project directory
-cd d:\semester9\agents
+All commands below assume your shell's current directory is already this `agents/` folder.
 
-# Install dependencies using UV
+```bash
 uv sync
 ```
 

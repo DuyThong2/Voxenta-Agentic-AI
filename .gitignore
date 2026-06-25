@@ -195,3 +195,15 @@ memory.db
 .claude/
 data/
 notebook/
+
+# Phase 0 spike model weights (multi-GB LivePortrait/MuseTalk checkpoints downloaded via
+# `hf download` — see spikes/README.md). Never commit these; re-download instead.
+/spikes/weights/
+/spikes/repos/
+/spikes/.venv-avatar/
+*.pth
+*.pt
+*.onnx
+*.safetensors
+*.ckpt
+*.bin

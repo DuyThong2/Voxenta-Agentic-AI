@@ -14,6 +14,7 @@ class FollowUpGraphState(TypedDict, total=False):
     prompt_text: Optional[str]
     current_turn: Dict[str, Any]
     turns: Annotated[List[Dict[str, Any]], add]
+    published_turn_orders: Annotated[List[int], add]
     signals: Dict[str, Any]
     decision: Dict[str, Any]
     status: Literal["idle", "processing", "completed", "error"]

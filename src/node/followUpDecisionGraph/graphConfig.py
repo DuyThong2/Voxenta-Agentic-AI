@@ -67,12 +67,24 @@ def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
 def append_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
     """Append the current turn to the checkpointed turns list for this
     thread_id=answer_id. No decision logic — /v1/chat/completions is the
-    only decision-maker now (docs/single-decision-source-plan.md)."""
+    only decision-maker now (docs/single-decision-source-plan.md).
+
+    Idempotency guard: `turns` is Annotated[List, add], so a blind append
+    would duplicate this turn if /turns/archive is retried (e.g. a timed-out
+    request that actually succeeded server-side) for a turn_order already
+    present in this thread_id's checkpointed turns. Upsert semantics instead:
+    if a turn with this turn_order already exists, skip the append so the
+    retried call is a safe no-op rather than a duplicate."""
     current_turn = state["current_turn"]
+    existing_turns = state.get("turns") or []
+    already_archived = any(
+        (turn or {}).get("turn_order") == current_turn.get("turn_order")
+        for turn in existing_turns
+    )
     return {
         **_state_without_turns(state),
         "status": "archived",
-        "turns": [current_turn],
+        "turns": [] if already_archived else [current_turn],
     }
 
 

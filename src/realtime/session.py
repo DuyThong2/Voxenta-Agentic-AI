@@ -15,6 +15,15 @@ returns the decision dict immediately and only *schedules*
 turn_publisher.publish_turn_if_new as a fire-and-forget background task; it
 never awaits it inline, so a slow/racing archive never delays the decision
 the client is waiting on.
+
+Transcript accumulation (Phase 3): live transcript text comes from Azure
+Voice Live's VAD-delimited utterances (see voice_live_client.py), not the
+Phase 2 placeholder's manually-typed `transcript_chunk` messages. A turn can
+contain more than one utterance (the speaker pauses then resumes before
+WPF decides the turn is actually over), so each utterance's *final*
+transcript is appended to `current_transcript` as it completes, not
+replaced — only the in-progress utterance's partial text is held separately
+until its own final_transcript arrives.
 """
 
 import asyncio
@@ -26,6 +35,13 @@ from node.state_models import QuestionContext
 from realtime import turn_publisher
 
 logger = logging.getLogger(__name__)
+
+# How long to wait, after a turn_end is requested, for a VAD-detected utterance's final_transcript
+# to arrive if speech_end already fired but the (slower) transcription hasn't completed yet.
+# Mirrors the margin spikes/voice_live_poc.py needed (final_transcript landed ~0.85s after
+# speech_end in real testing) -- chosen with headroom, not measured precisely against production
+# load.
+PENDING_TRANSCRIPT_TIMEOUT_SECONDS = 3.0
 
 
 class RealtimeExamSession:
@@ -55,14 +71,64 @@ class RealtimeExamSession:
         self.turns: List[Dict[str, Any]] = []
         self.current_transcript: str = ""
 
-    def append_transcript_chunk(self, text: str) -> None:
-        """Accumulate live transcript text for the turn currently in
-        progress. Mirrors Phase 3's eventual VAD-driven accumulation, but
-        here it's just string concatenation off the placeholder text
-        protocol."""
-        if not text:
+        # In-progress utterance state (Phase 3): _live_partial accumulates partial_transcript
+        # deltas for whichever utterance is currently being spoken; it is folded into
+        # current_transcript (and cleared) once that utterance's final_transcript arrives.
+        self._live_partial: str = ""
+        self._awaiting_final_transcript: bool = False
+        self._final_transcript_event: asyncio.Event = asyncio.Event()
+
+    def on_speech_start(self) -> None:
+        """A new utterance within this turn just started (VAD speech_start).
+        Does not touch already-finalized text in current_transcript."""
+        self._live_partial = ""
+
+    def on_partial_transcript(self, text: Optional[str]) -> None:
+        """Accumulate an in-progress utterance's transcription deltas.
+        Best-effort only -- on_final_transcript is the authoritative text for
+        this utterance once it arrives."""
+        if text:
+            self._live_partial += text
+
+    def on_speech_end(self) -> None:
+        """VAD detected the end of an utterance; its final_transcript is
+        still in flight (transcription is slower than VAD). Callers that
+        need the turn's full transcript right now should await
+        wait_for_pending_transcript first."""
+        self._awaiting_final_transcript = True
+        self._final_transcript_event.clear()
+
+    def on_final_transcript(self, text: Optional[str]) -> None:
+        """Authoritative transcript for the utterance that just completed --
+        appended to current_transcript (a turn may span multiple
+        utterances), superseding that utterance's own partial deltas."""
+        finalized = (text or self._live_partial or "").strip()
+        if finalized:
+            self.current_transcript = f"{self.current_transcript} {finalized}".strip()
+        self._live_partial = ""
+        self._awaiting_final_transcript = False
+        self._final_transcript_event.set()
+
+    async def wait_for_pending_transcript(self, timeout: float = PENDING_TRANSCRIPT_TIMEOUT_SECONDS) -> None:
+        """Block briefly for a just-ended utterance's final_transcript before
+        a turn_end reads current_transcript, so a turn_end arriving right on
+        the heels of vad_speech_end doesn't race the (slightly slower)
+        transcription. No-op if no utterance is currently pending."""
+        if not self._awaiting_final_transcript:
             return
-        self.current_transcript = f"{self.current_transcript} {text}".strip()
+        try:
+            await asyncio.wait_for(self._final_transcript_event.wait(), timeout=timeout)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[session] timed out waiting for final_transcript, falling back to partial text: answer_id=%s",
+                self.answer_id,
+            )
+            # Fall back to whatever partial text was accumulated rather than silently dropping
+            # this utterance's words.
+            if self._live_partial.strip():
+                self.current_transcript = f"{self.current_transcript} {self._live_partial.strip()}".strip()
+            self._live_partial = ""
+            self._awaiting_final_transcript = False
 
     def _build_current_turn(self, transcript: str, word_count: int) -> Dict[str, Any]:
         return {

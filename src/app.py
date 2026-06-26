@@ -8,6 +8,16 @@ from contextlib import asynccontextmanager
 import asyncio
 import sys
 
+# Windows' console defaults stdout/stderr to the legacy cp1252 codepage, which can't encode
+# Unicode characters (e.g. the Japanese-style brackets in MuseTalk's musetalk/utils/
+# preprocessing.py debug prints) -- without this, any such print() crashes with
+# UnicodeEncodeError the first time realtime/avatar_renderer.py's in-process MuseTalk call runs.
+# Subprocess calls (LivePortrait) dodge this via PYTHONIOENCODING in the child's own env; this is
+# the in-process equivalent fix for this main process itself. Harmless on Linux/macOS, where
+# stdout is already UTF-8.
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
 import logging
 
 logging.basicConfig(
@@ -37,6 +47,7 @@ setup_langsmith()
 
 from controller import router
 from controller.webrtc import close_all_connections
+from realtime.avatar_webrtc import close_all_connections as close_all_avatar_connections
 from node.followUpDecisionGraph.graphConfig import build_archive_graph, build_text_followup_graph
 from node.evalGraph.graphConfig import build_graph
 from config.postgresDB_config import settings as pg_settings
@@ -63,7 +74,6 @@ async def lifespan(app: FastAPI):
     pool = ConnectionPool(pg_settings.PG_URI, min_size=1, max_size=10)
     checkpointer = PostgresSaver(pool)
 
-    
     app.state.graph = build_graph(checkpointer)
     app.state.archive_graph = build_archive_graph(checkpointer)
     app.state.text_followup_graph = build_text_followup_graph()
@@ -83,6 +93,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await close_all_connections()
+        await close_all_avatar_connections()
         consumer_task.cancel()
         await mq_connection.close()
         pool.close()

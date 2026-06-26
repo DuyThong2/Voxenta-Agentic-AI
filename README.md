@@ -100,6 +100,16 @@ All commands below assume your shell's current directory is already this `agents
 uv sync
 ```
 
+If `mmcv` ever comes back with the wrong cached wheel after a CUDA/index change, use the helper
+below instead of remembering the repair flags by hand:
+
+```powershell
+.\setup\sync-python-env.ps1
+```
+
+It runs `uv sync`, smoke-tests `mmcv._ext`, and only if that check fails does it automatically
+rerun sync with `--reinstall-package mmcv --link-mode=copy`.
+
 ### 3. Environment Setup
 
 Create a `.env` file in the root directory with the following variables:

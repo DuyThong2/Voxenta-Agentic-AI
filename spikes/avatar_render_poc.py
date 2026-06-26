@@ -90,12 +90,16 @@ def _peak_memory_mb() -> Optional[float]:
 
 
 def _torch_lib_dir() -> Optional[Path]:
-    """torch bundles its own cudart64_12.dll/cublas64_12.dll/cudnn64_8.dll under
-    <venv>/Lib/site-packages/torch/lib — onnxruntime-gpu's CUDA execution provider depends on
-    these same DLLs but doesn't bundle or locate them itself, so it fails to load
-    (LoadLibrary error 126) unless this directory is already on PATH. Confirmed via direct repro:
-    `onnxruntime.InferenceSession(..., providers=["CUDAExecutionProvider"])` silently fell back
-    to CPUExecutionProvider with exactly this error until this directory was added to PATH."""
+    """torch (cu118 build) bundles cudart64_110.dll/cublas64_11.dll/cudnn64_8.dll/etc. under
+    <venv>/Lib/site-packages/torch/lib, which onnxruntime-gpu's CUDA execution provider depends
+    on but doesn't bundle or locate itself — adding this to PATH/child env is harmless and was
+    the fix for the original "LoadLibrary error 126" (missing dependency). It does NOT fix
+    onnxruntime's CUDA provider end to end, though: even with this directory present, it still
+    fails with `WinError 1114: DLL initialization routine failed` (the provider DLL's own init
+    code crashing, most likely an exact cuDNN patch-version mismatch between what onnxruntime-gpu
+    was built against and what torch bundles) — confirmed by directly loading the DLL via
+    ctypes. onnxruntime permanently falls back to CPU for face-detection; this is an accepted,
+    low-impact state (see spikes/README.md's GPU section), not a bug still being chased."""
     torch_lib = Path(sys.executable).resolve().parent.parent / "Lib" / "site-packages" / "torch" / "lib"
     return torch_lib if torch_lib.is_dir() else None
 
@@ -196,6 +200,7 @@ def _run_musetalk(config: AvatarRenderConfig, motion_video_path: Path, audio_pat
             "--unet_model_path", "./models/musetalkV15/unet.pth",
             "--whisper_dir", "./models/whisper",
             "--vae_type", "sd-vae",
+            "--use_float16",
             "--version", "v15",
             "--result_dir", str(output_dir.resolve()),
         ],

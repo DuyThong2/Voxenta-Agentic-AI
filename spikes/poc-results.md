@@ -74,3 +74,28 @@ credentials and the LivePortrait/MuseTalk weights+repos are set up (see `spikes/
 
 - liveportrait: 29.750s, peak 23MB
 - musetalk: 124.094s, peak 23MB
+
+## avatar_render_poc — audio=sample.wav photo=image.png
+
+- liveportrait: 37.062s, peak 23MB
+- musetalk: 139.906s, peak 23MB
+
+## avatar_render_poc — audio=sample.wav photo=image.png
+
+- liveportrait: 22.438s, peak 22MB
+- musetalk: 59.547s, peak 23MB
+
+## avatar_render_poc — audio=sample.wav photo=image.png
+
+- liveportrait: 22.437s, peak 23MB
+- musetalk: 58.812s, peak 23MB
+
+## avatar_render_poc — audio=sample.wav photo=image.png
+
+- liveportrait: 25.796s, peak 23MB
+- musetalk: 60.016s, peak 23MB
+
+## avatar_render_poc — audio=sample.wav photo=image.png
+
+- liveportrait: 22.547s, peak 23MB
+- musetalk: 49.453s, peak 23MB

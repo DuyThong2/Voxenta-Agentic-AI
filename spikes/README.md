@@ -135,13 +135,20 @@ same way now, via `uv run` against `agents/.venv`.)
 2. After unifying numpy/opencv between the two venvs (still separate venvs, warm disk cache):
    LivePortrait 21.75s + MuseTalk 57.8s = **79.5s end-to-end** — most of the improvement is
    likely warm OS disk cache for the multi-GB checkpoints, not the dependency unification itself.
-3. After the cu118 switch (onnxruntime now actually uses the GPU for face detection, still via
-   the now-retired separate venv, disk cache cold again): LivePortrait 28.5s + MuseTalk 165.5s =
-   **194.1s end-to-end**.
+3. After the cu118 switch, still via the now-retired separate venv, disk cache cold again:
+   LivePortrait 28.5s + MuseTalk 165.5s = **194.1s end-to-end**. (onnxruntime was assumed fixed
+   at this point — turned out not to be, see the GPU section above; this number does NOT reflect
+   a working onnxruntime CUDA provider.)
+4. Through `agents/.venv` directly (the only venv now), torch==2.3.0+cu118, run twice back to
+   back with no config change: **177s cold disk cache** (LivePortrait 37.1s + MuseTalk 139.9s)
+   then **82s warm disk cache** (22.5s + 59.5s) for the identical setup. This nearly 2x swing
+   from disk-cache state alone (not a CUDA-variant difference — same exact config both times) is
+   the clearest evidence yet of how much cold-start dominates every number in this list.
 None of these are warm-*process* numbers (every run is a fresh subprocess reloading all
-checkpoints from disk) — that's still an open item, see the bottom of this file. MuseTalk's
-PyTorch-based UNet inference dominates the total either way; the onnxruntime CUDA fix only
-ever affected a small slice of LivePortrait's stage, not the overall realtime verdict.
+checkpoints from disk) — that's still an open item. MuseTalk's PyTorch-based UNet inference
+dominates the total regardless of any of the onnxruntime/CUDA-variant work above — even the best
+number so far (82s for a 3.22s clip, ~25x slower than realtime) is nowhere close to realtime, and
+nothing in this dependency-consolidation work was expected to (or did) change that verdict.
 
 **Status (2026-06-25): fully resolved, declarative, single venv — `spikes/` has no
 `pyproject.toml`/`uv.lock`/`.venv` of its own anymore, by design.** Everything (vendored
@@ -196,9 +203,36 @@ CUDA-12 DLLs, so onnxruntime's CUDA execution provider could never load
 PATH problem. onnxruntime-gpu only publishes CUDA-12 builds via an unstable nightly-only Azure
 DevOps feed (no stable release), so matching torch to CUDA 11.8 instead — which the GPU driver
 runs just fine, newer drivers are always backwards-compatible with older CUDA runtimes — is the
-durable fix. `mmcv`'s index moved to the matching `cu118`/`torch2.3.0` build for the same reason
-(it has its own compiled CUDA extension; leaving it on a `cu121` wheel while torch supplies
-`cu118` DLLs would just trade this exact bug from onnxruntime onto mmcv instead).
+durable fix. `mmcv`'s index moved to the matching `cu118`/`torch2.3.0` build too (it has its own
+compiled CUDA extension and needs to match what torch actually bundles).
+
+**Pitfall hit while making this switch, worth knowing about for any future index change:** after
+flipping `mmcv`'s `[tool.uv.sources]` index from the cu121 build to the cu118 one, `import mmcv`
+kept crashing (`ImportError: DLL load failed while importing _ext`) even with torch correctly on
+cu118 — `pefile` on the installed `mmcv/_ext.*.pyd` showed it still importing `cudart64_12.dll`,
+i.e. the *old* cu121-built file, not the cu118 one this index actually serves. A plain `uv sync`
+does not always notice that a `[tool.uv.sources]` index changed for an already-resolved exact
+version on a `flat`-format index (no per-wheel hash to compare against) — it kept silently
+serving the stale cu121 wheel from cache. Fix: `uv sync --reinstall-package mmcv
+--link-mode=copy` forced a genuine re-fetch from the new index; afterward `_ext.*.pyd` correctly
+imports `cudart64_110.dll` and `mmcv`/`mmdet`/`mmpose` import and work correctly. If you ever
+change which index a pinned-version package should resolve from, force
+`--reinstall-package <name>` once rather than trusting a plain `uv sync` to notice.
+
+**However, onnxruntime's CUDA provider still doesn't actually work, for a different and deeper
+reason** (re-confirmed directly in `agents/.venv` after the mmcv fix above): loading
+`onnxruntime_providers_cuda.dll` directly (bypassing onnxruntime's own wrapper, via
+`ctypes.WinDLL`, with `torch/lib` already registered via `os.add_dll_directory`) fails with
+`WinError 1114: A dynamic link library (DLL) initialization routine failed` — a *different*
+error than the original "error 126 / missing dependency." All 5 of its direct DLL dependencies
+(`cublasLt64_11.dll`/`cublas64_11.dll`/`cudnn64_8.dll`/`cufft64_10.dll`/`cudart64_110.dll`) load
+individually without error, so this is the provider DLL's own init code crashing — most likely
+because torch's bundled `cudnn64_8.dll` (cuDNN 8.7.x) is a different exact patch version than
+whatever onnxruntime-gpu==1.18.0 was actually built/tested against, despite sharing the same
+filename. **Not pursued further: onnxruntime permanently falls back to CPU for the
+face-detection step, and that's an accepted state** — it's a small fraction of LivePortrait's
+already-much-smaller stage (37s of 177s total); MuseTalk (139.9s, unaffected either way) is what
+actually dominates. This does **not** change the realtime verdict below.
 
 **Why this needed to become a `pyproject.toml` change and not just a one-off
 `uv pip install --reinstall`:** a bare version pin like `torch==2.3.0` doesn't disambiguate CPU

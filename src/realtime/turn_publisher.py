@@ -16,6 +16,24 @@ node/followUpDecisionGraph/GraphState.py. This is intentionally not an
 in-memory Python set: a process restart or a RealtimeExamSession recreated
 after a reconnect must still know exactly which turns were already
 published, since that's the whole point of making this durable.
+
+archive_graph here is compiled with the SYNC PostgresSaver checkpointer
+(app.py's app.state.archive_graph, the same instance archive_controller.py's
+/turns/archive calls .invoke() on) -- NOT an AsyncPostgresSaver. Calling
+.aget_state()/.aupdate_state() directly on it raises NotImplementedError
+(BaseCheckpointSaver's async methods only have a real implementation when
+the checkpointer itself is async-native; the sync PostgresSaver doesn't
+provide one) -- confirmed via a real live run where every turn's Kafka
+publish silently failed this way (caught by this module's own try/except, so
+nothing crashed, it just never published). AsyncPostgresSaver was considered
+and rejected: psycopg's async mode requires a SelectorEventLoop, but
+asyncio's default on Windows is ProactorEventLoop, and switching the whole
+app's event loop policy to fix this one path risked breaking aiortc/aioice
+(used by both the proctoring and avatar WebRTC connections) for a benefit
+that's achievable more simply. Instead, the sync .get_state()/.update_state()
+are called via asyncio.to_thread -- same non-blocking-event-loop property,
+zero new dependencies, reuses the connection pool that's already proven
+working.
 """
 
 import asyncio
@@ -26,6 +44,14 @@ from infra.message_broker.publishers.exam_publisher import publish_answer_turns_
 from utils.jsonl_logger import append_jsonl
 
 logger = logging.getLogger(__name__)
+
+
+async def _aget_state(archive_graph, config: dict):
+    return await asyncio.to_thread(archive_graph.get_state, config)
+
+
+async def _aupdate_state(archive_graph, config: dict, update: dict) -> None:
+    await asyncio.to_thread(archive_graph.update_state, config, update)
 
 FOLLOWUP_KAFKA_LOG_FILE = "followup_kafka_publish.jsonl"
 
@@ -66,7 +92,7 @@ async def _wait_for_turn(archive_graph, answer_id: str, turn_order: int) -> dict
     for delay in [0.0, *_ARCHIVE_CATCHUP_RETRY_DELAYS_SECONDS]:
         if delay:
             await asyncio.sleep(delay)
-        archived_state = await archive_graph.aget_state(_archive_config(answer_id))
+        archived_state = await _aget_state(archive_graph, _archive_config(answer_id))
         turns = (archived_state.values or {}).get("turns") or []
         turn = next((t for t in turns if (t or {}).get("turn_order") == turn_order), None)
         if turn is not None:
@@ -84,7 +110,7 @@ async def get_last_archived_turn_order(archive_graph, answer_id: str) -> int:
     actually present in the checkpointed `turns` list for this answer_id, or
     0 if none. Reads the same checkpoint state turn_publisher writes to —
     never guesses from in-memory state."""
-    archived_state = await archive_graph.aget_state(_archive_config(answer_id))
+    archived_state = await _aget_state(archive_graph, _archive_config(answer_id))
     turns = (archived_state.values or {}).get("turns") or []
     turn_orders = [int((t or {}).get("turn_order") or 0) for t in turns]
     return max(turn_orders) if turn_orders else 0
@@ -105,7 +131,7 @@ async def publish_turn_if_new(archive_graph, answer_id: str, turn_order: int, re
     config = _archive_config(answer_id)
 
     try:
-        state_before = await archive_graph.aget_state(config)
+        state_before = await _aget_state(archive_graph, config)
         published_already = set((state_before.values or {}).get("published_turn_orders") or [])
         if turn_order in published_already:
             logger.debug(
@@ -124,7 +150,7 @@ async def publish_turn_if_new(archive_graph, answer_id: str, turn_order: int, re
 
         # Re-check right before publishing: another publish_turn_if_new call for the
         # same turn could have completed while we were polling above.
-        state_now = await archive_graph.aget_state(config)
+        state_now = await _aget_state(archive_graph, config)
         published_now = set((state_now.values or {}).get("published_turn_orders") or [])
         if turn_order in published_now:
             logger.debug(
@@ -152,7 +178,7 @@ async def publish_turn_if_new(archive_graph, answer_id: str, turn_order: int, re
         # published_turn_orders (mirrors how append_turn_node appends to
         # turns) — not a Python-process-local set, so this survives a
         # process restart or a RealtimeExamSession recreated after reconnect.
-        await archive_graph.aupdate_state(config, {"published_turn_orders": [turn_order]})
+        await _aupdate_state(archive_graph, config, {"published_turn_orders": [turn_order]})
     except Exception:
         logger.exception(
             "[turn_publisher] failed to publish turn: answer_id=%s turn_order=%d",

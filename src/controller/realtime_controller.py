@@ -1,16 +1,19 @@
-"""Realtime exam WebSocket endpoint (Phase 2 of
+"""Realtime exam WebSocket endpoint (Phase 2-3 of
 docs/realtime-self-hosted-avatar-plan.md).
 
 One WebSocket connection per exam attempt, not per question — this is the
 direct fix for Tavus's "fresh conversation per question" reconnect-gap
-problem. AttemptConnection owns the connection for its lifetime and
-creates/destroys a RealtimeExamSession per question as question_start
-control messages arrive.
+problem. AttemptConnection owns the connection (and, since Phase 3, the one
+Azure Voice Live session) for its lifetime and creates/destroys a
+RealtimeExamSession per question as question_start control messages arrive.
 
-This phase only implements the text-based placeholder protocol; real binary
-audio streaming (Azure Voice Live) is Phase 3.
+Frames are mixed: binary frames are raw PCM16 mic audio (routed to Voice
+Live via AttemptConnection.handle_audio_frame); text frames are the JSON
+control protocol (question_start/turn_end/resume) plus the VAD/transcript
+events AttemptConnection forwards back out.
 """
 
+import json
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -33,19 +36,38 @@ async def realtime_attempt_socket(websocket: WebSocket, exam_attempt_id: str):
         text_followup_graph=websocket.app.state.text_followup_graph,
     )
 
+    try:
+        await connection.start()
+    except Exception:
+        logger.exception("[realtime] failed to start Voice Live session exam_attempt_id=%s", exam_attempt_id)
+        await websocket.send_json({"type": "error", "text": "voice_live_start_failed"})
+        await websocket.close(code=1011)
+        return
+
     logger.info("[realtime] connection opened exam_attempt_id=%s", exam_attempt_id)
 
     try:
         while True:
-            message = await websocket.receive_json()
+            message = await websocket.receive()
+            if message["type"] == "websocket.disconnect":
+                raise WebSocketDisconnect(message.get("code", 1000), message.get("reason"))
+
             try:
-                await connection.handle_message(message)
+                if message.get("bytes") is not None:
+                    await connection.handle_audio_frame(message["bytes"])
+                    continue
+
+                text = message.get("text")
+                if text is None:
+                    continue
+                parsed = json.loads(text)
+                await connection.handle_message(parsed)
             except Exception:
                 logger.exception(
-                    "[realtime] error handling message exam_attempt_id=%s message_type=%s",
-                    exam_attempt_id, message.get("type"),
+                    "[realtime] error handling message exam_attempt_id=%s",
+                    exam_attempt_id,
                 )
     except WebSocketDisconnect:
         logger.info("[realtime] connection closed exam_attempt_id=%s", exam_attempt_id)
     finally:
-        connection.close()
+        await connection.close()

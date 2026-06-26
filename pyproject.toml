@@ -144,18 +144,40 @@ override-dependencies = ["numpy==1.26.4", "jax==0.4.13"]
 torch = [{ index = "pytorch-cu118" }]
 torchvision = [{ index = "pytorch-cu118" }]
 mmcv = [{ index = "openmmlab-cu118-torch230" }]
-# cu118, not cu121 (downgraded from this file's original cu121 pin, 2026-06-25): root-caused why
-# onnxruntime-gpu==1.18.0's CUDA execution provider always fell back to CPU in spikes/.venv —
-# its onnxruntime_providers_cuda.dll imports cublas64_11.dll/cudart64_110.dll/cufft64_10.dll
-# (a CUDA-11-built provider; confirmed via pefile), but cu121 torch only bundles CUDA-12 DLLs, so
-# the dependency could never resolve. onnxruntime-gpu only ships CUDA-12 builds via an unstable
-# nightly-only feed (no stable release), so matching torch to CUDA 11.8 is the durable fix.
-# Applied here too (not just spikes/pyproject.toml) so Phase 4 doesn't inherit this same
-# CPU-fallback bug when the avatar pipeline is wired into this venv for real. The GPU driver
-# (CUDA 13.2-capable) runs CUDA 11.8 binaries fine — newer drivers are always backwards-compatible
-# with older CUDA runtimes. Re-verify ultralytics/YOLO still loads correctly after this change
-# (expected to be fine — it's not CUDA-minor-version-sensitive — but hasn't been re-confirmed
-# since the switch).
+# cu118, not cu121: onnxruntime-gpu==1.18.0's CUDA execution provider's prebuilt wheel imports
+# CUDA-11 DLLs (cublas64_11.dll/cudart64_110.dll/cufft64_10.dll, confirmed via pefile on
+# onnxruntime_providers_cuda.dll) — cu121 torch only bundles CUDA-12 DLLs. Confirmed cu118 works
+# for mmcv too (no real conflict between mmcv and onnxruntime — see the pitfall note below). Full
+# pipeline verified end-to-end through this exact venv, twice: 177s cold disk cache (LivePortrait
+# 37.1s + MuseTalk 139.9s) and 82s warm disk cache (22.5s + 59.5s) for the same 3.22s audio clip —
+# disk-cache state, not the cu118 CUDA variant, explains most of that swing (re-running the
+# identical config twice produced both numbers). Even 82s is ~25x slower than realtime — see
+# spikes/README.md for the full timing history; MuseTalk's PyTorch inference dominates the cost,
+# not onnxruntime.
+#
+# onnxruntime's CUDA provider STILL doesn't actually work even on cu118, for a deeper reason than
+# the DLL-availability fix above addresses: loading `onnxruntime_providers_cuda.dll` directly
+# (bypassing onnxruntime's own wrapper) fails with `WinError 1114: A dynamic link library (DLL)
+# initialization routine failed` — NOT the original "error 126" (missing dependency). All 5 of
+# its direct DLL dependencies load individually without error, so this is the DLL's own init
+# code crashing, most likely because torch's bundled `cudnn64_8.dll` (cuDNN 8.7.x) is a different
+# exact patch version than whatever onnxruntime-gpu==1.18.0's CUDA provider was actually built/
+# tested against, despite sharing the same filename. Not pursued further — face-detection
+# (the only thing this affects) is a small fraction of LivePortrait's already-much-smaller stage
+# (37s of the 177s total); MuseTalk (139.9s) is unaffected either way. **onnxruntime silently
+# falls back to CPU and that's an accepted, permanent state — don't keep chasing this.**
+#
+# RESOLVED PITFALL (2026-06-25): after switching this index from cu121 to cu118, `mmcv` kept
+# failing to import (`ImportError: DLL load failed while importing _ext`) even with torch
+# correctly on cu118 — `pefile` showed the installed `mmcv/_ext.*.pyd` still imported
+# `cudart64_12.dll`, i.e. the CUDA-12-built wheel from the *old* cu121 index, not the CUDA-11
+# one this cu118 index actually serves. Root cause: a plain `uv sync` does not always notice
+# that `[tool.uv.sources]`'s index changed for an already-installed exact version on a `flat`
+# format index (no per-file hash to compare against) — it kept serving the stale cu121 wheel
+# from cache. Fix: `uv sync --reinstall-package mmcv --link-mode=copy` forced a genuine re-fetch
+# from the new index; afterward `mmcv/_ext.*.pyd` correctly imports `cudart64_110.dll` and
+# everything works. **If you ever change which index a pinned-version package resolves from,
+# force `--reinstall-package <name>` once — don't assume a plain `uv sync` re-fetches it.**
 # mmdet/mmpose hard-assert an mmcv upper bound at import time (mmdet: always <2.2.0, even on its
 # current main branch — verified on GitHub; mmpose 1.1.0 specifically: <=2.1.0, fixed in 1.3.2+ but
 # we're pinned to 1.1.0). The only prebuilt mmcv wheel for our torch/cuda/python combo is 2.2.0,

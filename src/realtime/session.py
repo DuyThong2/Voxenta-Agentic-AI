@@ -63,6 +63,7 @@ class RealtimeExamSession:
         self.answer_id = answer_id
         self.question = question
         self.prompt_text = prompt_text
+        self.current_prompt_text = prompt_text
         self.language = language
         self.archive_graph = archive_graph
         self.graph = graph or build_text_followup_graph()
@@ -135,7 +136,7 @@ class RealtimeExamSession:
             "answer_id": self.answer_id,
             "turn_order": self.turn_order,
             "turn_type": "MAIN" if self.turn_order == 1 else "FOLLOWUP",
-            "prompt_text": self.prompt_text,
+            "prompt_text": self.current_prompt_text or self.prompt_text,
             "transcript": transcript,
             "word_count": word_count,
         }
@@ -153,6 +154,7 @@ class RealtimeExamSession:
             "question": self.question,
             "turn_order": self.turn_order,
             "prompt_text": self.prompt_text,
+            "active_prompt_text": self.current_prompt_text or self.prompt_text,
             "current_turn": current_turn,
             "turns": self.turns,
             "status": "idle",
@@ -165,11 +167,19 @@ class RealtimeExamSession:
             "reason": result.get("error") or "decision_failed",
         }
 
+        current_turn["decision_reason"] = decision.get("reason", "")
         # Record this turn locally so the next turn's prepare_turn_signals/
         # followup_decision sees correct cumulative history and turn_order.
         self.turns.append(current_turn)
         completed_turn_order = self.turn_order
         self.turn_order += 1
+        next_active_prompt = decision.get("active_prompt_text")
+        next_prompt_text = decision.get("next_prompt_text")
+        if decision.get("should_continue"):
+            if isinstance(next_active_prompt, str) and next_active_prompt.strip():
+                self.current_prompt_text = next_active_prompt.strip()
+            elif isinstance(next_prompt_text, str) and next_prompt_text.strip():
+                self.current_prompt_text = next_prompt_text.strip()
         self.current_transcript = ""
 
         self.schedule_publish(completed_turn_order, reason=decision.get("reason", ""))

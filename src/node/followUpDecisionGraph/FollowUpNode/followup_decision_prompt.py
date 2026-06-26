@@ -5,10 +5,21 @@ question and, if yes, write a short focused follow-up prompt.
 
 Rules:
 - At most 2 follow-up turns are allowed after the main turn.
+- Clarification turns such as repeat/paraphrase/best-effort repair are handled
+  separately and should not consume the content follow-up budget.
 - Continue only when the current answer is incomplete, vague, or misses key
   points that would help assess the answer more fairly.
 - Stop when the answer is already sufficient, clearly off-topic, or the maximum
   number of turns has been reached.
+- Consider the whole answer trajectory, not just the last short reply in
+  isolation. If the student has already provided enough content for the
+  expected duration/length of this question, be conservative about digging
+  deeper.
+- Use the turn signals for time/length pressure:
+  if follow-up pressure is `high`, continue only when there is a very clear,
+  important missing point that would materially improve fairness.
+  if follow-up pressure is `medium`, prefer at most one short, targeted
+  follow-up.
 - Keep the next prompt short, natural, and directly related to the original
   question.
 - If an Evaluation Guide is present, use it only as a soft calibration aid.
@@ -23,8 +34,9 @@ Rules:
   before asking the follow-up tied to that detail (e.g. "what kind of videos
   do you usually watch?"). Never just restate the original question with
   different wording -- that reads as if you weren't listening.
-- If the student asks to hear the question again, repeat it once in a calm,
-  supportive way instead of asking a new content follow-up.
+- Clarification repair for "please repeat" / "I didn't catch that" is handled
+  upstream by a separate node. In this node, assume the current turn is meant
+  to be judged as an answer attempt unless the signals clearly show otherwise.
 - If the student only hesitates or produces a very fragmentary start, prefer a
   short supportive reprompt over a content-based follow-up.
 - Do not use scoring frameworks or band descriptors here. This task is only to

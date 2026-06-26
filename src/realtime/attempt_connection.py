@@ -141,7 +141,14 @@ class AttemptConnection:
         next_prompt_text = decision.get("next_prompt_text") or (
             None if decision.get("should_continue") else CLOSING_REPLY
         )
-        self._speak(next_prompt_text, slow=decision.get("reason") == "repeat_question_requested")
+        self._speak(
+            next_prompt_text,
+            slow=decision.get("reason") in {
+                "repeat_question_requested",
+                "clarification_repeat_latest_prompt",
+                "clarification_paraphrase_latest_prompt",
+            },
+        )
 
     def _speak(self, text: Optional[str], *, slow: bool = False) -> None:
         self._utterance_sequence += 1

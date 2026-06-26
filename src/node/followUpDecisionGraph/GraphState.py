@@ -12,10 +12,12 @@ class FollowUpGraphState(TypedDict, total=False):
     audio_path: str
     turn_order: int
     prompt_text: Optional[str]
+    active_prompt_text: Optional[str]
     current_turn: Dict[str, Any]
     turns: Annotated[List[Dict[str, Any]], add]
     published_turn_orders: Annotated[List[int], add]
     signals: Dict[str, Any]
+    edge_case_handled: bool
     decision: Dict[str, Any]
     status: Literal["idle", "processing", "completed", "error"]
     error: Optional[str]

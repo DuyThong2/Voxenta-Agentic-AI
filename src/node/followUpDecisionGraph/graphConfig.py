@@ -8,6 +8,9 @@ from langgraph.graph import END, START, StateGraph
 from node.followUpDecisionGraph.FollowUpNode.followup_decision_node_config import (
     followup_decision_node,
 )
+from node.followUpDecisionGraph.RepeatRecoveryNode.repeat_recovery_node_config import (
+    repeat_recovery_node,
+)
 from node.followUpDecisionGraph.SignalNode.signal_node_config import (
     prepare_turn_signals_node,
 )
@@ -94,6 +97,14 @@ def route_on_error(state: FollowUpGraphState) -> str:
     return "continue"
 
 
+def route_after_repeat_recovery(state: FollowUpGraphState) -> str:
+    if state.get("status") == "error":
+        return "end"
+    if state.get("edge_case_handled"):
+        return "end"
+    return "continue"
+
+
 def build_archive_graph(checkpointer):
     """Archive-only graph: transcribe the turn (reusing transcribe_turn_node
     as-is) and append it to the Postgres-checkpointed turns list keyed by
@@ -126,10 +137,19 @@ def build_text_followup_graph():
     """
     g = StateGraph(FollowUpGraphState)
     g.add_node("prepare_turn_signals", prepare_turn_signals_node)
+    g.add_node("repeat_recovery", repeat_recovery_node)
     g.add_node("followup_decision", followup_decision_node)
 
     g.add_edge(START, "prepare_turn_signals")
-    g.add_edge("prepare_turn_signals", "followup_decision")
+    g.add_edge("prepare_turn_signals", "repeat_recovery")
+    g.add_conditional_edges(
+        "repeat_recovery",
+        route_after_repeat_recovery,
+        {
+            "end": END,
+            "continue": "followup_decision",
+        },
+    )
     g.add_edge("followup_decision", END)
 
     return g.compile()

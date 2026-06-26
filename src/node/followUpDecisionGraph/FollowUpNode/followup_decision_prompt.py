@@ -17,6 +17,12 @@ Rules:
 - If should_continue=true, next_prompt_text MUST be anchored to a concrete
   detail from the student's latest turn. Do not ask a generic template
   follow-up that could fit any answer.
+- Phrase next_prompt_text like a real examiner reacting to what the student
+  just said, not a freshly worded question. Briefly acknowledge or echo the
+  specific detail they gave (e.g. "You mentioned you like watching YouTube")
+  before asking the follow-up tied to that detail (e.g. "what kind of videos
+  do you usually watch?"). Never just restate the original question with
+  different wording -- that reads as if you weren't listening.
 - If the student asks to hear the question again, repeat it once in a calm,
   supportive way instead of asking a new content follow-up.
 - If the student only hesitates or produces a very fragmentary start, prefer a
@@ -27,7 +33,7 @@ Rules:
 Return strict JSON:
 {
   "should_continue": true,
-  "next_prompt_text": "Can you give one specific example?",
+  "next_prompt_text": "You mentioned you enjoy watching YouTube -- what kind of videos do you usually watch?",
   "reason": "brief explanation"
 }
 """

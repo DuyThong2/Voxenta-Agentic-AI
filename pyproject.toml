@@ -32,11 +32,6 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "requests>=2.32.3",
     "sendgrid>=6.11.0",
-    # Upper-bounded below 80: newer setuptools (confirmed: 82.0.1) has removed the legacy
-    # `pkg_resources` module entirely, which mmengine's get_installed_path() (used by mmpose,
-    # an avatar-pipeline dependency below) imports directly — found while testing the avatar
-    # deps end-to-end in spikes/.venv, see spikes/pyproject.toml for the full story.
-    "setuptools>=78.1.0,<80",
     "smithery>=0.1.0",
     "speedtest-cli>=2.1.3",
     "wikipedia>=1.4.0",
@@ -55,65 +50,12 @@ dependencies = [
     "azure-cognitiveservices-speech>=1.50.0",
     "boto3>=1.38.46",
     "azure-ai-voicelive[aiohttp]>=1.2.0",
+    # Pinned to a known-working CUDA build for ultralytics/YOLO proctoring (the only real consumer
+    # now that the self-hosted LivePortrait+MuseTalk avatar pipeline that originally drove this
+    # exact pin/index has been removed) -- see [tool.uv.sources] below for why cu118 specifically.
     "torch==2.3.0",
     "torchvision==0.18.0",
     "torchaudio==2.3.0",
-    # Downgraded from 2.5.1/0.20.1/2.5.1 (2026-06-25): mmcv's compiled CUDA extension
-    # (mmcv.ops.active_rotated_filter -> `_ext`) is built against torch==2.3.0 specifically and
-    # FAILED TO LOAD under torch==2.5.1 (`ImportError: DLL load failed while importing _ext`) —
-    # confirmed by actually running the full avatar pipeline through this venv, not just an
-    # import smoke test. OpenMMLab does not publish mmcv wheels for any torch version newer than
-    # 2.3.0 on any CUDA index (checked cu118 and cu121, both stop at torch2.3.0) — so matching
-    # torch to exactly 2.3.0 is the only way to use mmcv/mmpose/mmdet for real (not just pass
-    # their import-time version-string checks). `ultralytics` only requires `torch>=1.8.0`
-    # (confirmed via PyPI metadata), so this isn't a real constraint conflict — torch==2.5.1 was
-    # just "whatever was installed" when the CPU->CUDA fix was first made, not a hard requirement
-    # from any dependency. Re-verify ultralytics/YOLO proctoring still works after this change.
-
-    # --- Avatar pipeline deps (LivePortrait + MuseTalk), added 2026-06-25 in preparation for
-    # Phase 4 (agents/src/realtime/avatar_renderer.py) since they'll need to live here
-    # eventually anyway. CONFIRMED working via `uv lock`/`uv sync` + a clean import smoke test
-    # (torch/mmcv/mmdet/mmpose/tensorflow all import without any manual post-sync step) — every
-    # fix needed is already applied declaratively below ([tool.uv.sources]' vendored mmdet/mmpose
-    # wheels, override-dependencies for numpy/jax, extra-build-dependencies for chumpy, the
-    # setuptools upper bound above). torch is now unified with spikes/pyproject.toml's exact
-    # version (2.3.0) — see the comment above for why.
-    "mmengine>=0.10.0",
-    "mmcv==2.2.0",
-    "mmdet==3.1.0",
-    "mmpose==1.1.0",
-    "tensorflow==2.12.0",
-    # On Windows, the "tensorflow" wheel is an empty stub that redirects to tensorflow-intel
-    # (see its METADATA: `Requires-Dist: tensorflow-intel (==2.12.0) ; platform_system ==
-    # "Windows"`) — uv's lock did NOT pull this in automatically (confirmed: absent from
-    # uv.lock's tensorflow dependencies block), so it must be declared explicitly or `import
-    # tensorflow` fails with ModuleNotFoundError despite tensorflow's dist-info being installed.
-    "tensorflow-intel==2.12.0; sys_platform == 'win32'",
-    "tensorflow-io-gcs-filesystem==0.31.0",
-    "onnxruntime-gpu==1.18.0",
-    "diffusers==0.30.2",
-    "accelerate==0.28.0",
-    "transformers==4.39.2",  # unbounded resolved to 5.12.1 (breaking major-version jump, real
-    # NameError crash) when testing this in spikes/.venv — pinned to MuseTalk's exact tested
-    # version, see spikes/pyproject.toml for the full story.
-    "librosa>=0.11.0",
-    "einops>=0.8.1",
-    "soundfile>=0.12.1",
-    "gdown",
-    "omegaconf>=2.3.1",
-    "moviepy>=1.0.3",
-    "albumentations==1.4.10",
-    "scikit-image>=0.24.0",
-    "scipy>=1.13.1",
-    "tyro>=0.8.5",
-    "gradio>=5.1.0",
-    "pykalman>=0.9.7",
-    "imageio>=2.34.2",
-    "imageio-ffmpeg>=0.5.1",
-    "ffmpeg-python>=0.2.0",
-    "onnx>=1.16.1",
-    "patch-ng>=1.19.1",
-    "pip",
 ]
 
 [dependency-groups]
@@ -121,89 +63,16 @@ dev = [
     "ipykernel>=6.29.5",
 ]
 
-# mmpose's dependency chumpy needs `pip` itself as a build dependency (legacy setup.py does
-# `import pip` directly) — same fix as spikes/pyproject.toml.
-[tool.uv.extra-build-dependencies]
-chumpy = ["pip"]
-
-# numpy<1.24 is what tensorflow==2.12.0 declares, but numpy==1.26.4 (needed by
-# albumentations/opencv-python-headless for the avatar deps above) is what's actually confirmed
-# working — same override as spikes/pyproject.toml; without it `uv sync` refuses to resolve.
-#
-# jax: pulled in transitively by tensorflow-intel (Windows-only, for an obscure TF Lite
-# "authoring" submodule that gets imported unconditionally as part of `import tensorflow`).
-# Without a pin, uv resolved the latest jax (0.10.2 at time of writing), whose
-# jax/_src/dtypes.py unconditionally calls `np.dtypes.StringDType()` — an attribute that only
-# exists in numpy>=2.0. That crashes `import tensorflow` outright under our pinned numpy==1.26.4.
-# Pinned to a pre-numpy-2.0-era jax release (numpy 2.0 shipped mid-2024) so this code path simply
-# doesn't exist yet in the version installed.
-[tool.uv]
-override-dependencies = ["numpy==1.26.4", "jax==0.4.13"]
-
 [tool.uv.sources]
+# cu118 (not cu121/default): confirmed working for ultralytics/YOLO's CUDA build on this GPU
+# (RTX 2000 Ada). Originally chosen to match an onnxruntime-gpu requirement from the now-removed
+# avatar pipeline, but kept since it's a known-working pin, not worth re-churning without reason.
 torch = [{ index = "pytorch-cu118" }]
 torchvision = [{ index = "pytorch-cu118" }]
-mmcv = [{ index = "openmmlab-cu118-torch230" }]
-# cu118, not cu121: onnxruntime-gpu==1.18.0's CUDA execution provider's prebuilt wheel imports
-# CUDA-11 DLLs (cublas64_11.dll/cudart64_110.dll/cufft64_10.dll, confirmed via pefile on
-# onnxruntime_providers_cuda.dll) — cu121 torch only bundles CUDA-12 DLLs. Confirmed cu118 works
-# for mmcv too (no real conflict between mmcv and onnxruntime — see the pitfall note below). Full
-# pipeline verified end-to-end through this exact venv, twice: 177s cold disk cache (LivePortrait
-# 37.1s + MuseTalk 139.9s) and 82s warm disk cache (22.5s + 59.5s) for the same 3.22s audio clip —
-# disk-cache state, not the cu118 CUDA variant, explains most of that swing (re-running the
-# identical config twice produced both numbers). Even 82s is ~25x slower than realtime — see
-# spikes/README.md for the full timing history; MuseTalk's PyTorch inference dominates the cost,
-# not onnxruntime.
-#
-# onnxruntime's CUDA provider STILL doesn't actually work even on cu118, for a deeper reason than
-# the DLL-availability fix above addresses: loading `onnxruntime_providers_cuda.dll` directly
-# (bypassing onnxruntime's own wrapper) fails with `WinError 1114: A dynamic link library (DLL)
-# initialization routine failed` — NOT the original "error 126" (missing dependency). All 5 of
-# its direct DLL dependencies load individually without error, so this is the DLL's own init
-# code crashing, most likely because torch's bundled `cudnn64_8.dll` (cuDNN 8.7.x) is a different
-# exact patch version than whatever onnxruntime-gpu==1.18.0's CUDA provider was actually built/
-# tested against, despite sharing the same filename. Not pursued further — face-detection
-# (the only thing this affects) is a small fraction of LivePortrait's already-much-smaller stage
-# (37s of the 177s total); MuseTalk (139.9s) is unaffected either way. **onnxruntime silently
-# falls back to CPU and that's an accepted, permanent state — don't keep chasing this.**
-#
-# RESOLVED PITFALL (2026-06-25): after switching this index from cu121 to cu118, `mmcv` kept
-# failing to import (`ImportError: DLL load failed while importing _ext`) even with torch
-# correctly on cu118 — `pefile` showed the installed `mmcv/_ext.*.pyd` still imported
-# `cudart64_12.dll`, i.e. the CUDA-12-built wheel from the *old* cu121 index, not the CUDA-11
-# one this cu118 index actually serves. Root cause: a plain `uv sync` does not always notice
-# that `[tool.uv.sources]`'s index changed for an already-installed exact version on a `flat`
-# format index (no per-file hash to compare against) — it kept serving the stale cu121 wheel
-# from cache. Fix: `uv sync --reinstall-package mmcv --link-mode=copy` forced a genuine re-fetch
-# from the new index; afterward `mmcv/_ext.*.pyd` correctly imports `cudart64_110.dll` and
-# everything works. **If you ever change which index a pinned-version package resolves from,
-# force `--reinstall-package <name>` once — don't assume a plain `uv sync` re-fetches it.**
-# mmdet/mmpose hard-assert an mmcv upper bound at import time (mmdet: always <2.2.0, even on its
-# current main branch — verified on GitHub; mmpose 1.1.0 specifically: <=2.1.0, fixed in 1.3.2+ but
-# we're pinned to 1.1.0). The only prebuilt mmcv wheel for our torch/cuda/python combo is 2.2.0,
-# which mmdet rejects outright — no version of mmdet accepts it. These are the exact same
-# mmdet==3.1.0/mmpose==1.1.0 wheels from PyPI with only their `mmcv_maximum_version` string
-# widened to '2.2.1' (pure-Python wheels, no compiled code touched) so `uv sync` alone resolves a
-# working install with no manual post-sync step, on this machine or anywhere else this repo is
-# cloned (including a future EKS image — these are platform-independent).
-mmdet = { path = "vendor/mmdet-3.1.0-py3-none-any.whl" }
-mmpose = { path = "vendor/mmpose-1.1.0-py2.py3-none-any.whl" }
 
 [[tool.uv.index]]
 name = "pytorch-cu118"
 url = "https://download.pytorch.org/whl/cu118"
-explicit = true
-
-[[tool.uv.index]]
-name = "openmmlab-cu118-torch230"
-# This index is keyed to torch2.3.0 specifically (OpenMMLab publishes one per exact torch
-# version) — torch above is now pinned to exactly 2.3.0 to match, after confirming mmcv's
-# compiled extension fails to load (`ImportError: DLL load failed while importing _ext`) under
-# torch==2.5.1. OpenMMLab does not publish mmcv wheels for any torch newer than 2.3.0 on any CUDA
-# index (checked both cu118 and cu121) — there is no newer index to "upgrade" to later short of
-# OpenMMLab publishing one or building mmcv from source.
-url = "https://download.openmmlab.com/mmcv/dist/cu118/torch2.3.0/index.html"
-format = "flat"
 explicit = true
 
 

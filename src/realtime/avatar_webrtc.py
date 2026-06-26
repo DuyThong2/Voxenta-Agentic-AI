@@ -22,7 +22,18 @@ from av import AudioFrame, VideoFrame
 
 logger = logging.getLogger(__name__)
 
+# MUST match aiortc.contrib.media.MediaPlayer's hardcoded output format exactly (confirmed in
+# aiortc/contrib/media.py: every MediaPlayer normalizes ANY source's audio via its own internal
+# AudioResampler to format="s16", layout="stereo", rate=48000, regardless of the source file's
+# actual format -- our 16kHz mono TTS WAV included). aiortc's G.711 encoder lazily builds its own
+# internal AudioResampler from whichever AudioFrame it sees FIRST on this track and then raises
+# `ValueError: Frame does not match AudioResampler setup` on any later frame with a different
+# format/layout/rate -- confirmed live (idle frames at mono initialized the resampler, then the
+# first real TTS utterance's MediaPlayer-normalized stereo frames crashed the encoder, silently
+# dropping all avatar audio for the rest of the connection). Keeping idle frames in this exact
+# format sidesteps the crash regardless of what audio file source ever gets played.
 _IDLE_AUDIO_SAMPLE_RATE = 48000
+_IDLE_AUDIO_LAYOUT = "stereo"
 _IDLE_AUDIO_PTIME = 0.020
 
 
@@ -107,7 +118,7 @@ class AvatarAudioTrack(MediaStreamTrack):
             if wait > 0:
                 await asyncio.sleep(wait)
 
-        frame = AudioFrame(format="s16", layout="mono", samples=samples)
+        frame = AudioFrame(format="s16", layout=_IDLE_AUDIO_LAYOUT, samples=samples)
         for plane in frame.planes:
             plane.update(bytes(plane.buffer_size))
         frame.pts = self._idle_timestamp

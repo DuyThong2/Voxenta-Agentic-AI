@@ -79,6 +79,7 @@ class AttemptConnection:
         question_payload = message.get("question") or {}
         question = QuestionContext.model_validate(question_payload) if question_payload else None
         prompt_text = question_payload.get("question_text") if isinstance(question_payload, dict) else None
+        instruction_text = question_payload.get("instruction_text") if isinstance(question_payload, dict) else None
         language = message.get("language", "en-US")
 
         # Replaces any previous session outright — a new question always
@@ -100,7 +101,11 @@ class AttemptConnection:
             self.exam_attempt_id, answer_id,
         )
         await self.websocket.send_json({"type": "question_start_ack", "answer_id": answer_id})
-        self._speak(prompt_text)
+        # The avatar reads any lead-in instructions (e.g. "Briefly explain your reasoning.")
+        # before the question itself, mirroring a real examiner -- prompt_text alone (used above
+        # for the evaluation session/decision context) stays the bare question text for grading.
+        spoken_text = " ".join(part.strip() for part in (instruction_text, prompt_text) if part and part.strip())
+        self._speak(spoken_text)
 
     async def _handle_turn_end(self, message: dict) -> None:
         if self.active_session is None:
@@ -136,15 +141,33 @@ class AttemptConnection:
         next_prompt_text = decision.get("next_prompt_text") or (
             None if decision.get("should_continue") else CLOSING_REPLY
         )
-        self._speak(next_prompt_text)
+        self._speak(next_prompt_text, slow=decision.get("reason") == "repeat_question_requested")
 
-    def _speak(self, text: Optional[str]) -> None:
-        if not text:
-            return
+    def _speak(self, text: Optional[str], *, slow: bool = False) -> None:
         self._utterance_sequence += 1
-        asyncio.create_task(
-            avatar_speech.speak(self.exam_attempt_id, text, sequence=self._utterance_sequence)
-        )
+        asyncio.create_task(self._speak_and_notify(text, self._utterance_sequence, slow))
+
+    async def _speak_and_notify(self, text: Optional[str], sequence: int, slow: bool) -> None:
+        try:
+            if text:
+                await avatar_speech.speak(
+                    self.exam_attempt_id,
+                    text,
+                    sequence=sequence,
+                    rate="-20%" if slow else None,
+                )
+        finally:
+            try:
+                await self.websocket.send_json({
+                    "type": "avatar_utterance_complete",
+                    "sequence": sequence,
+                    "text": text or "",
+                })
+            except Exception:
+                logger.exception(
+                    "[attempt_connection] failed to send avatar_utterance_complete exam_attempt_id=%s sequence=%d",
+                    self.exam_attempt_id, sequence,
+                )
 
     async def _handle_resume(self, message: dict) -> None:
         answer_id = message.get("answer_id")

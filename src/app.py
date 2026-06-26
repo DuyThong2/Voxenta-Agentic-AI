@@ -9,12 +9,8 @@ import asyncio
 import sys
 
 # Windows' console defaults stdout/stderr to the legacy cp1252 codepage, which can't encode
-# Unicode characters (e.g. the Japanese-style brackets in MuseTalk's musetalk/utils/
-# preprocessing.py debug prints) -- without this, any such print() crashes with
-# UnicodeEncodeError the first time realtime/avatar_renderer.py's in-process MuseTalk call runs.
-# Subprocess calls (LivePortrait) dodge this via PYTHONIOENCODING in the child's own env; this is
-# the in-process equivalent fix for this main process itself. Harmless on Linux/macOS, where
-# stdout is already UTF-8.
+# arbitrary Unicode characters in log/print output -- harmless on Linux/macOS, where stdout is
+# already UTF-8.
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 

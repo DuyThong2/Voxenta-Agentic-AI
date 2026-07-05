@@ -16,7 +16,6 @@ from .enums import (
 )
 from .scoring import CriterionScore, CriteriaScores
 from .validity import RuleResult, ValidityResult
-from .ui_response import Scores, UIResponse
 
 __all__ = [
     "AssessmentAction",
@@ -33,6 +32,4 @@ __all__ = [
     "CriteriaScores",
     "RuleResult",
     "ValidityResult",
-    "Scores",
-    "UIResponse",
 ]

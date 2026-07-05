@@ -21,7 +21,6 @@ Only rules with blocking=true and action="reject_or_zero" route to END.
 """
 
 import json
-import re
 from typing import Any, Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
@@ -30,8 +29,9 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from node.state_models import SpeakingInput
 from node.evalGraph.ValidityNode.validity_eval_prompt import SYSTEM_PROMPT
 from schemas.enums import DifficultyLevel, SpeakingMode
+from mappers.schema_mapper import build_validity_result_from_rules, normalize_rule_result
 from utils.length_utils import get_expected_min_words
-from utils.schema_mapper import build_validity_result_from_rules, normalize_rule_result
+from utils.text_utils import word_count
 
 
 # ---------------------------------------------------------------------------
@@ -52,9 +52,10 @@ STRICT_ZERO_ON_TOO_SHORT = False
 # Helpers
 # ---------------------------------------------------------------------------
 
-
-def _word_count(text: str) -> int:
-    return len(re.findall(r"\b\w+\b", text))
+def _rule_attr(rule: Any, key: str) -> Any:
+    if isinstance(rule, dict):
+        return rule.get(key)
+    return getattr(rule, key, None)
 
 
 def _build_llm_prompt(
@@ -64,6 +65,7 @@ def _build_llm_prompt(
     mode: Optional[str],
     difficulty_level: Optional[str],
     word_count: int,
+    off_topic_examples: Optional[str] = None,
 ) -> str:
     parts = [
         "## Transcript",
@@ -87,6 +89,11 @@ def _build_llm_prompt(
     if difficulty_level:
         parts.append(f"Difficulty: {difficulty_level}")
 
+    if off_topic_examples:
+        parts.append("")
+        parts.append("## Off-topic Examples (supporting reference, not exhaustive)")
+        parts.append(off_topic_examples)
+
     parts.append("")
     parts.append("Evaluate the transcript against all 4 rules and return the JSON result.")
 
@@ -94,10 +101,14 @@ def _build_llm_prompt(
 
 
 def _call_llm(text: str, question_text: Optional[str], question_type: Optional[str],
-              mode: Optional[str], difficulty_level: Optional[str], word_count: int) -> Dict[str, Any]:
+              mode: Optional[str], difficulty_level: Optional[str], word_count: int,
+              off_topic_examples: Optional[str] = None) -> Dict[str, Any]:
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
-    user_prompt = _build_llm_prompt(text, question_text, question_type, mode, difficulty_level, word_count)
+    user_prompt = _build_llm_prompt(
+        text, question_text, question_type, mode, difficulty_level, word_count,
+        off_topic_examples=off_topic_examples,
+    )
 
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
@@ -148,21 +159,27 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
         or ""
     )
     text = text.strip()
-    word_count = _word_count(text)
+    transcript_word_count = word_count(text)
 
     question_text: Optional[str] = speaking_input.question.question_text if speaking_input.question else None
     question_type: Optional[str] = speaking_input.question.question_type if speaking_input.question else None
     duration_seconds: Optional[int] = speaking_input.question.duration_seconds if speaking_input.question else None
+    min_response_seconds: Optional[int] = speaking_input.question.min_response_seconds if speaking_input.question else None
     mode: Optional[str] = getattr(speaking_input, "mode", None)
     difficulty_level: Optional[str] = speaking_input.question.difficulty_level if speaking_input.question else None
+    off_topic_examples: Optional[str] = (
+        speaking_input.question.evaluation_guide.off_topic_examples
+        if speaking_input.question and speaking_input.question.evaluation_guide
+        else None
+    )
 
-    rule_results: List[Dict[str, Any]] = []
+    rule_results: List[Any] = []
 
     # ------------------------------------------------------------------
     # Pure logic rule 1: no_speech (always reject)
     # ------------------------------------------------------------------
 
-    if word_count == 0:
+    if transcript_word_count == 0:
         rule_results.append(normalize_rule_result({
             "rule_id": "audio.no_speech",
             "category": "audio",
@@ -178,9 +195,13 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # Pure logic rule 2: too_short (conditional)
     # ------------------------------------------------------------------
 
-    if mode != SpeakingMode.SCRIPTED and word_count > 0:
-        expected_min = get_expected_min_words(question_type, duration_seconds)
-        if word_count < expected_min:
+    if mode != SpeakingMode.SCRIPTED and transcript_word_count > 0:
+        expected_min = get_expected_min_words(
+            question_type,
+            duration_seconds,
+            min_response_seconds=min_response_seconds,
+        )
+        if transcript_word_count < expected_min:
             if STRICT_ZERO_ON_TOO_SHORT:
                 rule_results.append(normalize_rule_result({
                     "rule_id": "answer_length.too_short",
@@ -188,9 +209,9 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
                     "severity": "critical",
                     "action": "reject_or_zero",
                     "blocking": True,
-                    "message": f"Answer has {word_count} words, expected at least {expected_min}.",
+                    "message": f"Answer has {transcript_word_count} words, expected at least {expected_min}.",
                     "evidence": {
-                        "word_count": word_count,
+                        "word_count": transcript_word_count,
                         "expected_min_words": expected_min,
                     },
                     "target_criteria": ["grammar", "vocabulary", "coherence"],
@@ -203,9 +224,9 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
                     "severity": "medium",
                     "action": "score_with_penalty",
                     "blocking": False,
-                    "message": f"Answer has {word_count} words, expected at least {expected_min}. Score will be penalized.",
+                    "message": f"Answer has {transcript_word_count} words, expected at least {expected_min}. Score will be penalized.",
                     "evidence": {
-                        "word_count": word_count,
+                        "word_count": transcript_word_count,
                         "expected_min_words": expected_min,
                     },
                     "target_criteria": ["grammar", "vocabulary", "coherence"],
@@ -213,7 +234,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     # If pure logic already has a blocking reject, skip LLM call
     has_blocking_reject = any(
-        r.get("blocking") and r.get("action") == "reject_or_zero"
+        _rule_attr(r, "blocking") and _rule_attr(r, "action") == "reject_or_zero"
         for r in rule_results
     )
 
@@ -221,7 +242,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # LLM rules (semantic understanding)
     # ------------------------------------------------------------------
 
-    if not has_blocking_reject and word_count > 0:
+    if not has_blocking_reject and transcript_word_count > 0:
         try:
             llm_response = _call_llm(
                 text=text,
@@ -229,7 +250,8 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 question_type=question_type,
                 mode=mode,
                 difficulty_level=difficulty_level,
-                word_count=word_count,
+                word_count=transcript_word_count,
+                off_topic_examples=off_topic_examples,
             )
 
             # Merge LLM-triggered rules
@@ -258,7 +280,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     validity = build_validity_result_from_rules(
         rule_entries=rule_results,
         transcript_source="transcribed_text",
-        transcript_word_count=word_count,
+        transcript_word_count=transcript_word_count,
     )
 
     return {

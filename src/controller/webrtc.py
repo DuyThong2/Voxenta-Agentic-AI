@@ -19,6 +19,8 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from ultralytics import YOLO
 
+from realtime import gpu_scheduler
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webrtc", tags=["WebRTC"])
@@ -109,7 +111,10 @@ async def process_video_track(track, session_id: str):
         person_count = 0
 
         try:
-            yolo_results = yolo_model(img, verbose=False)
+            # Shares the GPU with realtime/avatar_renderer.py's LivePortrait/MuseTalk inference --
+            # see gpu_scheduler.py for why this needs to take turns rather than run concurrently.
+            async with gpu_scheduler.gpu_lock():
+                yolo_results = yolo_model(img, verbose=False)
         except Exception as exc:
             logger.warning("[YOLO_ERROR] session=%s: %s", session_id, exc)
             continue

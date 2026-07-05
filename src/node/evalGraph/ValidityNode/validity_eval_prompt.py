@@ -53,6 +53,8 @@ Topic relevance examples (words that indicate the answer IS on-topic):
 - Commute/transport: school, bus, walk, bike, car, motorbike, train, road, traffic, commute, go to school, go to work
 - Food: food, eat, like, favorite, pizza, rice, noodles, restaurant, cooking, taste, delicious
 
+If an "## Off-topic Examples" section is provided in the input, treat it as supporting reference for what this specific question's author considers off-topic — it is illustrative, not an exhaustive or strict checklist. It does not override the conservative bias below; an answer that doesn't match any listed example can still be on-topic, and an answer should not be auto-triggered just because it resembles one phrase from the list without considering full context.
+
 Key principle: When in doubt, do NOT trigger off_topic_full.
 Let coherence/content scoring handle weak or underdeveloped answers later.
 

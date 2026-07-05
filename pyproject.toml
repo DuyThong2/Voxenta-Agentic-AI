@@ -3,7 +3,7 @@ name = "agents"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 dependencies = [
     "anthropic>=0.49.0",
     "fastapi>=0.115.0",
@@ -32,7 +32,6 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "requests>=2.32.3",
     "sendgrid>=6.11.0",
-    "setuptools>=78.1.0",
     "smithery>=0.1.0",
     "speedtest-cli>=2.1.3",
     "wikipedia>=1.4.0",
@@ -46,12 +45,34 @@ dependencies = [
     "opencv-python-headless>=4.10.0",
     "mediapipe>=0.10.14",
     "ultralytics>=8.3.0",
-    "numpy>=1.26.0",
+    "numpy==1.26.4",
     "pydantic>=2.8.0",
     "azure-cognitiveservices-speech>=1.50.0",
+    "boto3>=1.38.46",
+    "azure-ai-voicelive[aiohttp]>=1.2.0",
+    # Pinned to a known-working CUDA build for ultralytics/YOLO proctoring (the only real consumer
+    # now that the self-hosted LivePortrait+MuseTalk avatar pipeline that originally drove this
+    # exact pin/index has been removed) -- see [tool.uv.sources] below for why cu118 specifically.
+    "torch==2.3.0",
+    "torchvision==0.18.0",
+    "torchaudio==2.3.0",
 ]
 
 [dependency-groups]
 dev = [
     "ipykernel>=6.29.5",
 ]
+
+[tool.uv.sources]
+# cu118 (not cu121/default): confirmed working for ultralytics/YOLO's CUDA build on this GPU
+# (RTX 2000 Ada). Originally chosen to match an onnxruntime-gpu requirement from the now-removed
+# avatar pipeline, but kept since it's a known-working pin, not worth re-churning without reason.
+torch = [{ index = "pytorch-cu118" }]
+torchvision = [{ index = "pytorch-cu118" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
+explicit = true
+
+

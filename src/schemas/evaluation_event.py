@@ -9,3 +9,4 @@ class EvaluationGuideInput(_CamelMessage):
     acceptable_responses: Optional[str] = None
     off_topic_examples: Optional[str] = None
     scoring_hints: Optional[str] = None
+    common_mistakes: Optional[str] = None

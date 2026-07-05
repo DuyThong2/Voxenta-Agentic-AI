@@ -29,6 +29,7 @@ class KafkaSettings(BaseSettings):
     # phân biệt bằng EventEnvelope.event_type (xem src/dtos/), không cần thêm topic DLQ riêng.
     KAFKA_EXAM_REQUEST_TOPIC: str = "exam-attempt-evaluation-requested"
     KAFKA_EXAM_COMPLETED_TOPIC: str = "exam-attempt-evaluation-completed"
+    KAFKA_ANSWER_TURN_TOPIC: str = "answer-turns-recorded"
     KAFKA_EXAM_CONSUMER_GROUP: str = "exam-attempt-evaluation"
     KAFKA_MAX_RETRY: int = 3
 

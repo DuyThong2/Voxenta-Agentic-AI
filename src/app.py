@@ -8,6 +8,12 @@ from contextlib import asynccontextmanager
 import asyncio
 import sys
 
+# Windows' console defaults stdout/stderr to the legacy cp1252 codepage, which can't encode
+# arbitrary Unicode characters in log/print output -- harmless on Linux/macOS, where stdout is
+# already UTF-8.
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
 import logging
 
 logging.basicConfig(
@@ -16,7 +22,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
-logging.getLogger("infra.message_broker.kafka_consumer").setLevel(logging.INFO)
+logging.getLogger("infra.message_broker.external_events_handlers.kafka_consumer").setLevel(logging.INFO)
 logging.getLogger("vector.indexer").setLevel(logging.INFO)
 
 from utils import load_root_dotenv
@@ -37,10 +43,11 @@ setup_langsmith()
 
 from controller import router
 from controller.webrtc import close_all_connections
-from node.followUpDecisionGraph.graphConfig import build_followup_graph
+from realtime.avatar_webrtc import close_all_connections as close_all_avatar_connections
+from node.followUpDecisionGraph.graphConfig import build_archive_graph, build_text_followup_graph
 from node.evalGraph.graphConfig import build_graph
 from config.postgresDB_config import settings as pg_settings
-from infra.message_broker.kafka_consumer import start_outbox_consumer
+from infra.message_broker.external_events_handlers.kafka_consumer import start_outbox_consumer
 from infra.message_broker import connection as mq_connection
 from vector.chroma_client import build_chroma_collection
 
@@ -63,9 +70,9 @@ async def lifespan(app: FastAPI):
     pool = ConnectionPool(pg_settings.PG_URI, min_size=1, max_size=10)
     checkpointer = PostgresSaver(pool)
 
-    
     app.state.graph = build_graph(checkpointer)
-    app.state.followup_graph = build_followup_graph(checkpointer)
+    app.state.archive_graph = build_archive_graph(checkpointer)
+    app.state.text_followup_graph = build_text_followup_graph()
 
     # 2) Setup Chroma collection
     try:
@@ -82,6 +89,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await close_all_connections()
+        await close_all_avatar_connections()
         consumer_task.cancel()
         await mq_connection.close()
         pool.close()

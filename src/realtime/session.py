@@ -54,6 +54,8 @@ class RealtimeExamSession:
         self,
         *,
         answer_id: str,
+        exam_attempt_id: str,
+        paper_item_id: Optional[str],
         question: Optional[QuestionContext],
         prompt_text: Optional[str],
         language: str,
@@ -61,6 +63,8 @@ class RealtimeExamSession:
         graph=None,
     ) -> None:
         self.answer_id = answer_id
+        self.exam_attempt_id = exam_attempt_id
+        self.paper_item_id = paper_item_id
         self.question = question
         self.prompt_text = prompt_text
         self.current_prompt_text = prompt_text
@@ -134,6 +138,7 @@ class RealtimeExamSession:
     def _build_current_turn(self, transcript: str, word_count: int) -> Dict[str, Any]:
         return {
             "answer_id": self.answer_id,
+            "paper_item_id": self.paper_item_id,
             "turn_order": self.turn_order,
             "turn_type": "MAIN" if self.turn_order == 1 else "FOLLOWUP",
             "prompt_text": self.current_prompt_text or self.prompt_text,
@@ -193,6 +198,10 @@ class RealtimeExamSession:
         relies on awaiting it."""
         return asyncio.create_task(
             turn_publisher.publish_turn_if_new(
-                self.archive_graph, self.answer_id, turn_order, reason=reason,
+                self.archive_graph,
+                self.answer_id,
+                turn_order,
+                reason=reason,
+                exam_attempt_id=self.exam_attempt_id,
             )
         )

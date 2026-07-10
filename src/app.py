@@ -48,6 +48,7 @@ from node.followUpDecisionGraph.graphConfig import build_archive_graph, build_te
 from node.evalGraph.graphConfig import build_graph
 from config.postgresDB_config import settings as pg_settings
 from infra.message_broker.external_events_handlers.kafka_consumer import start_outbox_consumer
+from infra.message_broker.external_events_handlers.exam_consumer import start_exam_attempt_consumer
 from infra.message_broker import connection as mq_connection
 from vector.chroma_client import build_chroma_collection
 
@@ -85,12 +86,19 @@ async def lifespan(app: FastAPI):
     consumer_task = asyncio.create_task(start_outbox_consumer(app))
     app.state.outbox_task = consumer_task
 
+    # 4) Start exam-attempt-evaluation-requested consumer (grading pipeline) -- defined in
+    # exam_consumer.py but was never actually started anywhere, so no grading requests from vox
+    # were ever consumed despite the handler being fully implemented.
+    exam_consumer_task = asyncio.create_task(start_exam_attempt_consumer(app))
+    app.state.exam_consumer_task = exam_consumer_task
+
     try:
         yield
     finally:
         await close_all_connections()
         await close_all_avatar_connections()
         consumer_task.cancel()
+        exam_consumer_task.cancel()
         await mq_connection.close()
         pool.close()
 

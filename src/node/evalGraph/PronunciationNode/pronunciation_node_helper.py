@@ -12,6 +12,7 @@ from node.state_models import (
     PhonemeFeedback,
 )
 from schemas.enums import ScoreColor, SpeakingMode
+from schemas.framework import CriterionFramework
 from schemas.scoring import CriteriaScores, CriterionScore
 
 
@@ -204,7 +205,52 @@ def build_correction_summary(words: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def build_criteria_scores(result: PronunciationAssessmentResult) -> CriteriaScores:
+def find_band_for_score(framework: CriterionFramework, score: Optional[float]) -> Optional[Any]:
+    if score is None:
+        return None
+    for band in sorted(framework.bands, key=lambda b: b.score_min):
+        if band.score_min <= score <= band.score_max:
+            return band
+    return None
+
+
+def build_pronunciation_framework_note(
+    criteria_frameworks: Optional[List[CriterionFramework]],
+    score: Optional[float],
+) -> Optional[str]:
+    """Look up the "pronunciation" scoring framework (if the exam has one) and
+    describe which band the Azure score falls into. Pronunciation has no LLM
+    step (unlike grammar/lexical/coherence), so the framework's band
+    descriptor/signals are attached directly to the CriterionScore note here
+    instead of being fed into a prompt.
+    """
+    framework = next(
+        (cf for cf in (criteria_frameworks or []) if cf.criterion_key == "pronunciation"),
+        None,
+    )
+    if framework is None:
+        return None
+
+    band = find_band_for_score(framework, score)
+    if band is None:
+        return None
+
+    note = f"Matches framework band {band.code}"
+    if band.label:
+        note += f" ({band.label})"
+    if band.descriptor:
+        note += f": {band.descriptor}"
+    if band.positive_signals:
+        note += f" Positive signals: {', '.join(band.positive_signals)}."
+    if band.negative_signals:
+        note += f" Negative signals: {', '.join(band.negative_signals)}."
+    return note
+
+
+def build_criteria_scores(
+    result: PronunciationAssessmentResult,
+    criteria_frameworks: Optional[List[CriterionFramework]] = None,
+) -> CriteriaScores:
     """
     Build CriteriaScores aligned with schemas.scoring.CriteriaScores:
     pronunciation, fluency, grammar, vocabulary, coherence.
@@ -216,14 +262,17 @@ def build_criteria_scores(result: PronunciationAssessmentResult) -> CriteriaScor
     - grammar: LLM (added by grammar_eval_node)
     """
 
+    pronunciation_score = round_score(result.pron_score or result.accuracy_score)
+    framework_note = build_pronunciation_framework_note(criteria_frameworks, pronunciation_score)
+
     return CriteriaScores(
         pronunciation=CriterionScore(
-            score=round_score(result.pron_score or result.accuracy_score),
+            score=pronunciation_score,
             subscores={
                 "accuracy": round_score(result.accuracy_score),
                 "prosody": round_score(result.prosody_score),
             },
-            note="Based on pronunciation accuracy and prosody from speech assessment.",
+            note=framework_note or "Based on pronunciation accuracy and prosody from speech assessment.",
         ),
         fluency=CriterionScore(
             score=round_score(result.fluency_score),
@@ -250,6 +299,7 @@ def format_pronunciation_api_response(
     mode: str,
     reference_text: Optional[str] = None,
     include_raw: bool = False,
+    criteria_frameworks: Optional[List[CriterionFramework]] = None,
 ) -> FormattedPronunciationResult:
     """
     Format pronunciation result for frontend.
@@ -284,7 +334,7 @@ def format_pronunciation_api_response(
                 else None
             ),
         },
-        "criteria": build_criteria_scores(result),
+        "criteria": build_criteria_scores(result, criteria_frameworks),
         "correction_summary": build_correction_summary(words),
         "word_feedback": words,
         "notes": [

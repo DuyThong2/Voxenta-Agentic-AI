@@ -7,6 +7,9 @@ You will receive:
 - The speaker's transcript
 - The reference text (if available)
 - The mode (scripted or unscripted)
+- Conversation context: a timestamped AI/User dialogue transcript, including any follow-up
+  questions the AI asked. This is reference context only -- never grade or quote the "AI:"
+  lines as if they were spoken by the student.
 
 ## Calibration Priority
 

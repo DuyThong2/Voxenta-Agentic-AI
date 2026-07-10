@@ -1,11 +1,14 @@
 """Script correction node using OpenAI to refine Azure transcription."""
 
+import logging
 from typing import Any, Dict, Optional
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from node.evalGraph.CorrectionNode.correction_node_prompt import SYSTEM_PROMPT
+
+logger = logging.getLogger(__name__)
 
 
 def correct_transcript(transcript: str) -> str:
@@ -54,8 +57,11 @@ def correction_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     
     speaking_input = state.get("speaking_input")
+    answer_id = getattr(speaking_input, "answer_id", None)
+    turn_order = (state.get("metadata") or {}).get("turn_order")
 
     if speaking_input and speaking_input.reference_text:
+        logger.info("[eval:correction] skipped (reference_text provided) answer_id=%s turn=%s", answer_id, turn_order)
         return {
             **state,
             "speaking_input": speaking_input,
@@ -68,19 +74,23 @@ def correction_node(state: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     transcribed_text = speaking_input.transcribed_text if speaking_input else None
-    
+
     if not transcribed_text:
         return {
             **state,
             "status": "error",
             "error": "transcribed_text is required for correction_node",
         }
-    
+
+    logger.info("[eval:correction] correcting transcript answer_id=%s turn=%s", answer_id, turn_order)
+
     try:
         corrected_transcript = correct_transcript(transcribed_text)
-        
+
         if speaking_input:
             speaking_input.corrected_transcript = corrected_transcript
+
+        logger.info("[eval:correction] done answer_id=%s turn=%s changed=%s", answer_id, turn_order, corrected_transcript != transcribed_text)
 
         return {
             **state,
@@ -92,8 +102,9 @@ def correction_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 "correction_applied": corrected_transcript != transcribed_text,
             },
         }
-    
+
     except Exception as exc:
+        logger.exception("[eval:correction] failed answer_id=%s turn=%s", answer_id, turn_order)
         return {
             **state,
             "status": "error",

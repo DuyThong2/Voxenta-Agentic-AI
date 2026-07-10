@@ -40,6 +40,17 @@ def build_user_prompt(speaking_input: SpeakingInput, transcript: str) -> str:
         ]
     )
 
+    if speaking_input.conversation_transcript:
+        parts.append("")
+        parts.append("## Conversation Context (for reference only, do not grade the AI's lines)")
+        parts.append(
+            "The lines below show the full AI/User dialogue with timestamps, including any "
+            "follow-up questions. Use it only to judge whether the speaker's answer coherently "
+            "follows what was actually asked -- never grade or quote the \"AI:\" lines as if "
+            "they were the speaker's own words."
+        )
+        parts.append(speaking_input.conversation_transcript)
+
     if speaking_input.answer_length_metrics:
         parts.append("\n## Answer Length Metrics")
         parts.append(f"Word count: {speaking_input.answer_length_metrics.get('word_count')}")

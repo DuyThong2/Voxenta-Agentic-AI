@@ -9,6 +9,7 @@ Transcript priority: transcribed_text > corrected_transcript > reference_text (f
 """
 
 import json
+import logging
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from langchain_openai import ChatOpenAI
@@ -18,11 +19,18 @@ from node.state_models import SpeakingInput
 from schemas.enums import SpeakingMode
 from schemas.scoring import CriterionScore
 
+logger = logging.getLogger(__name__)
+
 
 def select_text_for_language_scoring(
     speaking_input: SpeakingInput,
 ) -> Tuple[Optional[str], str]:
     """Pick the best transcript for LLM-based language scoring.
+
+    This selects the student-only text that is actually graded.
+    conversation_transcript (the timestamped AI/User dialogue) is added
+    separately as additional context in coherence_eval_node_config's
+    build_user_prompt -- it is context only, never the graded text itself.
 
     Returns:
         (text, source) where source is one of:
@@ -195,6 +203,8 @@ def run_eval_node(
     """Run the coherence eval node: guards, transcript selection, LLM call, merge, error handling."""
     speaking_input = state.get("speaking_input")
     pronunciation_result = state.get("pronunciation_result")
+    answer_id = getattr(speaking_input, "answer_id", None)
+    turn_order = (state.get("metadata") or {}).get("turn_order")
 
     if speaking_input is None:
         return {**state, "status": "error", "error": f"speaking_input is required for {node_name}_eval_node"}
@@ -209,6 +219,8 @@ def run_eval_node(
 
     scoring_meta = build_scoring_metadata(source, speaking_input.mode)
 
+    logger.info("[eval:%s] calling LLM answer_id=%s turn=%s", node_name, answer_id, turn_order)
+
     try:
         user_prompt = build_user_prompt_fn(speaking_input, transcript)
         llm_response = call_llm(system_prompt, user_prompt)
@@ -217,10 +229,16 @@ def run_eval_node(
         existing_meta = state.get("metadata") or {}
         merged_meta = {**existing_meta, **scoring_meta}
 
+        logger.info(
+            "[eval:%s] done answer_id=%s turn=%s score=%s",
+            node_name, answer_id, turn_order, llm_response.get("score"),
+        )
         return {**state, "pronunciation_result": updated_result, "metadata": merged_meta, "status": "completed", "error": None}
 
     except json.JSONDecodeError as exc:
+        logger.exception("[eval:%s] LLM returned invalid JSON answer_id=%s turn=%s", node_name, answer_id, turn_order)
         return {**state, "status": "error", "error": f"LLM returned invalid JSON: {str(exc)}"}
 
     except Exception as exc:
+        logger.exception("[eval:%s] failed answer_id=%s turn=%s", node_name, answer_id, turn_order)
         return {**state, "status": "error", "error": f"{node_name} evaluation failed: {str(exc)}"}

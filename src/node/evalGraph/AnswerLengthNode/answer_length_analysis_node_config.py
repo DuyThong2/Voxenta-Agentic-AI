@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 from typing import Any, Dict, Optional
@@ -13,6 +14,9 @@ from node.evalGraph.AnswerLengthNode.answer_length_node_helper import (
 )
 from node.state_models import SpeakingInput
 from utils.length_utils import get_expected_min_words
+from utils.speech_client import extract_non_target_segments, strip_non_target_segments
+
+logger = logging.getLogger(__name__)
 
 
 ENFORCE_CAP_IN_PYTHON = os.getenv("ENFORCE_CAP_IN_PYTHON", "true").lower() == "true"
@@ -77,14 +81,33 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
     if speaking_input is None:
         return {**state, "status": "error", "error": "speaking_input is required for answer_length_analysis_node"}
 
+    answer_id = getattr(speaking_input, "answer_id", None)
+    turn_order = (state.get("metadata") or {}).get("turn_order")
+    logger.info("[eval:answer_length] analyzing answer_id=%s turn=%s", answer_id, turn_order)
+
     # Select transcript: transcribed_text > corrected_transcript > reference_text (fallback).
     transcript, _source = select_text_for_language_scoring(speaking_input)
     transcript = transcript or ""
 
-    words = re.findall(r"\b\w+\b", transcript or "")
+    # Code-switched segments (wrapped "[XX: ...]" by speech_client.transcribe) are excluded
+    # from word/sentence counts -- only target-language words feed the length signal.
+    target_language_text = strip_non_target_segments(transcript)
+
+    words = re.findall(r"\b\w+\b", target_language_text)
     word_count = len(words)
-    sentences = [s.strip() for s in re.split(r"[.!?]+", transcript) if s.strip()]
+    sentences = [s.strip() for s in re.split(r"[.!?]+", target_language_text) if s.strip()]
     sentence_count = len(sentences)
+
+    non_target_word_count = sum(
+        len(re.findall(r"\b\w+\b", segment))
+        for segment in extract_non_target_segments(transcript)
+    )
+    total_words_all_languages = word_count + non_target_word_count
+    code_switching_ratio = (
+        round(non_target_word_count / total_words_all_languages, 2)
+        if total_words_all_languages > 0
+        else 0.0
+    )
 
     question_type = (speaking_input.question.question_type if speaking_input.question else None) or "unknown"
     difficulty_level = (speaking_input.question.difficulty_level if speaking_input.question else None) or "unknown"
@@ -147,6 +170,7 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "length_category": length_category,
         "note": note,
         "caps_enforced_in_python": ENFORCE_CAP_IN_PYTHON,
+        "code_switching_ratio": code_switching_ratio,
     }
 
     if coherence_cap is not None:
@@ -162,6 +186,11 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
         metrics["length_judgment_error"] = length_judgment_error
 
     speaking_input.answer_length_metrics = metrics
+
+    logger.info(
+        "[eval:answer_length] done answer_id=%s turn=%s word_count=%d category=%s",
+        answer_id, turn_order, word_count, length_category,
+    )
 
     return {
         **state,

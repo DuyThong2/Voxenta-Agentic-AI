@@ -76,6 +76,7 @@ class SpeakingInput(BaseModel):
     audio_path: str
     reference_text: Optional[str] = None
     transcribed_text: Optional[str] = None
+    conversation_transcript: Optional[str] = None
     corrected_transcript: Optional[str] = None
     mode: SpeakingMode = SpeakingMode.UNSCRIPTED
     language: str = "en-US"

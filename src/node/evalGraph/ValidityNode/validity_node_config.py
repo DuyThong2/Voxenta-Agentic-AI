@@ -21,6 +21,7 @@ Only rules with blocking=true and action="reject_or_zero" route to END.
 """
 
 import json
+import logging
 from typing import Any, Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
@@ -32,6 +33,8 @@ from schemas.enums import DifficultyLevel, SpeakingMode
 from mappers.schema_mapper import build_validity_result_from_rules, normalize_rule_result
 from utils.length_utils import get_expected_min_words
 from utils.text_utils import word_count
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -152,9 +155,21 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "error": "speaking_input is required for validity_node",
         }
 
-    # Transcript source: prefer transcribed_text from start_node
+    answer_id = getattr(speaking_input, "answer_id", None)
+    turn_order = (state.get("metadata") or {}).get("turn_order")
+    logger.info("[eval:validity] checking answer_id=%s turn=%s", answer_id, turn_order)
+
+    # Transcript source: prefer transcribed_text from start_node. conversation_transcript
+    # is deliberately NOT used here -- it's the AI/User dialogue scaffold meant only as
+    # extra context for CoherenceEvalNode (see select_text_for_language_scoring's own
+    # docstring in the eval-node helpers); validity must judge the student's own words,
+    # same as grammar/lexical/answer-length. Using it here previously caused false
+    # rejections, since conversation_transcript only ever contains "AI: <question>" lines
+    # at the point an individual turn is validated (the real per-turn transcript hadn't
+    # been merged into it yet), making every answer look like an empty repeat-the-question.
     text = (
         getattr(speaking_input, "transcribed_text", None)
+        or getattr(speaking_input, "corrected_transcript", None)
         or (state.get("metadata") or {}).get("transcription_text")
         or ""
     )
@@ -281,6 +296,12 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
         rule_entries=rule_results,
         transcript_source="transcribed_text",
         transcript_word_count=transcript_word_count,
+    )
+
+    logger.info(
+        "[eval:validity] done answer_id=%s turn=%s action=%s rule_ids=%s transcript=%r",
+        answer_id, turn_order, getattr(validity, "action", None),
+        [_rule_attr(r, "rule_id") for r in rule_results], text[:200],
     )
 
     return {

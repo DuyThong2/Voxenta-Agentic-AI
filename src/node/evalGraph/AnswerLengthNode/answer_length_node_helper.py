@@ -16,6 +16,11 @@ def select_text_for_language_scoring(
 ) -> Tuple[Optional[str], str]:
     """Pick the best transcript for LLM-based language scoring.
 
+    conversation_transcript (the timestamped AI/User dialogue) is deliberately
+    never selected here -- it includes the AI's own prompt/follow-up text,
+    which would inflate word_count/sentence_count. Only CoherenceEvalNode
+    adds conversation_transcript back in, as separate additional context.
+
     Returns:
         (text, source) where source is one of:
           - "transcribed_text"

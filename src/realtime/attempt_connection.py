@@ -76,6 +76,7 @@ class AttemptConnection:
 
     async def _handle_question_start(self, message: dict) -> None:
         answer_id = message.get("answer_id")
+        paper_item_id = message.get("paper_item_id")
         question_payload = message.get("question") or {}
         question = QuestionContext.model_validate(question_payload) if question_payload else None
         prompt_text = question_payload.get("question_text") if isinstance(question_payload, dict) else None
@@ -89,6 +90,8 @@ class AttemptConnection:
         # so sharing the one instance across sessions/questions is safe.
         self.active_session = RealtimeExamSession(
             answer_id=answer_id,
+            exam_attempt_id=self.exam_attempt_id,
+            paper_item_id=paper_item_id,
             question=question,
             prompt_text=prompt_text,
             language=language,

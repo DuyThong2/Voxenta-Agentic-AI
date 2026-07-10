@@ -60,14 +60,23 @@ FOLLOWUP_KAFKA_LOG_FILE = "followup_kafka_publish.jsonl"
 # can resolve before WPF's archive for this exact turn has landed in Postgres. Poll briefly
 # for the archive to catch up before publishing instead of publishing whatever's there
 # immediately and silently dropping the latest turn (this exact tuning fixed a real bug:
-# question 1/3/5 all published with the last turn missing in a 2026-06-24 run) — reused
-# verbatim here, do not "simplify" the timing.
-_ARCHIVE_CATCHUP_RETRY_DELAYS_SECONDS = [0.3, 0.3, 0.5, 0.5, 1.0, 1.0, 1.5, 1.5]
+# question 1/3/5 all published with the last turn missing in a 2026-06-24 run) — the first
+# 8 entries are reused verbatim from that fix, do not "simplify" that part of the timing.
+# Extended with a longer tail: utils.speech_client.transcribe() now uses continuous
+# recognition (fixing a truncation bug in recognize_once()), so archival runs proportionally
+# to real audio length instead of near-instant -- a long turn can take tens of seconds to
+# actually land in Postgres, which the original ~6.6s total ceiling did not anticipate.
+_ARCHIVE_CATCHUP_RETRY_DELAYS_SECONDS = [
+    0.3, 0.3, 0.5, 0.5, 1.0, 1.0, 1.5, 1.5,
+    2.0, 3.0, 5.0, 5.0, 10.0, 10.0, 15.0, 15.0, 20.0,
+]
 
 
-def _build_answer_turn_payload(turn: dict, answer_id: str) -> AnswerTurnPayload:
+def _build_answer_turn_payload(turn: dict, answer_id: str, exam_attempt_id: str | None = None) -> AnswerTurnPayload:
     return AnswerTurnPayload(
         answer_id=turn.get("answer_id") or answer_id,
+        session_id=exam_attempt_id,
+        paper_item_id=turn.get("paper_item_id"),
         turn_order=turn.get("turn_order", 0),
         turn_type=turn.get("turn_type"),
         prompt_text=turn.get("prompt_text"),
@@ -116,7 +125,13 @@ async def get_last_archived_turn_order(archive_graph, answer_id: str) -> int:
     return max(turn_orders) if turn_orders else 0
 
 
-async def publish_turn_if_new(archive_graph, answer_id: str, turn_order: int, reason: str = "") -> None:
+async def publish_turn_if_new(
+    archive_graph,
+    answer_id: str,
+    turn_order: int,
+    reason: str = "",
+    exam_attempt_id: str | None = None,
+) -> None:
     """Wait for this specific turn to be archived, then publish it to Kafka
     exactly once, durably. Safe to call multiple times for the same
     (answer_id, turn_order) — e.g. once per decide_next_step call and again
@@ -162,7 +177,7 @@ async def publish_turn_if_new(archive_graph, answer_id: str, turn_order: int, re
         event = AnswerTurnsRecordedEvent(
             answer_id=answer_id,
             payload=AnswerTurnsRecordedPayload(
-                turns=[_build_answer_turn_payload(turn, answer_id)],
+                turns=[_build_answer_turn_payload(turn, answer_id, exam_attempt_id)],
                 reason=reason,
             ),
         )

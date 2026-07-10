@@ -9,6 +9,7 @@ This node:
 """
 
 import json
+import logging
 import os
 from typing import Any, Dict, List, Optional
 
@@ -26,6 +27,8 @@ from utils import load_root_dotenv
 from utils.speech_client import build_speech_config, normalize_text
 
 load_root_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 def extract_pronunciation_summary(data: Dict[str, Any]) -> Dict[str, Optional[float]]:
@@ -124,6 +127,9 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "error": "speaking_input is required for pronunciation_eval_node",
         }
 
+    answer_id = getattr(speaking_input, "answer_id", None)
+    turn_order = (state.get("metadata") or {}).get("turn_order")
+
     audio_path = speaking_input.audio_path
     language = speaking_input.language or "en-US"
     
@@ -156,6 +162,8 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "status": "error",
             "error": f"Audio file not found: {audio_path}",
         }
+
+    logger.info("[eval:pronunciation] calling Azure pronunciation assessment answer_id=%s turn=%s", answer_id, turn_order)
 
     try:
         speech_config = build_speech_config(
@@ -232,6 +240,12 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             mode=speaking_input.mode,
             reference_text=reference_text if reference_text else None,
             include_raw=False,
+            criteria_frameworks=speaking_input.criteria_frameworks,
+        )
+
+        logger.info(
+            "[eval:pronunciation] done answer_id=%s turn=%s pron_score=%s",
+            answer_id, turn_order, pronunciation_result.pron_score,
         )
 
         return {
@@ -242,6 +256,7 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     except Exception as exc:
+        logger.exception("[eval:pronunciation] failed answer_id=%s turn=%s", answer_id, turn_order)
         return {
             **state,
             "status": "error",

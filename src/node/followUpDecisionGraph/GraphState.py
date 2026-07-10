@@ -7,6 +7,7 @@ from node.state_models import QuestionContext
 class FollowUpGraphState(TypedDict, total=False):
     answer_id: str
     audio_ref: str
+    paper_item_id: Optional[str]
     question: Optional[QuestionContext]
     language: str
     audio_path: str

@@ -50,6 +50,7 @@ def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
 
     current_turn = {
         "answer_id": state.get("answer_id"),
+        "paper_item_id": state.get("paper_item_id"),
         "turn_order": state["turn_order"],
         "turn_type": "MAIN" if state["turn_order"] == 1 else "FOLLOWUP",
         "prompt_text": state.get("prompt_text"),

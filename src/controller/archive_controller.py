@@ -20,6 +20,7 @@ async def archive_turn(
     request: Request,
     audio_ref: str = Form(...),
     answer_id: str = Form(...),
+    paper_item_id: str | None = Form(default=None),
     turn_order: int = Form(...),
     prompt_text: str | None = Form(default=None),
     language: str = Form(default="en-US"),
@@ -39,6 +40,7 @@ async def archive_turn(
             {
                 "answer_id": answer_id,
                 "audio_ref": audio_ref,
+                "paper_item_id": paper_item_id,
                 "question": _parse_question_payload(question),
                 "language": language,
                 "audio_path": local_audio_path,

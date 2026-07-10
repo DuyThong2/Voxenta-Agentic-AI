@@ -12,6 +12,7 @@ class TurnInput(_CamelMessage):
     prompt_text: Optional[str] = None
     audio_ref: str
     transcript: Optional[str] = None
+    duration_seconds: Optional[int] = None
 
 
 class PronunciationOverallScores(_CamelMessage):
@@ -37,6 +38,7 @@ class TurnDetail(_CamelMessage):
 
 
 class EvaluationSignals(_CamelMessage):
+    duration_seconds: int = 0
     word_count: int
     sentence_count: int
     length_ratio: Optional[float] = None
@@ -44,5 +46,6 @@ class EvaluationSignals(_CamelMessage):
     asr_confidence_avg: Optional[float] = None
     topic_relevance_score: Optional[float] = None
     off_topic_ratio: Optional[float] = None
+    code_switching_ratio: Optional[float] = None
     speech_rate: Optional[float] = None
     silence_ratio: Optional[float] = None

@@ -36,7 +36,7 @@ def round_score(score: Optional[float]) -> Optional[float]:
     return round(float(score), 1)
 
 
-def get_lowest_phoneme_score(phonemes: List[PhonemeFeedback]) -> Optional[float]:
+def get_average_phoneme_score(phonemes: List[PhonemeFeedback]) -> Optional[float]:
     scores = [
         phoneme.accuracy_score
         for phoneme in phonemes
@@ -46,32 +46,34 @@ def get_lowest_phoneme_score(phonemes: List[PhonemeFeedback]) -> Optional[float]
     if not scores:
         return None
 
-    return min(scores)
+    return sum(scores) / len(scores)
 
 
 def get_effective_word_score(word: WordFeedback) -> Optional[float]:
     """
-    Azure word score can sometimes look high even when one phoneme is very weak.
-    For frontend warning, use the lowest score between word score and phoneme score.
+    Blend the word-level Azure score with the average across all of its
+    phonemes, so one weak phoneme pulls the word's color down proportionally
+    instead of single-handedly forcing it (worst-case min()), while the
+    other, fine phonemes still count too.
 
-    Examples:
-    - word bus = 94, phoneme /s/ = 0 -> effective score = 0
-    - word school = Omission -> effective score = 0
+    Example: word "student" = 94, phonemes average ~90 (one weak /s/=54
+    among several 88-100s) -> effective score ~92, not dragged all the way
+    down to 54.
     """
 
     if word.error_type in ["Omission", "Insertion"]:
         return 0
 
     word_score = word.accuracy_score
-    lowest_phoneme = get_lowest_phoneme_score(word.phonemes)
+    avg_phoneme = get_average_phoneme_score(word.phonemes)
 
     if word_score is None:
-        return lowest_phoneme
+        return avg_phoneme
 
-    if lowest_phoneme is None:
+    if avg_phoneme is None:
         return word_score
 
-    return min(word_score, lowest_phoneme)
+    return (word_score + avg_phoneme) / 2
 
 
 def explain_error_type(error_type: Optional[str]) -> str:

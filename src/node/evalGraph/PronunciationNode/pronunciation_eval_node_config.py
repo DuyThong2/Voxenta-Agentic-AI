@@ -11,6 +11,7 @@ This node:
 import json
 import logging
 import os
+import threading
 from typing import Any, Dict, List, Optional
 
 import azure.cognitiveservices.speech as speechsdk
@@ -24,7 +25,7 @@ from node.state_models.pronunciation import (
 )
 from node.evalGraph.PronunciationNode.pronunciation_node_helper import format_pronunciation_api_response
 from utils import load_root_dotenv
-from utils.speech_client import build_speech_config, normalize_text
+from utils.speech_client import build_speech_config, normalize_text, _probe_audio_duration_seconds
 
 load_root_dotenv()
 
@@ -69,6 +70,35 @@ def extract_phoneme_feedback(phonemes: List[Dict[str, Any]]) -> List[PhonemeFeed
         )
 
     return feedback
+
+
+def _word_count(data: Dict[str, Any]) -> int:
+    nbest = data.get("NBest", [])
+    if not nbest:
+        return 0
+    return len(nbest[0].get("Words", []))
+
+
+def merge_pronunciation_summaries(segments_data: List[Dict[str, Any]]) -> Dict[str, Optional[float]]:
+    """Combine one PronunciationAssessment summary per continuous-recognition
+    segment into a single overall summary, weighted by each segment's word
+    count (a short segment's score shouldn't count as much as a long one)."""
+    keys = ["accuracy_score", "fluency_score", "prosody_score", "pron_score", "completeness_score"]
+    merged: Dict[str, Optional[float]] = {key: None for key in keys}
+
+    weighted_summaries = [
+        (extract_pronunciation_summary(data), max(_word_count(data), 1))
+        for data in segments_data
+    ]
+
+    for key in keys:
+        pairs = [(summary.get(key), weight) for summary, weight in weighted_summaries if summary.get(key) is not None]
+        if not pairs:
+            continue
+        total_weight = sum(weight for _, weight in pairs)
+        merged[key] = sum(value * weight for value, weight in pairs) / total_weight
+
+    return merged
 
 
 def extract_word_feedback(data: Dict[str, Any]) -> List[WordFeedback]:
@@ -194,45 +224,86 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         pronunciation_config.apply_to(recognizer)
 
-        result = recognizer.recognize_once()
+        # Continuous recognition, not recognize_once() -- recognize_once()
+        # stops after the first detected utterance/silence and returns only
+        # that segment, so any answer with a natural pause between sentences
+        # has everything after the pause silently missing from this
+        # assessment. Because reference_text (built from the turn's own
+        # transcript) still contains those later words, Azure's miscue
+        # alignment then flags them as a block of "Omission" (bright red)
+        # even though the student really did say them -- this is exactly
+        # what was showing up as red word spans on otherwise well-scored
+        # answers. Continuous recognition + a reference_text is Microsoft's
+        # own documented pattern for multi-sentence/paused audio (see
+        # speech_client.transcribe(), which already uses this same
+        # approach) -- each recognized segment's own PronunciationAssessment
+        # JSON is accumulated here and merged below.
+        segments_data: List[Dict[str, Any]] = []
+        recognized_text_parts: List[str] = []
+        done = threading.Event()
+        canceled_error: Optional[str] = None
 
-        raw_json = result.properties.get(
-            speechsdk.PropertyId.SpeechServiceResponse_JsonResult
-        )
+        def on_recognized(evt) -> None:
+            seg_result = evt.result
+            if seg_result.reason != speechsdk.ResultReason.RecognizedSpeech or not seg_result.text:
+                return
+            seg_raw_json = seg_result.properties.get(
+                speechsdk.PropertyId.SpeechServiceResponse_JsonResult
+            )
+            if seg_raw_json:
+                segments_data.append(json.loads(seg_raw_json))
+            recognized_text_parts.append(seg_result.text)
 
-        if result.reason != speechsdk.ResultReason.RecognizedSpeech:
-            cancellation_details = None
+        def on_canceled(evt) -> None:
+            nonlocal canceled_error
+            if evt.reason == speechsdk.CancellationReason.Error:
+                canceled_error = evt.error_details
+            done.set()
 
-            if result.reason == speechsdk.ResultReason.Canceled:
-                cancellation = speechsdk.CancellationDetails.from_result(result)
-                cancellation_details = {
-                    "reason": str(cancellation.reason),
-                    "error_details": cancellation.error_details,
-                }
+        def on_stopped(evt) -> None:
+            done.set()
 
+        recognizer.recognized.connect(on_recognized)
+        recognizer.session_stopped.connect(on_stopped)
+        recognizer.canceled.connect(on_canceled)
+
+        audio_duration = _probe_audio_duration_seconds(audio_path)
+        timeout_seconds = max(30.0, (audio_duration or 0.0) * 1.5)
+
+        recognizer.start_continuous_recognition()
+        try:
+            done.wait(timeout=timeout_seconds)
+        finally:
+            recognizer.stop_continuous_recognition()
+
+        if canceled_error:
             return {
                 **state,
                 "status": "error",
-                "error": f"Azure speech recognition failed: {result.reason}",
-                "metadata": {
-                    **state.get("metadata", {}),
-                    "raw_azure_response": raw_json,
-                    "cancellation_details": cancellation_details,
-                },
+                "error": f"Azure continuous recognition canceled: {canceled_error}",
             }
 
-        data = json.loads(raw_json) if raw_json else {}
-        summary = extract_pronunciation_summary(data)
+        if not segments_data:
+            return {
+                **state,
+                "status": "error",
+                "error": "Azure speech recognition returned no recognized segments",
+            }
+
+        summary = merge_pronunciation_summaries(segments_data)
+        merged_word_feedback: List[WordFeedback] = []
+        for seg_data in segments_data:
+            merged_word_feedback.extend(extract_word_feedback(seg_data))
 
         pronunciation_result = PronunciationAssessmentResult(
-            recognized_text=result.text,
+            recognized_text=" ".join(recognized_text_parts),
             accuracy_score=summary.get("accuracy_score"),
             fluency_score=summary.get("fluency_score"),
             prosody_score=summary.get("prosody_score"),
             pron_score=summary.get("pron_score"),
             completeness_score=summary.get("completeness_score"),
-            word_feedback=extract_word_feedback(data),
-            raw_result=data,
+            word_feedback=merged_word_feedback,
+            raw_result={"segments": segments_data},
         )
 
         formatted_result = format_pronunciation_api_response(

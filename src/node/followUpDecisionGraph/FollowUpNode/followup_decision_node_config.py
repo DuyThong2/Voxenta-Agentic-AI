@@ -1,11 +1,15 @@
 import json
+import random
 from typing import Any, Dict, List
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from node.followUpDecisionGraph.constants import MAX_TURNS
-from node.followUpDecisionGraph.followup_graph_helper import count_assessment_turns
+from node.followUpDecisionGraph.followup_graph_helper import (
+    count_assessment_turns,
+    is_clarification_reason,
+)
 from node.followUpDecisionGraph.FollowUpNode.followup_decision_prompt import SYSTEM_PROMPT
 from schemas.evaluation_event import EvaluationGuideInput
 from node.state_models import QuestionContext
@@ -13,7 +17,46 @@ from node.state_models import QuestionContext
 _HESITATION_TOKENS = {
     "uh", "um", "erm", "hmm", "ah", "eh", "like",
 }
-_NO_SPEECH_PREFIX = "Sorry, I may not have caught that clearly."
+
+# These 4 pools back the no-LLM fast paths in _handled_edge_case_decision
+# (silence / hesitation-only) -- randomized per call so the two most common
+# edge cases in an exam don't repeat the exact same phrase every time,
+# without paying for an LLM round-trip on the hot path.
+_NO_SPEECH_PREFIXES = (
+    "Sorry, I may not have caught that clearly.",
+    "Hmm, I didn't quite catch that.",
+    "Sorry, I couldn't hear a clear answer there.",
+    "I'm not sure that came through -- let's try again.",
+    "Sorry, that didn't come through clearly.",
+    "I didn't quite get that -- let's give it another go.",
+)
+
+_NO_SPEECH_AFTER_REPEAT_PROMPTS = (
+    "Take your time. Please answer when you're ready.",
+    "No rush -- answer whenever you're ready.",
+    "It's okay, take a moment and answer when you're ready.",
+    "Take a breath and answer whenever you're ready.",
+    "There's no hurry -- go ahead whenever you're ready.",
+    "Take your time, and speak whenever you're ready.",
+)
+
+_HESITATION_SHORT_ANSWER_PROMPTS = (
+    "Take your time. A short answer is fine.",
+    "No need to rush -- a brief answer works.",
+    "Take a moment. Even a short answer is okay.",
+    "It's fine to keep it short -- just take your time.",
+    "A quick, short answer is perfectly fine.",
+    "Take your time -- a short response is totally fine.",
+)
+
+_HESITATION_GENERAL_PROMPTS = (
+    "Take your time. You can answer in one or two simple sentences first.",
+    "No rush -- start with just one or two simple sentences.",
+    "Take a moment. A couple of simple sentences is a good start.",
+    "It's okay to start small -- one or two sentences is fine.",
+    "Take your time, and try answering in just a sentence or two.",
+    "Whenever you're ready, one or two simple sentences will do.",
+)
 
 
 def _question_attr(question: QuestionContext | Dict[str, Any] | None, key: str) -> Any:
@@ -89,15 +132,6 @@ def _split_turn_history(turns: List[Dict[str, Any]], current_turn: Dict[str, Any
     return turns, current_turn
 
 
-def _state_without_turns(state: Dict[str, Any]) -> Dict[str, Any]:
-    """FollowUpGraphState.turns is Annotated[List, add]. Spreading **state
-    back out without touching turns still re-submits whatever turns already
-    is as a "new" update, and the add reducer appends it again — silently
-    duplicating history across invokes on the same thread_id. This node
-    never appends turns itself, so strip it from every return."""
-    return {k: v for k, v in state.items() if k != "turns"}
-
-
 def _tokenize_words(text: str | None) -> List[str]:
     import re
     return re.findall(r"[a-zA-Z']+", (text or "").lower())
@@ -116,27 +150,39 @@ def _is_hesitation_only(transcript: str | None, word_count: int) -> bool:
 def _has_used_repeat_once(turns: List[Dict[str, Any]]) -> bool:
     for turn in turns:
         decision_reason = str(turn.get("decision_reason") or "")
-        if decision_reason.startswith("clarification_") or decision_reason == "no_meaningful_speech":
+        if is_clarification_reason(decision_reason) or decision_reason == "no_meaningful_speech":
             return True
     return False
 
 
 def _build_no_speech_reprompt(question: QuestionContext | Dict[str, Any] | None, fallback_prompt: str | None) -> str:
     question_text = str(fallback_prompt or _question_attr(question, "question_text") or "").strip()
+    prefix = random.choice(_NO_SPEECH_PREFIXES)
     if not question_text:
-        return _NO_SPEECH_PREFIX
-    return f"{_NO_SPEECH_PREFIX} {question_text}"
+        return prefix
+    return f"{prefix} {question_text}"
 
 
 def _build_hesitation_reprompt(question: QuestionContext | Dict[str, Any] | None) -> str:
     question_type = _question_attr(question, "question_type")
     question_type_value = getattr(question_type, "value", question_type)
     if question_type_value == "short_answer":
-        return "Take your time. A short answer is fine."
-    return "Take your time. You can answer in one or two simple sentences first."
+        return random.choice(_HESITATION_SHORT_ANSWER_PROMPTS)
+    return random.choice(_HESITATION_GENERAL_PROMPTS)
 
 
 def _handled_edge_case_decision(state: Dict[str, Any]) -> Dict[str, Any] | None:
+    # NOTE: followup_decision_node runs in PARALLEL with repeat_recovery_node
+    # (fan-out from prepare_turn_signals, see graphConfig.py's
+    # build_text_followup_graph). Every return here must be a NARROW dict
+    # containing only the keys this node actually intends to set
+    # (followup_decision_* / status / error) -- never spread the input
+    # `state` back out. FollowUpGraphState's shared keys (status, answer_id,
+    # exam_attempt_id, question, signals, current_turn, ...) are plain
+    # LastValue channels with no reducer, so if both parallel nodes echo them
+    # back in the same superstep, LangGraph raises InvalidUpdateError ("can
+    # only receive one value per step") even when both sides write the
+    # identical value.
     current_turn = state["current_turn"]
     all_turns = [*list(state.get("turns", [])), current_turn]
     question = state.get("question")
@@ -147,15 +193,13 @@ def _handled_edge_case_decision(state: Dict[str, Any]) -> Dict[str, Any] | None:
 
     if signals.get("no_meaningful_speech"):
         if repeated_once:
-            next_prompt_text = "Take your time. Please answer when you're ready."
+            next_prompt_text = random.choice(_NO_SPEECH_AFTER_REPEAT_PROMPTS)
             reason = "no_meaningful_speech_after_repeat"
         else:
             next_prompt_text = _build_no_speech_reprompt(question, current_turn.get("prompt_text"))
             reason = "no_meaningful_speech"
         return {
-            **_state_without_turns(state),
-            "status": "completed",
-            "decision": {
+            "followup_decision_result": {
                 "should_continue": True,
                 "next_prompt_text": next_prompt_text,
                 "reason": reason,
@@ -164,9 +208,7 @@ def _handled_edge_case_decision(state: Dict[str, Any]) -> Dict[str, Any] | None:
 
     if _is_hesitation_only(transcript, word_count):
         return {
-            **_state_without_turns(state),
-            "status": "completed",
-            "decision": {
+            "followup_decision_result": {
                 "should_continue": True,
                 "next_prompt_text": _build_hesitation_reprompt(question),
                 "reason": "hesitation_reprompt",
@@ -210,20 +252,20 @@ def _build_prompt(state: Dict[str, Any]) -> str:
 
 
 def followup_decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
+    # See the NOTE in _handled_edge_case_decision: every return path in this
+    # node must be a narrow dict (no `**state` spread) because this node runs
+    # in parallel with repeat_recovery_node in the same LangGraph superstep.
     current_turn = state.get("current_turn")
     if current_turn is None:
         return {
-            **_state_without_turns(state),
-            "status": "error",
             "error": "current_turn is required for followup_decision_node",
+            "followup_decision_error": "current_turn is required for followup_decision_node",
         }
 
     signals = state.get("signals") or {}
     if signals.get("hard_stop"):
         return {
-            **_state_without_turns(state),
-            "status": "completed",
-            "decision": {
+            "followup_decision_result": {
                 "should_continue": False,
                 "next_prompt_text": None,
                 "reason": signals.get("hard_stop_reason", ""),
@@ -249,10 +291,8 @@ def followup_decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
         decision = json.loads(content)
     except Exception as exc:
         return {
-            **_state_without_turns(state),
-            "status": "completed",
-            "error": f"Follow-up decision failed: {exc}",
-            "decision": {
+            "followup_decision_error": f"Follow-up decision failed: {exc}",
+            "followup_decision_result": {
                 "should_continue": False,
                 "next_prompt_text": None,
                 "reason": "decision_fallback",
@@ -281,9 +321,7 @@ def followup_decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
         next_prompt_text = None
 
     return {
-        **_state_without_turns(state),
-        "status": "completed",
-        "decision": {
+        "followup_decision_result": {
             "should_continue": should_continue,
             "next_prompt_text": next_prompt_text,
             "reason": reason,

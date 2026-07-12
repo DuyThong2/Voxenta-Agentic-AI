@@ -83,6 +83,44 @@ class RealtimeExamSession:
         self._awaiting_final_transcript: bool = False
         self._final_transcript_event: asyncio.Event = asyncio.Event()
 
+    @classmethod
+    async def create_from_archive(
+        cls,
+        *,
+        answer_id: str,
+        exam_attempt_id: str,
+        archive_graph: Any,
+        graph=None,
+    ) -> Optional["RealtimeExamSession"]:
+        """Rebuilds a full session purely from the durable archive_graph
+        checkpoint, keyed by answer_id -- used by AttemptConnection's
+        `resume` handler so a reconnect (WebSocket drop, or the serving pod
+        restarting on EKS) can restore an in-progress question WITHOUT the
+        client resending question_start or any question data at all: the
+        question snapshot (question/paper_item_id/language/prompt_text) was
+        durably persisted once, at question_start, by
+        turn_publisher.persist_question_snapshot; turn history/
+        decision_reasons/the pending follow-up prompt are persisted per-turn
+        by turn_publisher.publish_turn_if_new. Returns None if nothing was
+        ever archived for this answer_id (nothing to resume -- callers
+        should treat that as a resume that can't be honored, not a crash)."""
+        resume_state = await turn_publisher.get_resume_state(archive_graph, answer_id)
+        if resume_state is None:
+            return None
+
+        session = cls(
+            answer_id=answer_id,
+            exam_attempt_id=exam_attempt_id,
+            paper_item_id=resume_state.get("paper_item_id"),
+            question=resume_state.get("question"),
+            prompt_text=resume_state.get("prompt_text"),
+            language=resume_state.get("language") or "en-US",
+            archive_graph=archive_graph,
+            graph=graph,
+        )
+        session._apply_resume_state(resume_state)
+        return session
+
     def on_speech_start(self) -> None:
         """A new utterance within this turn just started (VAD speech_start).
         Does not touch already-finalized text in current_transcript."""
@@ -135,6 +173,56 @@ class RealtimeExamSession:
             self._live_partial = ""
             self._awaiting_final_transcript = False
 
+    async def hydrate_from_archive(self) -> None:
+        """Restore turn history (+ the pending follow-up prompt) from the
+        durable archive_graph checkpoint if this answer_id already has
+        archived turns -- called unconditionally by AttemptConnection on
+        every question_start, including brand-new questions (where it's a
+        cheap no-op: no checkpoint exists yet for this answer_id). This is
+        what lets a question survive a reconnect where the client resends a
+        fresh question_start (as opposed to a `resume`, which goes through
+        create_from_archive instead) without losing progress, since
+        self.turns/self.turn_order/self.current_prompt_text otherwise only
+        ever lived in this process's memory. Does not restore
+        self.current_transcript or the in-progress-utterance state -- a turn
+        that was still being spoken when the connection dropped is genuinely
+        lost and must be re-answered."""
+        resume_state = await turn_publisher.get_resume_state(self.archive_graph, self.answer_id)
+        if resume_state is None or not resume_state.get("turns"):
+            return
+        self._apply_resume_state(resume_state)
+
+    def _apply_resume_state(self, resume_state: Dict[str, Any]) -> None:
+        """Shared by hydrate_from_archive and create_from_archive: restores
+        turn history and turn_order from resume_state["turns"], and
+        current_prompt_text from resume_state["active_prompt_text"] -- the
+        pending follow-up prompt persisted by
+        turn_publisher.publish_turn_if_new after the LAST completed turn's
+        decision (should_continue=True case). Falls back to the last
+        archived turn's own prompt_text only if active_prompt_text was never
+        persisted (e.g. archive predates this feature) -- that fallback is
+        the PREVIOUS prompt, not the pending one, so it's a best-effort
+        approximation, not a guarantee."""
+        turns = resume_state.get("turns") or []
+        if not turns:
+            return
+
+        self.turns = turns
+        self.turn_order = max(int(t.get("turn_order") or 0) for t in turns) + 1
+
+        pending_prompt = resume_state.get("active_prompt_text")
+        if isinstance(pending_prompt, str) and pending_prompt.strip():
+            self.current_prompt_text = pending_prompt.strip()
+        else:
+            last_prompt = turns[-1].get("prompt_text")
+            if isinstance(last_prompt, str) and last_prompt.strip():
+                self.current_prompt_text = last_prompt.strip()
+
+        logger.info(
+            "[session] resumed %d archived turn(s) for answer_id=%s, resuming at turn_order=%d",
+            len(turns), self.answer_id, self.turn_order,
+        )
+
     def _build_current_turn(self, transcript: str, word_count: int) -> Dict[str, Any]:
         return {
             "answer_id": self.answer_id,
@@ -156,6 +244,7 @@ class RealtimeExamSession:
         current_turn = self._build_current_turn(transcript, word_count)
         state = {
             "answer_id": self.answer_id,
+            "exam_attempt_id": self.exam_attempt_id,
             "question": self.question,
             "turn_order": self.turn_order,
             "prompt_text": self.prompt_text,
@@ -203,5 +292,6 @@ class RealtimeExamSession:
                 turn_order,
                 reason=reason,
                 exam_attempt_id=self.exam_attempt_id,
+                active_prompt_text=self.current_prompt_text,
             )
         )

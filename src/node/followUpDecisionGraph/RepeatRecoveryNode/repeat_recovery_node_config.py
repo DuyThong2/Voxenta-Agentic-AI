@@ -1,68 +1,282 @@
+import asyncio
 import json
-from typing import Any, Dict
+import logging
+from typing import Any, Dict, List
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
+from infra.alert_client import push_alert
 from node.followUpDecisionGraph.RepeatRecoveryNode.repeat_recovery_node_helper import (
-    PARAPHRASE_PREFIX,
-    build_repeat_text,
+    build_decline_repair_text,
+    build_paraphrase_text,
+    count_decline_repair,
+    count_uncooperative_warning,
     format_history,
     question_attr,
-    state_without_turns,
 )
-from node.followUpDecisionGraph.RepeatRecoveryNode.repeat_recovery_node_prompt import (
-    SYSTEM_PROMPT,
-)
+from node.followUpDecisionGraph.RepeatRecoveryNode.repeat_recovery_node_prompt import SYSTEM_PROMPT
+
+logger = logging.getLogger(__name__)
+
+_REMIND_PREFIX = "We need a respectful answer to continue. Let's try this question once more:"
+_ALLOWED_ACTIONS = {
+    "continue_normal_followup",
+    "clarify_prompt",
+    "decline_repair",
+    "decline_move_on",
+    "remind_respectfully",
+    "uncooperative_move_on",
+    "skip_requested",
+}
+
+
+def _format_question(question: Any) -> str:
+    if question is None:
+        return "No question context provided."
+
+    parts: List[str] = []
+    question_text = question_attr(question, "question_text")
+    question_type = question_attr(question, "question_type")
+    duration_seconds = question_attr(question, "duration_seconds")
+    min_response_seconds = question_attr(question, "min_response_seconds")
+    max_response_seconds = question_attr(question, "max_response_seconds")
+
+    if question_text:
+        parts.append(f'Question: "{question_text}"')
+    if question_type:
+        parts.append(f"Question type: {question_type}")
+    if duration_seconds is not None:
+        parts.append(f"Expected duration: {duration_seconds}s")
+    if min_response_seconds is not None and max_response_seconds is not None:
+        parts.append(f"Expected response length: {min_response_seconds}-{max_response_seconds}s")
+    elif min_response_seconds is not None:
+        parts.append(f"Expected response length: at least {min_response_seconds}s")
+    elif max_response_seconds is not None:
+        parts.append(f"Expected response length: up to {max_response_seconds}s")
+
+    return "\n".join(parts) if parts else "No question context provided."
+
+
+def _split_turn_history(turns: List[Dict[str, Any]], current_turn: Dict[str, Any]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    if turns and turns[-1].get("turn_order") == current_turn.get("turn_order"):
+        return turns[:-1], turns[-1]
+    return turns, current_turn
 
 
 def _build_prompt(state: Dict[str, Any]) -> str:
     current_turn = state["current_turn"]
-    turns = list(state.get("turns", []))
     question = state.get("question")
-    active_prompt_text = state.get("active_prompt_text") or current_turn.get("prompt_text")
-    transcript = current_turn.get("transcript") or ""
+    all_turns = list(state.get("turns", []))
+    history, latest_turn = _split_turn_history(all_turns, current_turn)
     signals = state.get("signals") or {}
-
-    clarification_count = sum(
-        1
-        for turn in turns
-        if str(turn.get("decision_reason") or "").startswith("clarification_")
+    active_prompt_text = (
+        state.get("active_prompt_text")
+        or latest_turn.get("prompt_text")
+        or question_attr(question, "question_text")
+        or ""
     )
-    respectful_reminder_count = sum(
-        1
-        for turn in turns
-        if str(turn.get("decision_reason") or "") == "clarification_respectful_reminder"
-    )
+    decline_repair_count = count_decline_repair(history)
+    uncooperative_warning_count = count_uncooperative_warning(history)
 
     return (
-        "## Original Question\n"
-        f"{question_attr(question, 'question_text') or ''}\n\n"
-        "## Current Active Prompt\n"
-        f"{active_prompt_text or ''}\n\n"
+        "## Question Context\n"
+        f"{_format_question(question)}\n\n"
+        "## Active Prompt\n"
+        f"{active_prompt_text}\n\n"
         "## Previous Turns\n"
-        f"{format_history(turns)}\n\n"
-        "## Current Student Turn\n"
-        f"Transcript: {transcript}\n"
-        f"Turn type: {current_turn.get('turn_type')}\n"
-        f"Word count: {current_turn.get('word_count') or 0}\n\n"
-        "## Turn Signals\n"
-        f"No meaningful speech: {signals.get('no_meaningful_speech')}\n"
-        f"Length sufficient: {signals.get('length_sufficient')}\n"
-        f"Clarification attempts already seen: {clarification_count}\n"
-        f"Respectful reminders already given: {respectful_reminder_count}\n\n"
-        "Decide whether to repair the latest prompt, move on because the student is uncooperative/refusing,"
-        " or pass this turn to the normal follow-up decision."
+        f"{format_history(history)}\n\n"
+        "## Current Turn\n"
+        f"Turn {latest_turn.get('turn_order')} ({latest_turn.get('turn_type')}):\n"
+        f"Prompt: {latest_turn.get('prompt_text') or ''}\n"
+        f"Transcript: {latest_turn.get('transcript') or ''}\n"
+        f"Word count: {latest_turn.get('word_count') or 0}\n\n"
+        "## State Counters\n"
+        f"decline_repair_count={decline_repair_count}\n"
+        f"uncooperative_warning_count={uncooperative_warning_count}\n"
+        f"no_meaningful_speech={signals.get('no_meaningful_speech')}\n"
+        f"followup_pressure={signals.get('followup_pressure')}\n"
+        f"hard_stop={signals.get('hard_stop')}\n\n"
+        "Choose exactly one allowed action and return strict JSON only."
     )
+
+
+def _normalize_action(action: Any) -> str:
+    normalized = str(action or "").strip()
+    return normalized if normalized in _ALLOWED_ACTIONS else "continue_normal_followup"
+
+
+def _enforce_escalation(action: str, turns: List[Dict[str, Any]]) -> str:
+    decline_repair_count = count_decline_repair(turns)
+    uncooperative_warning_count = count_uncooperative_warning(turns)
+
+    if action == "decline_repair" and decline_repair_count >= 1:
+        return "decline_move_on"
+    if action == "decline_move_on" and decline_repair_count == 0:
+        return "decline_repair"
+    if action == "remind_respectfully" and uncooperative_warning_count >= 1:
+        return "uncooperative_move_on"
+    if action == "uncooperative_move_on" and uncooperative_warning_count == 0:
+        return "remind_respectfully"
+    return action
+
+
+def _clean_text(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+def _schedule_alert(state: Dict[str, Any], *, alert_type: str) -> None:
+    room_id = str(state.get("exam_attempt_id") or "").strip()
+    if not room_id:
+        logger.warning("[repeat_recovery] exam_attempt_id missing, skipping alert %s", alert_type)
+        return
+
+    participant_id = str(state.get("candidate_id") or room_id).strip() or room_id
+    stream_id = str(state.get("answer_id") or room_id).strip() or room_id
+
+    try:
+        asyncio.get_running_loop().create_task(
+            push_alert(
+                room_id=room_id,
+                participant_id=participant_id,
+                stream_id=stream_id,
+                alert_type=alert_type,
+            )
+        )
+    except RuntimeError:
+        logger.warning("[repeat_recovery] no running loop, skipping alert %s", alert_type)
+
+
+def _decision_payload(
+    *,
+    should_continue: bool,
+    reason: str,
+    next_prompt_text: str | None = None,
+    active_prompt_text: str | None = None,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "should_continue": should_continue,
+        "next_prompt_text": next_prompt_text if should_continue else None,
+        "reason": reason,
+    }
+    if should_continue and active_prompt_text:
+        payload["active_prompt_text"] = active_prompt_text
+    return payload
+
+
+def _resolve_edge_case_decision(state: Dict[str, Any], llm_decision: Dict[str, Any]) -> Dict[str, Any]:
+    # NOTE: this node runs in PARALLEL with followup_decision_node (fan-out
+    # from prepare_turn_signals, see graphConfig.py's build_text_followup_graph).
+    # Every return here must be a NARROW dict containing only the keys this
+    # node actually intends to set (repeat_recovery_* / status / error) --
+    # never spread the input `state` back out. FollowUpGraphState's shared
+    # keys (status, answer_id, exam_attempt_id, question, signals,
+    # current_turn, ...) are plain LastValue channels with no reducer, so if
+    # both parallel nodes echo them back in the same superstep, LangGraph
+    # raises InvalidUpdateError ("can only receive one value per step") even
+    # when both sides write the identical value.
+    current_turn = state["current_turn"]
+    question = state.get("question")
+    prior_turns, latest_turn = _split_turn_history(list(state.get("turns", [])), current_turn)
+    current_prompt = (
+        _clean_text(state.get("active_prompt_text"))
+        or _clean_text(latest_turn.get("prompt_text"))
+        or _clean_text(question_attr(question, "question_text"))
+    )
+    action = _enforce_escalation(_normalize_action(llm_decision.get("action")), prior_turns)
+    spoken_text = _clean_text(llm_decision.get("spoken_text"))
+    active_prompt_text = _clean_text(llm_decision.get("active_prompt_text")) or current_prompt
+
+    if action == "continue_normal_followup":
+        return {
+            "repeat_recovery_edge_case_handled": False,
+        }
+
+    if action == "clarify_prompt":
+        rewritten_prompt = active_prompt_text or current_prompt
+        reply_text = spoken_text or build_paraphrase_text(rewritten_prompt, question)
+        return {
+            "repeat_recovery_edge_case_handled": True,
+            "repeat_recovery_decision": _decision_payload(
+                should_continue=True,
+                next_prompt_text=reply_text,
+                active_prompt_text=rewritten_prompt,
+                reason="clarify_prompt",
+            ),
+        }
+
+    if action == "decline_repair":
+        rewritten_prompt = active_prompt_text or current_prompt
+        reply_text = spoken_text or build_decline_repair_text(rewritten_prompt, question)
+        return {
+            "repeat_recovery_edge_case_handled": True,
+            "repeat_recovery_decision": _decision_payload(
+                should_continue=True,
+                next_prompt_text=reply_text,
+                active_prompt_text=rewritten_prompt,
+                reason="decline_repair",
+            ),
+        }
+
+    if action == "decline_move_on":
+        return {
+            "repeat_recovery_edge_case_handled": True,
+            "repeat_recovery_decision": _decision_payload(
+                should_continue=False,
+                next_prompt_text=None,
+                reason="decline_move_on",
+            ),
+        }
+
+    if action == "remind_respectfully":
+        rewritten_prompt = active_prompt_text or current_prompt
+        reply_text = spoken_text or f"{_REMIND_PREFIX} {rewritten_prompt}".strip()
+        return {
+            "repeat_recovery_edge_case_handled": True,
+            "repeat_recovery_decision": _decision_payload(
+                should_continue=True,
+                next_prompt_text=reply_text,
+                active_prompt_text=rewritten_prompt,
+                reason="remind_respectfully",
+            ),
+        }
+
+    if action == "uncooperative_move_on":
+        _schedule_alert(state, alert_type="CRITICAL_VIOLATION")
+        return {
+            "repeat_recovery_edge_case_handled": True,
+            "repeat_recovery_decision": _decision_payload(
+                should_continue=False,
+                next_prompt_text=None,
+                reason="uncooperative_move_on",
+            ),
+        }
+
+    if action == "skip_requested":
+        return {
+            "repeat_recovery_edge_case_handled": True,
+            "repeat_recovery_decision": _decision_payload(
+                should_continue=False,
+                next_prompt_text=None,
+                reason="skip_requested",
+            ),
+        }
+
+    return {
+        "repeat_recovery_edge_case_handled": False,
+    }
 
 
 def repeat_recovery_node(state: Dict[str, Any]) -> Dict[str, Any]:
+    # See the NOTE in _resolve_edge_case_decision: every return path in this
+    # node must be a narrow dict (no `**state` spread) because this node runs
+    # in parallel with followup_decision_node in the same LangGraph superstep.
     current_turn = state.get("current_turn")
     if current_turn is None:
         return {
-            **state_without_turns(state),
-            "status": "error",
-            "error": "current_turn is required for repeat_recovery_node",
+            "repeat_recovery_edge_case_handled": False,
+            "repeat_recovery_error": "current_turn is required for repeat_recovery_node",
         }
 
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
@@ -77,99 +291,12 @@ def repeat_recovery_node(state: Dict[str, Any]) -> Dict[str, Any]:
         if content.startswith("```"):
             lines = [line for line in content.splitlines() if not line.strip().startswith("```")]
             content = "\n".join(lines).strip()
-        repair = json.loads(content)
+        decision = json.loads(content)
     except Exception as exc:
+        logger.warning("[repeat_recovery] LLM decision failed: %s", exc, exc_info=True)
         return {
-            **state_without_turns(state),
-            "status": "completed",
-            "edge_case_handled": False,
-            "error": f"Repeat recovery failed: {exc}",
+            "repeat_recovery_edge_case_handled": False,
+            "repeat_recovery_error": f"Repeat recovery decision failed: {exc}",
         }
 
-    action = str(repair.get("action") or "").strip()
-    spoken_text = str(repair.get("spoken_text") or "").strip() or None
-    active_prompt_text = str(repair.get("active_prompt_text") or "").strip() or None
-    reason = str(repair.get("reason") or "").strip() or "clarification_continue"
-
-    current_active_prompt = state.get("active_prompt_text") or current_turn.get("prompt_text")
-
-    if action == "repeat_latest_prompt":
-        return {
-            **state_without_turns(state),
-            "status": "completed",
-            "edge_case_handled": True,
-            "decision": {
-                "should_continue": True,
-                "next_prompt_text": spoken_text or build_repeat_text(current_active_prompt, state.get("question")),
-                "active_prompt_text": active_prompt_text or current_active_prompt,
-                "reason": "clarification_repeat_latest_prompt",
-            },
-        }
-
-    if action == "paraphrase_latest_prompt":
-        paraphrased_prompt = active_prompt_text or spoken_text or current_active_prompt
-        spoken = spoken_text or (
-            f"{PARAPHRASE_PREFIX} {paraphrased_prompt}" if paraphrased_prompt else PARAPHRASE_PREFIX
-        )
-        return {
-            **state_without_turns(state),
-            "status": "completed",
-            "edge_case_handled": True,
-            "decision": {
-                "should_continue": True,
-                "next_prompt_text": spoken,
-                "active_prompt_text": paraphrased_prompt,
-                "reason": "clarification_paraphrase_latest_prompt",
-            },
-        }
-
-    if action == "encourage_best_effort":
-        return {
-            **state_without_turns(state),
-            "status": "completed",
-            "edge_case_handled": True,
-            "decision": {
-                "should_continue": True,
-                "next_prompt_text": spoken_text or "Please answer as best you can from what you heard.",
-                "active_prompt_text": current_active_prompt,
-                "reason": "clarification_best_effort",
-            },
-        }
-
-    if action == "remind_respectfully":
-        return {
-            **state_without_turns(state),
-            "status": "completed",
-            "edge_case_handled": True,
-            "decision": {
-                "should_continue": True,
-                "next_prompt_text": spoken_text or "Please answer respectfully and do your best with this question.",
-                "active_prompt_text": current_active_prompt,
-                "reason": "clarification_respectful_reminder",
-            },
-        }
-
-    if action == "move_on":
-        move_on_reason = "clarification_move_on"
-        if "uncooperative" in reason.lower() or "refus" in reason.lower() or "non-cooper" in reason.lower():
-            move_on_reason = "clarification_uncooperative_move_on"
-        return {
-            **state_without_turns(state),
-            "status": "completed",
-            "edge_case_handled": True,
-            "decision": {
-                "should_continue": False,
-                "next_prompt_text": None,
-                "active_prompt_text": None,
-                "reason": move_on_reason,
-            },
-        }
-
-    return {
-        **state_without_turns(state),
-        "status": "completed",
-        "edge_case_handled": False,
-        "decision": None,
-        "error": None,
-        "reason": reason,
-    }
+    return _resolve_edge_case_decision(state, decision)

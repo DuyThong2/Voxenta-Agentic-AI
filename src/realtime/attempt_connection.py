@@ -98,6 +98,22 @@ class AttemptConnection:
             archive_graph=self.archive_graph,
             graph=self.text_followup_graph,
         )
+        # Durably snapshot the question payload for this answer_id, once --
+        # this is what lets a later `resume` (see _handle_resume) rebuild a
+        # full session from nothing but answer_id, with no question data
+        # resent by the client. Safe/idempotent: a genuinely new question
+        # writes fresh values; the same question re-sent via question_start
+        # (rather than resume) overwrites with identical values.
+        await turn_publisher.persist_question_snapshot(
+            self.archive_graph, answer_id,
+            question=question, paper_item_id=paper_item_id,
+            language=language, prompt_text=prompt_text,
+        )
+        # Unconditional: restores turn history + the pending follow-up
+        # prompt from the durable archive if this answer_id already has some
+        # (reconnect / pod restart mid-question on EKS); a no-op for a
+        # genuinely new question. See RealtimeExamSession.hydrate_from_archive.
+        await self.active_session.hydrate_from_archive()
 
         logger.info(
             "[attempt_connection] question_start exam_attempt_id=%s answer_id=%s",
@@ -147,9 +163,8 @@ class AttemptConnection:
         self._speak(
             next_prompt_text,
             slow=decision.get("reason") in {
-                "repeat_question_requested",
-                "clarification_repeat_latest_prompt",
-                "clarification_paraphrase_latest_prompt",
+                "clarify_prompt",
+                "decline_repair",
             },
         )
 
@@ -180,15 +195,44 @@ class AttemptConnection:
                 )
 
     async def _handle_resume(self, message: dict) -> None:
+        """Rebuilds self.active_session purely from the durable archive
+        (see RealtimeExamSession.create_from_archive) -- the client sends
+        only answer_id/turn_order here, no question data, since the question
+        snapshot was already persisted durably at question_start
+        (_persist_question_snapshot). Restores turn history, turn_order, and
+        the pending follow-up prompt, then re-speaks that prompt so the exam
+        actually continues instead of leaving the student in silence with a
+        rebuilt-but-mute session."""
         answer_id = message.get("answer_id")
-        last_archived_turn_order = await turn_publisher.get_last_archived_turn_order(
-            self.archive_graph, answer_id,
+        session = await RealtimeExamSession.create_from_archive(
+            answer_id=answer_id,
+            exam_attempt_id=self.exam_attempt_id,
+            archive_graph=self.archive_graph,
+            graph=self.text_followup_graph,
         )
+
+        last_archived_turn_order = 0
+        if session is not None:
+            self.active_session = session
+            last_archived_turn_order = session.turn_order - 1
+            logger.info(
+                "[attempt_connection] resume rebuilt session exam_attempt_id=%s answer_id=%s turn_order=%d",
+                self.exam_attempt_id, answer_id, session.turn_order,
+            )
+        else:
+            logger.warning(
+                "[attempt_connection] resume with nothing archived for answer_id=%s exam_attempt_id=%s",
+                answer_id, self.exam_attempt_id,
+            )
+
         await self.websocket.send_json({
             "type": "resume_ack",
             "answer_id": answer_id,
             "last_archived_turn_order": last_archived_turn_order,
         })
+
+        if session is not None and session.current_prompt_text:
+            self._speak(session.current_prompt_text)
 
     async def _on_voice_live_event(self, event: VoiceLiveServerEvent) -> None:
         """Routes a translated Voice Live event to the active session's

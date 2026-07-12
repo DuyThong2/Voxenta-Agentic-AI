@@ -114,15 +114,71 @@ async def _wait_for_turn(archive_graph, answer_id: str, turn_order: int) -> dict
     return turn
 
 
-async def get_last_archived_turn_order(archive_graph, answer_id: str) -> int:
-    """Durable truth for the `resume` handshake: the highest turn_order
-    actually present in the checkpointed `turns` list for this answer_id, or
-    0 if none. Reads the same checkpoint state turn_publisher writes to —
-    never guesses from in-memory state."""
+async def persist_question_snapshot(
+    archive_graph,
+    answer_id: str,
+    *,
+    question,
+    paper_item_id,
+    language: str,
+    prompt_text,
+) -> None:
+    """Durably snapshots the question payload for answer_id, once, right when
+    AttemptConnection._handle_question_start first receives it. This is what
+    lets RealtimeExamSession.create_from_archive rebuild a full session from
+    nothing but answer_id on a `resume` -- the WPF client never needs to
+    resend question data at all, since it's cached here the first (and only)
+    time it's ever sent. Safe to call every question_start unconditionally:
+    a genuinely new question just writes its own fresh values; the same
+    question resumed via a fresh question_start (rather than `resume`)
+    overwrites with identical values."""
+    await _aupdate_state(archive_graph, _archive_config(answer_id), {
+        "question": question,
+        "paper_item_id": paper_item_id,
+        "language": language,
+        "prompt_text": prompt_text,
+    })
+
+
+async def get_resume_state(archive_graph, answer_id: str) -> dict | None:
+    """Full durable state for answer_id, in one Postgres round trip -- used
+    by both RealtimeExamSession.hydrate_from_archive (turns + the pending
+    follow-up prompt) and RealtimeExamSession.create_from_archive (the
+    question snapshot, for rebuilding a session from nothing but answer_id on
+    a `resume`). Returns None if nothing has ever been archived for this
+    answer_id (a genuinely new question -- callers should treat that as
+    "nothing to resume", not an error).
+
+    turns are returned sorted by turn_order, with decision_reason merged in
+    from the decision_reasons marker (see publish_turn_if_new) since the
+    archived turn record itself never carries it (WPF's POST /turns/archive
+    payload has no such field -- decision_reason is only ever known
+    in-memory, after decide_next_step runs)."""
     archived_state = await _aget_state(archive_graph, _archive_config(answer_id))
-    turns = (archived_state.values or {}).get("turns") or []
-    turn_orders = [int((t or {}).get("turn_order") or 0) for t in turns]
-    return max(turn_orders) if turn_orders else 0
+    values = archived_state.values or {}
+    if not values.get("question") and not values.get("turns"):
+        return None
+
+    turns = list(values.get("turns") or [])
+    reasons_by_turn_order = {
+        int(entry.get("turn_order")): entry.get("reason", "")
+        for entry in (values.get("decision_reasons") or [])
+        if entry and entry.get("turn_order") is not None
+    }
+    for turn in turns:
+        turn_order = turn.get("turn_order")
+        if turn_order is not None and turn_order in reasons_by_turn_order:
+            turn["decision_reason"] = reasons_by_turn_order[turn_order]
+    turns.sort(key=lambda t: t.get("turn_order") or 0)
+
+    return {
+        "turns": turns,
+        "active_prompt_text": values.get("active_prompt_text"),
+        "question": values.get("question"),
+        "paper_item_id": values.get("paper_item_id"),
+        "language": values.get("language"),
+        "prompt_text": values.get("prompt_text"),
+    }
 
 
 async def publish_turn_if_new(
@@ -131,6 +187,7 @@ async def publish_turn_if_new(
     turn_order: int,
     reason: str = "",
     exam_attempt_id: str | None = None,
+    active_prompt_text: str | None = None,
 ) -> None:
     """Wait for this specific turn to be archived, then publish it to Kafka
     exactly once, durably. Safe to call multiple times for the same
@@ -144,6 +201,25 @@ async def publish_turn_if_new(
     decision response.
     """
     config = _archive_config(answer_id)
+
+    # Persist decision_reason + the pending follow-up prompt IMMEDIATELY,
+    # decoupled from the Kafka-publish path below -- that path waits (up to
+    # ~90s, _ARCHIVE_CATCHUP_RETRY_DELAYS_SECONDS) for WPF's own separate
+    # POST /turns/archive (audio upload + STT) to land before it does
+    # anything durable. A reconnect can legitimately happen well before that
+    # slower upload completes, and RealtimeExamSession.hydrate_from_archive/
+    # create_from_archive need this to resume correctly regardless of
+    # whether/when the audio archive itself catches up.
+    try:
+        await _aupdate_state(archive_graph, config, {
+            "decision_reasons": [{"turn_order": turn_order, "reason": reason}],
+            "active_prompt_text": active_prompt_text,
+        })
+    except Exception:
+        logger.exception(
+            "[turn_publisher] failed to persist decision_reason/active_prompt_text: answer_id=%s turn_order=%d",
+            answer_id, turn_order,
+        )
 
     try:
         state_before = await _aget_state(archive_graph, config)
@@ -193,6 +269,8 @@ async def publish_turn_if_new(
         # published_turn_orders (mirrors how append_turn_node appends to
         # turns) — not a Python-process-local set, so this survives a
         # process restart or a RealtimeExamSession recreated after reconnect.
+        # (decision_reasons/active_prompt_text are persisted earlier, up
+        # front — see the comment above — not here.)
         await _aupdate_state(archive_graph, config, {"published_turn_orders": [turn_order]})
     except Exception:
         logger.exception(

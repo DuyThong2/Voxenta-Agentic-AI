@@ -19,6 +19,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from ultralytics import YOLO
 
+from infra.alert_client import push_alert
 from realtime import gpu_scheduler
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,10 @@ session_events: Dict[str, List[dict]] = defaultdict(list)
 session_subscribers: Dict[str, Set[asyncio.Queue]] = defaultdict(set)
 
 yolo_model = YOLO(YOLO_MODEL)
+_ALERT_TYPE_MAP = {
+    "PERSON_MISSING": "PERSON_MISSING",
+    "MULTIPLE_PERSONS": "MULTIPLE_PERSONS",
+}
 
 
 def utc_now() -> str:
@@ -62,6 +67,31 @@ async def broadcast_event(session_id: str, event: dict):
     session_events[session_id].append(event)
     for queue in session_subscribers.get(session_id, set()):
         await queue.put(event)
+
+
+def _map_alert_type(event: dict) -> str:
+    if event.get("type") == "OBJECT_DETECTED":
+        return "PHONE_DETECTED" if event.get("object") == "cell phone" else "OBJECT_DETECTED"
+    return _ALERT_TYPE_MAP.get(str(event.get("type") or ""), str(event.get("type") or ""))
+
+
+def _schedule_alert(session_id: str, event: dict) -> None:
+    alert_type = _map_alert_type(event)
+    if not alert_type:
+        return
+
+    try:
+        asyncio.get_running_loop().create_task(
+            push_alert(
+                room_id=session_id,
+                participant_id=session_id,
+                stream_id=session_id,
+                alert_type=alert_type,
+                confidence=float(event.get("confidence") or 1.0),
+            )
+        )
+    except RuntimeError:
+        logger.warning("[PROCTORING] no running loop, skipping alert for session=%s", session_id)
 
 
 async def process_video_track(track, session_id: str):
@@ -172,6 +202,7 @@ async def process_video_track(track, session_id: str):
         for event in events:
             await broadcast_event(session_id, event)
             logger.info("[PROCTORING] session=%s %s", session_id, json.dumps(event, ensure_ascii=False))
+            _schedule_alert(session_id, event)
 
 
 async def cleanup_session(session_id: str):
@@ -214,7 +245,7 @@ async def offer(request: Request):
             content={"error": "Invalid WebRTC offer. Body must include 'sdp' and 'type'."},
         )
 
-    session_id = str(uuid.uuid4())
+    session_id = str(params.get("exam_attempt_id") or uuid.uuid4())
     pc = RTCPeerConnection()
     pcs.add(pc)
     session_map[session_id] = pc

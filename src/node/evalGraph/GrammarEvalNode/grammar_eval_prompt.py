@@ -50,6 +50,7 @@ Return ONLY a valid JSON object, no markdown formatting, no explanations:
 
 {
   "score": <int 0-100>,
+  "confidence": <number 0-1>,
   "subscores": {
     "range": <int 0-100>,
     "accuracy": <int 0-100>
@@ -60,6 +61,7 @@ Return ONLY a valid JSON object, no markdown formatting, no explanations:
 IMPORTANT:
 - Return ONLY the JSON object, nothing else
 - All scores must be integers between 0 and 100
+- Confidence must be a number between 0 and 1 representing how reliable your grammar judgment is from the available transcript
 - Note MUST explain WHY the score was given
 - For scripted/read_aloud mode, note must say "diagnostic only"
 """

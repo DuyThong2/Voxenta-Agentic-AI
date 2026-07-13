@@ -48,4 +48,6 @@ class EvaluationSignals(_CamelMessage):
     off_topic_ratio: Optional[float] = None
     code_switching_ratio: Optional[float] = None
     speech_rate: Optional[float] = None
+    ai_confidence: Optional[float] = None
+    audio_quality: Optional[float] = None
     silence_ratio: Optional[float] = None

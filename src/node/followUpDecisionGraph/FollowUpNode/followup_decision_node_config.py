@@ -126,6 +126,47 @@ def _format_question(question: QuestionContext | Dict[str, Any] | None) -> str:
     return "\n".join(parts) if parts else "No question context provided."
 
 
+def _format_asset(question: QuestionContext | Dict[str, Any] | None) -> str:
+    asset = _question_attr(question, "asset")
+    if asset is None:
+        return "No question asset provided."
+
+    if isinstance(asset, dict):
+        asset_type = asset.get("type")
+        transcript = asset.get("transcript")
+        description = asset.get("description")
+        alt_text = asset.get("alt_text")
+    else:
+        asset_type = getattr(asset, "type", None)
+        transcript = getattr(asset, "transcript", None)
+        description = getattr(asset, "description", None)
+        alt_text = getattr(asset, "alt_text", None)
+
+    parts: List[str] = []
+    if asset_type:
+        parts.append(f"Asset type: {asset_type}")
+    asset_text = transcript or description or alt_text
+    if transcript:
+        parts.append(f"Asset transcript: {transcript}")
+    elif description:
+        parts.append(f"Asset description: {description}")
+    elif alt_text:
+        parts.append(f"Asset alt text: {alt_text}")
+    if not asset_text and asset_type:
+        parts.append("Asset details: unavailable")
+    if asset_text:
+        parts.append(
+            "(Note: this is objective/factual information about the asset's content, "
+            "NOT a model answer or the single correct interpretation. If the question "
+            "asks the student to describe feelings, meaning, or their opinion about the "
+            "asset, a DIFFERENT interpretation than what's described above is still VALID "
+            "as long as it genuinely engages with the asset's actual content and is "
+            "reasonably argued -- do not mark it off-topic or incorrect just because it "
+            "diverges from this description.)"
+        )
+    return "\n".join(parts) if parts else "No question asset provided."
+
+
 def _split_turn_history(turns: List[Dict[str, Any]], current_turn: Dict[str, Any]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
     if turns and turns[-1].get("turn_order") == current_turn.get("turn_order"):
         return turns[:-1], turns[-1]
@@ -229,6 +270,8 @@ def _build_prompt(state: Dict[str, Any]) -> str:
     return (
         "## Question Context\n"
         f"{_format_question(question)}\n\n"
+        "## Question Asset\n"
+        f"{_format_asset(question)}\n\n"
         "## Evaluation Guide\n"
         f"{_format_guide(guide)}\n\n"
         "## Turn Signals\n"

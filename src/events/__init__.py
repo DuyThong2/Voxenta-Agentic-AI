@@ -16,6 +16,14 @@ from events.exam_attempt_evaluation_requested import (
     ExamAttemptEvaluationRequestedEvent,
     ExamAttemptEvaluationRequestedPayload,
 )
+from events.question_asset_analysis_completed import (
+    QuestionAssetAnalysisCompletedEvent,
+    QuestionAssetAnalysisCompletedPayload,
+)
+from events.question_asset_analysis_requested import (
+    QuestionAssetAnalysisRequestedEvent,
+    QuestionAssetAnalysisRequestedPayload,
+)
 from events.exam_attempt_evaluation_shared import (
     EvaluationSignals,
     PronunciationOverallScores,
@@ -35,6 +43,10 @@ __all__ = [
     "ExamAttemptEvaluationFailedPayload",
     "ExamAttemptEvaluationRequestedEvent",
     "ExamAttemptEvaluationRequestedPayload",
+    "QuestionAssetAnalysisCompletedEvent",
+    "QuestionAssetAnalysisCompletedPayload",
+    "QuestionAssetAnalysisRequestedEvent",
+    "QuestionAssetAnalysisRequestedPayload",
     "EvaluationSignals",
     "PronunciationOverallScores",
     "TurnDetail",

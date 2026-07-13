@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import wave
 from datetime import datetime, timezone
@@ -41,12 +42,12 @@ def _wav_duration_seconds(audio_path: str) -> Optional[int]:
         return None
 
 
-def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
+async def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
     audio_path = state.get("audio_path")
     if not audio_path:
         return {**_state_without_turns(state), "status": "error", "error": "audio_path is required"}
 
-    transcript = transcribe(audio_path, state.get("language", "en-US")) or ""
+    transcript = await asyncio.to_thread(transcribe, audio_path, state.get("language", "en-US")) or ""
 
     current_turn = {
         "answer_id": state.get("answer_id"),

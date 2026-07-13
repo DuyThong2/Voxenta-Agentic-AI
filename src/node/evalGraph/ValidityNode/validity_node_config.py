@@ -64,6 +64,7 @@ def _rule_attr(rule: Any, key: str) -> Any:
 def _build_llm_prompt(
     text: str,
     question_text: Optional[str],
+    asset_context: Optional[str],
     question_type: Optional[str],
     mode: Optional[str],
     difficulty_level: Optional[str],
@@ -82,6 +83,11 @@ def _build_llm_prompt(
         parts.append("")
         parts.append("## Question")
         parts.append(f'"{question_text}"')
+
+    if asset_context:
+        parts.append("")
+        parts.append("## Question Asset")
+        parts.append(asset_context)
 
     if question_type:
         parts.append(f"Question type: {question_type}")
@@ -104,12 +110,12 @@ def _build_llm_prompt(
 
 
 def _call_llm(text: str, question_text: Optional[str], question_type: Optional[str],
-              mode: Optional[str], difficulty_level: Optional[str], word_count: int,
+              asset_context: Optional[str], mode: Optional[str], difficulty_level: Optional[str], word_count: int,
               off_topic_examples: Optional[str] = None) -> Dict[str, Any]:
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
     user_prompt = _build_llm_prompt(
-        text, question_text, question_type, mode, difficulty_level, word_count,
+        text, question_text, asset_context, question_type, mode, difficulty_level, word_count,
         off_topic_examples=off_topic_examples,
     )
 
@@ -177,6 +183,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     transcript_word_count = word_count(text)
 
     question_text: Optional[str] = speaking_input.question.question_text if speaking_input.question else None
+    asset_context: Optional[str] = None
     question_type: Optional[str] = speaking_input.question.question_type if speaking_input.question else None
     duration_seconds: Optional[int] = speaking_input.question.duration_seconds if speaking_input.question else None
     min_response_seconds: Optional[int] = speaking_input.question.min_response_seconds if speaking_input.question else None
@@ -187,6 +194,22 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
         if speaking_input.question and speaking_input.question.evaluation_guide
         else None
     )
+
+    if speaking_input.question and speaking_input.question.asset:
+        asset = speaking_input.question.asset
+        asset_details = asset.transcript or asset.description or asset.alt_text
+        if asset_details:
+            asset_context = (
+                f"Asset type: {asset.type}\n"
+                f"Asset details: {asset_details}\n"
+                "(Note: this is objective/factual information about the asset's content, "
+                "NOT a model answer or the single correct interpretation. If the question "
+                "asks the student to describe feelings, meaning, or their opinion about the "
+                "asset, a DIFFERENT interpretation than what's described above is still VALID "
+                "as long as it genuinely engages with the asset's actual content and is "
+                "reasonably argued -- do not mark it off-topic or incorrect just because it "
+                "diverges from this description.)"
+            )
 
     rule_results: List[Any] = []
 
@@ -263,6 +286,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 text=text,
                 question_text=question_text,
                 question_type=question_type,
+                asset_context=asset_context,
                 mode=mode,
                 difficulty_level=difficulty_level,
                 word_count=transcript_word_count,

@@ -30,7 +30,7 @@ from typing import Any, Optional
 
 from fastapi import WebSocket
 
-from node.followUpDecisionGraph.constants import CLOSING_REPLY
+from node.followUpDecisionGraph.constants import CLOSING_REPLY, EXAM_FAREWELL_TEXT
 from node.state_models import QuestionContext
 from realtime import avatar_speech, turn_publisher
 from realtime.session import RealtimeExamSession
@@ -64,10 +64,15 @@ class AttemptConnection:
         message_type = message.get("type")
         if message_type == "question_start":
             await self._handle_question_start(message)
+        elif message_type == "present_question":
+            await self._handle_present_question(message)
         elif message_type == "turn_end":
             await self._handle_turn_end(message)
         elif message_type == "resume":
             await self._handle_resume(message)
+        elif message_type == "exam_end":
+            self._speak(EXAM_FAREWELL_TEXT)
+            await self.websocket.send_json({"type": "exam_end_ack"})
         else:
             logger.warning(
                 "[attempt_connection] unknown message type=%s exam_attempt_id=%s",
@@ -79,8 +84,14 @@ class AttemptConnection:
         paper_item_id = message.get("paper_item_id")
         question_payload = message.get("question") or {}
         question = QuestionContext.model_validate(question_payload) if question_payload else None
-        prompt_text = question_payload.get("question_text") if isinstance(question_payload, dict) else None
+        session_prompt_text = question_payload.get("question_text") if isinstance(question_payload, dict) else None
+        # WPF always includes "prompt_text" in the question_start payload (as an explicit null
+        # when an asset gate defers it to a later present_question message -- see
+        # RealtimeSessionClient.cs::SendQuestionStartAsync), so a plain .get() already yields
+        # None in that case without needing a fallback to session_prompt_text here.
+        prompt_text = message.get("prompt_text")
         instruction_text = question_payload.get("instruction_text") if isinstance(question_payload, dict) else None
+        section_instruction = message.get("section_instruction")
         language = message.get("language", "en-US")
 
         # Replaces any previous session outright — a new question always
@@ -93,7 +104,7 @@ class AttemptConnection:
             exam_attempt_id=self.exam_attempt_id,
             paper_item_id=paper_item_id,
             question=question,
-            prompt_text=prompt_text,
+            prompt_text=session_prompt_text,
             language=language,
             archive_graph=self.archive_graph,
             graph=self.text_followup_graph,
@@ -107,7 +118,7 @@ class AttemptConnection:
         await turn_publisher.persist_question_snapshot(
             self.archive_graph, answer_id,
             question=question, paper_item_id=paper_item_id,
-            language=language, prompt_text=prompt_text,
+            language=language, prompt_text=session_prompt_text,
         )
         # Unconditional: restores turn history + the pending follow-up
         # prompt from the durable archive if this answer_id already has some
@@ -123,8 +134,18 @@ class AttemptConnection:
         # The avatar reads any lead-in instructions (e.g. "Briefly explain your reasoning.")
         # before the question itself, mirroring a real examiner -- prompt_text alone (used above
         # for the evaluation session/decision context) stays the bare question text for grading.
-        spoken_text = " ".join(part.strip() for part in (instruction_text, prompt_text) if part and part.strip())
+        spoken_text = " ".join(
+            part.strip()
+            for part in (section_instruction, instruction_text, prompt_text)
+            if part and part.strip()
+        )
         self._speak(spoken_text)
+
+    async def _handle_present_question(self, message: dict) -> None:
+        prompt_text = message.get("prompt_text")
+        if self.active_session is not None and prompt_text:
+            self.active_session.current_prompt_text = prompt_text
+        self._speak(prompt_text)
 
     async def _handle_turn_end(self, message: dict) -> None:
         if self.active_session is None:

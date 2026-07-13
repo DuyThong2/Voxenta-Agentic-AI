@@ -9,9 +9,10 @@ from langchain_openai import ChatOpenAI
 from infra.alert_client import push_alert
 from node.followUpDecisionGraph.RepeatRecoveryNode.repeat_recovery_node_helper import (
     build_decline_repair_text,
+    build_offtopic_redirect_text,
     build_paraphrase_text,
-    count_decline_repair,
-    count_uncooperative_warning,
+    build_wrong_language_redirect_text,
+    count_engagement_violations,
     format_history,
     question_attr,
 )
@@ -27,8 +28,24 @@ _ALLOWED_ACTIONS = {
     "decline_move_on",
     "remind_respectfully",
     "uncooperative_move_on",
+    "redirect_offtopic",
+    "offtopic_move_on",
+    "redirect_wrong_language",
+    "language_move_on",
     "skip_requested",
 }
+
+# Reminder-triggering action -> its "budget exhausted" terminal action. These 4 share ONE
+# combined budget (see count_engagement_violations) -- max 2 reminders total, 3rd violation
+# (any of the 4 types) forces the matching move-on variant.
+_FIRST_TIME_TO_MOVE_ON = {
+    "decline_repair": "decline_move_on",
+    "remind_respectfully": "uncooperative_move_on",
+    "redirect_offtopic": "offtopic_move_on",
+    "redirect_wrong_language": "language_move_on",
+}
+_MOVE_ON_TO_FIRST_TIME = {v: k for k, v in _FIRST_TIME_TO_MOVE_ON.items()}
+_ENGAGEMENT_VIOLATION_BUDGET = 2
 
 
 def _format_question(question: Any) -> str:
@@ -58,6 +75,45 @@ def _format_question(question: Any) -> str:
     return "\n".join(parts) if parts else "No question context provided."
 
 
+def _format_asset(question: Any) -> str:
+    if question is None:
+        return "No question asset provided."
+
+    asset = question_attr(question, "asset")
+    if asset is None:
+        return "No question asset provided."
+
+    parts: List[str] = []
+    transcript = question_attr(asset, "transcript")
+    description = question_attr(asset, "description")
+    alt_text = question_attr(asset, "alt_text")
+    asset_type = question_attr(asset, "type")
+
+    if asset_type:
+        parts.append(f"Asset type: {asset_type}")
+    asset_text = transcript or description or alt_text
+    if transcript:
+        parts.append(f"Asset transcript: {transcript}")
+    elif description:
+        parts.append(f"Asset description: {description}")
+    elif alt_text:
+        parts.append(f"Asset alt text: {alt_text}")
+    if not asset_text and asset_type:
+        parts.append("Asset details: unavailable")
+    if asset_text:
+        parts.append(
+            "(Note: this is objective/factual information about the asset's content, "
+            "NOT a model answer or the single correct interpretation. If the question "
+            "asks the student to describe feelings, meaning, or their opinion about the "
+            "asset, a DIFFERENT interpretation than what's described above is still VALID "
+            "as long as it genuinely engages with the asset's actual content and is "
+            "reasonably argued -- do not mark it off-topic or incorrect just because it "
+            "diverges from this description.)"
+        )
+
+    return "\n".join(parts) if parts else "No question asset provided."
+
+
 def _split_turn_history(turns: List[Dict[str, Any]], current_turn: Dict[str, Any]) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
     if turns and turns[-1].get("turn_order") == current_turn.get("turn_order"):
         return turns[:-1], turns[-1]
@@ -76,12 +132,13 @@ def _build_prompt(state: Dict[str, Any]) -> str:
         or question_attr(question, "question_text")
         or ""
     )
-    decline_repair_count = count_decline_repair(history)
-    uncooperative_warning_count = count_uncooperative_warning(history)
+    engagement_violation_count = count_engagement_violations(history)
 
     return (
         "## Question Context\n"
         f"{_format_question(question)}\n\n"
+        "## Question Asset\n"
+        f"{_format_asset(question)}\n\n"
         "## Active Prompt\n"
         f"{active_prompt_text}\n\n"
         "## Previous Turns\n"
@@ -92,8 +149,9 @@ def _build_prompt(state: Dict[str, Any]) -> str:
         f"Transcript: {latest_turn.get('transcript') or ''}\n"
         f"Word count: {latest_turn.get('word_count') or 0}\n\n"
         "## State Counters\n"
-        f"decline_repair_count={decline_repair_count}\n"
-        f"uncooperative_warning_count={uncooperative_warning_count}\n"
+        f"engagement_violation_count={engagement_violation_count}\n"
+        "(counts decline_repair + remind_respectfully + redirect_offtopic + redirect_wrong_language "
+        "combined, over the full history of this question -- max 2 before force move-on)\n"
         f"no_meaningful_speech={signals.get('no_meaningful_speech')}\n"
         f"followup_pressure={signals.get('followup_pressure')}\n"
         f"hard_stop={signals.get('hard_stop')}\n\n"
@@ -107,17 +165,12 @@ def _normalize_action(action: Any) -> str:
 
 
 def _enforce_escalation(action: str, turns: List[Dict[str, Any]]) -> str:
-    decline_repair_count = count_decline_repair(turns)
-    uncooperative_warning_count = count_uncooperative_warning(turns)
+    violation_count = count_engagement_violations(turns)
 
-    if action == "decline_repair" and decline_repair_count >= 1:
-        return "decline_move_on"
-    if action == "decline_move_on" and decline_repair_count == 0:
-        return "decline_repair"
-    if action == "remind_respectfully" and uncooperative_warning_count >= 1:
-        return "uncooperative_move_on"
-    if action == "uncooperative_move_on" and uncooperative_warning_count == 0:
-        return "remind_respectfully"
+    if action in _FIRST_TIME_TO_MOVE_ON and violation_count >= _ENGAGEMENT_VIOLATION_BUDGET:
+        return _FIRST_TIME_TO_MOVE_ON[action]
+    if action in _MOVE_ON_TO_FIRST_TIME and violation_count < _ENGAGEMENT_VIOLATION_BUDGET:
+        return _MOVE_ON_TO_FIRST_TIME[action]
     return action
 
 
@@ -239,6 +292,52 @@ def _resolve_edge_case_decision(state: Dict[str, Any], llm_decision: Dict[str, A
                 next_prompt_text=reply_text,
                 active_prompt_text=rewritten_prompt,
                 reason="remind_respectfully",
+            ),
+        }
+
+    if action == "redirect_offtopic":
+        rewritten_prompt = active_prompt_text or current_prompt
+        reply_text = spoken_text or build_offtopic_redirect_text(rewritten_prompt, question)
+        return {
+            "repeat_recovery_edge_case_handled": True,
+            "repeat_recovery_decision": _decision_payload(
+                should_continue=True,
+                next_prompt_text=reply_text,
+                active_prompt_text=rewritten_prompt,
+                reason="redirect_offtopic",
+            ),
+        }
+
+    if action == "offtopic_move_on":
+        return {
+            "repeat_recovery_edge_case_handled": True,
+            "repeat_recovery_decision": _decision_payload(
+                should_continue=False,
+                next_prompt_text=None,
+                reason="offtopic_move_on",
+            ),
+        }
+
+    if action == "redirect_wrong_language":
+        rewritten_prompt = active_prompt_text or current_prompt
+        reply_text = spoken_text or build_wrong_language_redirect_text(rewritten_prompt, question)
+        return {
+            "repeat_recovery_edge_case_handled": True,
+            "repeat_recovery_decision": _decision_payload(
+                should_continue=True,
+                next_prompt_text=reply_text,
+                active_prompt_text=rewritten_prompt,
+                reason="redirect_wrong_language",
+            ),
+        }
+
+    if action == "language_move_on":
+        return {
+            "repeat_recovery_edge_case_handled": True,
+            "repeat_recovery_decision": _decision_payload(
+                should_continue=False,
+                next_prompt_text=None,
+                reason="language_move_on",
             ),
         }
 

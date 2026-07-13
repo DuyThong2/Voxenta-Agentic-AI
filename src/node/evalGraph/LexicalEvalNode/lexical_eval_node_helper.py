@@ -22,6 +22,43 @@ from schemas.scoring import CriterionScore
 logger = logging.getLogger(__name__)
 
 
+def _format_asset_context(speaking_input: SpeakingInput) -> list[str]:
+    q = speaking_input.question
+    if not q or not q.asset:
+        return []
+
+    asset = q.asset
+    parts = ["\n## Question Asset"]
+    if asset.type:
+        parts.append(f"Asset type: {asset.type}")
+    if asset.transcript:
+        parts.append(f"Asset transcript: {asset.transcript}")
+    elif asset.description:
+        parts.append(f"Asset description: {asset.description}")
+    elif asset.alt_text:
+        parts.append(f"Asset alt text: {asset.alt_text}")
+    if asset.transcript or asset.description or asset.alt_text:
+        parts.append(
+            "(Note: this is objective/factual information about the asset's content, "
+            "NOT a model answer or the single correct interpretation. If the question "
+            "asks the student to describe feelings, meaning, or their opinion about the "
+            "asset, a DIFFERENT interpretation than what's described above is still VALID "
+            "as long as it genuinely engages with the asset's actual content and is "
+            "reasonably argued -- do not mark it off-topic or incorrect just because it "
+            "diverges from this description.)"
+        )
+    return parts
+
+
+def _parse_confidence(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return None
+
+
 def select_text_for_language_scoring(
     speaking_input: SpeakingInput,
 ) -> Tuple[Optional[str], str]:
@@ -121,6 +158,7 @@ def build_question_context(speaking_input: SpeakingInput) -> str:
             parts.append(f"Scoring hints: {g.scoring_hints}")
         if g.common_mistakes:
             parts.append(f"Common mistakes for this question (supporting context, not exhaustive): {g.common_mistakes}")
+    parts.extend(_format_asset_context(speaking_input))
 
     return "\n".join(parts) if parts else "No question context provided."
 
@@ -227,7 +265,12 @@ def run_eval_node(
         updated_result = merge_criterion(pronunciation_result, criterion_key, llm_response)
 
         existing_meta = state.get("metadata") or {}
-        merged_meta = {**existing_meta, **scoring_meta}
+        confidence = _parse_confidence(llm_response.get("confidence"))
+        merged_meta = {
+            **existing_meta,
+            **scoring_meta,
+            **({"vocabulary_confidence": confidence} if confidence is not None else {}),
+        }
 
         logger.info(
             "[eval:%s] done answer_id=%s turn=%s score=%s",

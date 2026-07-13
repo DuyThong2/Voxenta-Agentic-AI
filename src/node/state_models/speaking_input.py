@@ -24,6 +24,7 @@ class QuestionContext(BaseModel):
     min_response_seconds: Optional[int] = None
     max_response_seconds: Optional[int] = None
     evaluation_guide: Optional[EvaluationGuideInput] = None
+    asset: Optional["QuestionAssetContext"] = None
 
     @field_validator("question_type", mode="before")
     @classmethod
@@ -61,6 +62,13 @@ class QuestionContext(BaseModel):
         return self
 
 
+class QuestionAssetContext(BaseModel):
+    type: Optional[str] = None
+    transcript: Optional[str] = None
+    description: Optional[str] = None
+    alt_text: Optional[str] = None
+
+
 class TopicContext(BaseModel):
     """Topic context for evaluation."""
 
@@ -84,3 +92,6 @@ class SpeakingInput(BaseModel):
     question: Optional[QuestionContext] = None
     topic: Optional[TopicContext] = None
     answer_length_metrics: Optional[dict] = None
+
+
+QuestionContext.model_rebuild()

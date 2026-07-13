@@ -19,7 +19,7 @@ from infra.message_broker.publishers.exam_publisher import (
     publish_exam_attempt_evaluation_completed,
     publish_exam_attempt_evaluation_failed,
 )
-from infra.storage.audio_storage import download_from_s3
+from infra.storage.audio_storage import download_from_s3_async
 from mappers.exam_event_builder import (
     build_completed_event,
     build_criteria_payload,
@@ -33,7 +33,7 @@ from node.evalGraph.AnswerLengthNode.answer_length_analysis_node_config import (
 from node.evalGraph.CoherenceEvalNode.coherence_eval_node_config import coherence_eval_node
 from node.evalGraph.GrammarEvalNode.grammar_eval_node_config import grammar_eval_node
 from node.evalGraph.LexicalEvalNode.lexical_eval_node_config import lexical_eval_node
-from node.state_models import QuestionContext, SpeakingInput, TopicContext
+from node.state_models import QuestionAssetContext, QuestionContext, SpeakingInput, TopicContext
 from node.state_models.pronunciation import FormattedPronunciationResult
 from schemas.enums import SpeakingMode
 
@@ -118,6 +118,16 @@ def _build_question_context(request_payload: Any) -> QuestionContext:
         min_response_seconds=request_payload.min_response_seconds,
         max_response_seconds=request_payload.max_response_seconds,
         evaluation_guide=request_payload.evaluation_guide,
+        asset=(
+            QuestionAssetContext(
+                type=request_payload.asset.type,
+                transcript=request_payload.asset.transcript,
+                description=request_payload.asset.description,
+                alt_text=request_payload.asset.alt_text,
+            )
+            if getattr(request_payload, "asset", None) is not None
+            else None
+        ),
     )
 
 
@@ -166,7 +176,7 @@ async def _evaluate_turn(
     conversation_transcript: str,
     raw_payload: Dict[str, Any],
 ) -> Dict[str, Any]:
-    local_audio_path = download_from_s3(turn.audio_ref)
+    local_audio_path = await download_from_s3_async(turn.audio_ref)
     try:
         initial_state = _build_initial_state(
             request_event,

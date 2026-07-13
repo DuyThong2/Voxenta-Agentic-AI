@@ -48,6 +48,9 @@ from node.followUpDecisionGraph.graphConfig import build_archive_graph, build_te
 from node.evalGraph.graphConfig import build_graph
 from config.postgresDB_config import settings as pg_settings
 from infra.message_broker.external_events_handlers.kafka_consumer import start_outbox_consumer
+from infra.message_broker.external_events_handlers.question_asset_analysis_consumer import (
+    start_question_asset_analysis_consumer,
+)
 from infra.message_broker.external_events_handlers.exam_consumer import start_exam_attempt_consumer
 from infra.message_broker import connection as mq_connection
 from vector.chroma_client import build_chroma_collection
@@ -91,6 +94,8 @@ async def lifespan(app: FastAPI):
     # were ever consumed despite the handler being fully implemented.
     exam_consumer_task = asyncio.create_task(start_exam_attempt_consumer(app))
     app.state.exam_consumer_task = exam_consumer_task
+    asset_analysis_consumer_task = asyncio.create_task(start_question_asset_analysis_consumer(app))
+    app.state.asset_analysis_consumer_task = asset_analysis_consumer_task
 
     try:
         yield
@@ -99,6 +104,7 @@ async def lifespan(app: FastAPI):
         await close_all_avatar_connections()
         consumer_task.cancel()
         exam_consumer_task.cancel()
+        asset_analysis_consumer_task.cancel()
         await mq_connection.close()
         pool.close()
 

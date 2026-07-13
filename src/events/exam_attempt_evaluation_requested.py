@@ -8,6 +8,13 @@ from schemas.common import _CamelMessage
 from schemas.evaluation_event import EvaluationGuideInput
 
 
+class QuestionAssetInput(_CamelMessage):
+    type: Optional[str] = None
+    transcript: Optional[str] = None
+    description: Optional[str] = None
+    alt_text: Optional[str] = None
+
+
 class ExamAttemptEvaluationRequestedPayload(_CamelMessage):
     question_text: Optional[str] = None
     question_type: Optional[str] = None
@@ -15,6 +22,7 @@ class ExamAttemptEvaluationRequestedPayload(_CamelMessage):
     duration_seconds: Optional[int] = None
     min_response_seconds: Optional[int] = None
     max_response_seconds: Optional[int] = None
+    asset: Optional[QuestionAssetInput] = None
     topic_name: Optional[str] = None
     topic_description: Optional[str] = None
     evaluation_guide: Optional[EvaluationGuideInput] = None

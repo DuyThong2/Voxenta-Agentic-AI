@@ -11,6 +11,34 @@ from node.state_models import SpeakingInput
 from schemas.enums import SpeakingMode
 
 
+def _format_asset_context(speaking_input: SpeakingInput) -> list[str]:
+    q = speaking_input.question
+    if not q or not q.asset:
+        return []
+
+    asset = q.asset
+    parts = ["\n## Question Asset"]
+    if asset.type:
+        parts.append(f"Asset type: {asset.type}")
+    if asset.transcript:
+        parts.append(f"Asset transcript: {asset.transcript}")
+    elif asset.description:
+        parts.append(f"Asset description: {asset.description}")
+    elif asset.alt_text:
+        parts.append(f"Asset alt text: {asset.alt_text}")
+    if asset.transcript or asset.description or asset.alt_text:
+        parts.append(
+            "(Note: this is objective/factual information about the asset's content, "
+            "NOT a model answer or the single correct interpretation. If the question "
+            "asks the student to describe feelings, meaning, or their opinion about the "
+            "asset, a DIFFERENT interpretation than what's described above is still VALID "
+            "as long as it genuinely engages with the asset's actual content and is "
+            "reasonably argued -- do not mark it off-topic or incorrect just because it "
+            "diverges from this description.)"
+        )
+    return parts
+
+
 def select_text_for_language_scoring(
     speaking_input: SpeakingInput,
 ) -> Tuple[Optional[str], str]:
@@ -110,5 +138,6 @@ def build_question_context(speaking_input: SpeakingInput) -> str:
             parts.append(f"Scoring hints: {g.scoring_hints}")
         if g.common_mistakes:
             parts.append(f"Common mistakes for this question (supporting context, not exhaustive): {g.common_mistakes}")
+    parts.extend(_format_asset_context(speaking_input))
 
     return "\n".join(parts) if parts else "No question context provided."

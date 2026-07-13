@@ -120,6 +120,43 @@ def build_criteria_payload(result: Dict[str, Any]) -> Dict[str, CriterionScore]:
     return criteria
 
 
+def _clamp_unit(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    return max(0.0, min(1.0, float(value)))
+
+
+def _average(values: List[Optional[float]]) -> Optional[float]:
+    normalized = [value for value in values if value is not None]
+    if not normalized:
+        return None
+    return sum(normalized) / len(normalized)
+
+
+def _compute_ai_confidence(result: Dict[str, Any]) -> Optional[float]:
+    metadata = result.get("metadata") or {}
+    return _average(
+        [
+            _clamp_unit(metadata.get("coherence_confidence")),
+            _clamp_unit(metadata.get("grammar_confidence")),
+            _clamp_unit(metadata.get("vocabulary_confidence")),
+        ]
+    )
+
+
+def _compute_audio_quality(metrics: Dict[str, Any]) -> Optional[float]:
+    asr_confidence = _clamp_unit(metrics.get("asr_confidence_avg"))
+    silence_ratio = _clamp_unit(metrics.get("silence_ratio"))
+
+    if asr_confidence is not None and silence_ratio is not None:
+        return 0.7 * asr_confidence + 0.3 * (1.0 - silence_ratio)
+    if asr_confidence is not None:
+        return asr_confidence
+    if silence_ratio is not None:
+        return 1.0 - silence_ratio
+    return None
+
+
 def build_signals(
     result: Dict[str, Any],
     speaking_input: Optional[SpeakingInput] = None,
@@ -142,6 +179,8 @@ def build_signals(
         off_topic_ratio=metrics.get("off_topic_ratio"),
         code_switching_ratio=metrics.get("code_switching_ratio"),
         speech_rate=metrics.get("speech_rate"),
+        ai_confidence=_compute_ai_confidence(result),
+        audio_quality=_compute_audio_quality(metrics),
         silence_ratio=metrics.get("silence_ratio"),
     )
 

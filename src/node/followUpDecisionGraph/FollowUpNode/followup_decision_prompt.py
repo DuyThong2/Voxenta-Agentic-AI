@@ -33,6 +33,8 @@ Rules:
 - If should_continue=true, next_prompt_text MUST be anchored to a concrete
   detail from the student's latest turn. Do not ask a generic template
   follow-up that could fit any answer.
+- If a Question Asset is provided, use its details together with the latest
+  answer. Do not ignore the asset or ask a generic follow-up unrelated to it.
 - Phrase next_prompt_text like a real examiner reacting to what the student
   just said, not a freshly worded question. Briefly acknowledge or echo the
   specific detail they gave (e.g. "You mentioned you like watching YouTube")

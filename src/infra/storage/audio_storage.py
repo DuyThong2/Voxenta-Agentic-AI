@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import tempfile
 from pathlib import Path
@@ -94,6 +95,10 @@ def download_from_s3(ref: str) -> str:
     except Exception:
         Path(tmp_file.name).unlink(missing_ok=True)
         raise
+
+
+async def download_from_s3_async(ref: str) -> str:
+    return await asyncio.to_thread(download_from_s3, ref)
 
 
 def upload_to_s3(local_path: str) -> str:

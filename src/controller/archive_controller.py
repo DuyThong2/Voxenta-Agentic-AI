@@ -3,7 +3,7 @@ import os
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 
-from infra.storage.audio_storage import download_from_s3
+from infra.storage.audio_storage import download_from_s3_async
 from node.state_models import QuestionContext
 
 router = APIRouter(prefix="/turns", tags=["Archive"])
@@ -32,11 +32,11 @@ async def archive_turn(
     No decision logic here — /v1/chat/completions is the only decision-maker
     now (see docs/single-decision-source-plan.md).
     """
-    local_audio_path = download_from_s3(audio_ref)
+    local_audio_path = await download_from_s3_async(audio_ref)
 
     graph = request.app.state.archive_graph
     try:
-        result = graph.invoke(
+        result = await graph.ainvoke(
             {
                 "answer_id": answer_id,
                 "audio_ref": audio_ref,

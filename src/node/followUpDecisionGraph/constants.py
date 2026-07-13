@@ -5,3 +5,4 @@ MAX_TURNS = 3
 # that case since there's nothing more to ask, but the avatar still needs something to say before
 # RealtimeExamFlowService (WPF, Phase 5) advances to the next question_start.
 CLOSING_REPLY = "Thank you for your answer. Let's move on."
+EXAM_FAREWELL_TEXT = "That completes the speaking exam. Thank you for your effort today and good luck with your results!"

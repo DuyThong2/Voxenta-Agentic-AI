@@ -92,6 +92,7 @@ class SpeakingInput(BaseModel):
     question: Optional[QuestionContext] = None
     topic: Optional[TopicContext] = None
     answer_length_metrics: Optional[dict] = None
+    asr_confidence: Optional[float] = None
 
 
 QuestionContext.model_rebuild()

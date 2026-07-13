@@ -164,10 +164,7 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
     language = speaking_input.language or "en-US"
     
     # If reference_text is available, compare audio directly against it.
-    # Otherwise, for unscripted mode, use corrected_transcript when available,
-    # or fallback to raw transcribed_text.
-    corrected_transcript = speaking_input.corrected_transcript
-
+    # Otherwise, for unscripted mode, use Azure's own transcribed_text.
     if speaking_input.mode == SpeakingMode.SCRIPTED:
         reference_text = normalize_text(speaking_input.reference_text or "") or ""
         if not reference_text:
@@ -177,7 +174,7 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 "error": "reference_text is required for scripted pronunciation evaluation",
             }
     else:
-        reference_text = corrected_transcript or speaking_input.transcribed_text or ""
+        reference_text = speaking_input.transcribed_text or ""
 
     if not audio_path:
         return {
@@ -205,6 +202,17 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             filename=audio_path
         )
 
+        # Fixed language=, NOT auto_detect_source_language_config: tried combining
+        # PronunciationAssessmentConfig with auto-detect to stop code-switched Vietnamese
+        # words (e.g. "banh mi") from being silently dropped from Words[] -- confirmed live
+        # this broke detailed phoneme assessment entirely (word_feedback came back empty).
+        # Detailed phoneme scoring for the English content is the core of this feature and
+        # matters far more than a code-switched word appearing in the word-tag list, so this
+        # stays a fixed single-language recognizer. The DISPLAY-only fix for code-switched
+        # text is instead: show speaking_input.transcribed_text (Azure's own transcription,
+        # already auto-detect + language-tagged, has the Vietnamese) as the turn's summary
+        # line, not a transcript rebuilt from this recognizer's Words[] -- see
+        # WordFeedbackText.tsx / exam_event_builder.display_transcript.
         recognizer = speechsdk.SpeechRecognizer(
             speech_config=speech_config,
             language=language,

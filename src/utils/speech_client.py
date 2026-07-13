@@ -1,11 +1,15 @@
+import json
+import logging
 import os
 import re
 import threading
-from typing import List, NamedTuple, Optional
+from typing import List, NamedTuple, Optional, Tuple
 
 import azure.cognitiveservices.speech as speechsdk
 
 from utils import load_root_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Candidate languages for continuous Language Identification during archive
 # re-transcription: the exam's target language (English) plus the student
@@ -39,6 +43,19 @@ def extract_non_target_segments(text: Optional[str]) -> List[str]:
     if not text:
         return []
     return [match.group(1) for match in NON_TARGET_SEGMENT_CAPTURE_PATTERN.finditer(text)]
+
+
+def unwrap_language_tags(text: Optional[str]) -> str:
+    """Remove the "[XX: ...]" wrapper punctuation while keeping the text inside it in
+    place, e.g. "I go to [VI: đại học] every day" -> "I go to đại học every day". Used
+    for DISPLAY (what the student actually said, read naturally) -- unlike
+    strip_non_target_segments (which deletes the wrapped text entirely, for word/sentence
+    counts) or extract_non_target_segments (which isolates only the wrapped text, for
+    codeSwitchingRatio), this keeps the full sentence intact and just drops the
+    internal "[XX: ]" bookkeeping markup the reader has no reason to see."""
+    if not text:
+        return ""
+    return re.sub(NON_TARGET_SEGMENT_CAPTURE_PATTERN, r"\1", text)
 
 
 def normalize_text(text: Optional[str]) -> Optional[str]:
@@ -94,6 +111,26 @@ def build_recognizer(audio_path: str, language: str) -> speechsdk.SpeechRecogniz
 class _TranscribedSegment(NamedTuple):
     text: str
     language: str
+    confidence: Optional[float]
+
+
+def _segment_confidence(result) -> Optional[float]:
+    """Best-effort NBest[0].Confidence from Azure's detailed JSON result, the
+    same per-segment confidence Azure itself uses for Pronunciation
+    Assessment. Returns None (rather than raising) if the property is
+    missing/malformed -- confidence is a diagnostic signal, not something
+    that should ever fail a transcription."""
+    try:
+        raw_json = result.properties.get(speechsdk.PropertyId.SpeechServiceResponse_JsonResult)
+        if not raw_json:
+            return None
+        nbest = json.loads(raw_json).get("NBest", [])
+        if not nbest:
+            return None
+        confidence = nbest[0].get("Confidence")
+        return float(confidence) if confidence is not None else None
+    except (ValueError, TypeError, KeyError):
+        return None
 
 
 def _wrap_non_target_segment(text: str, detected_language: str) -> str:
@@ -120,6 +157,22 @@ def _probe_audio_duration_seconds(audio_path: str) -> Optional[float]:
 
 
 def transcribe(audio_path: str, language: str) -> Optional[str]:
+    """Transcribe the full audio file. See _transcribe_impl for behavior;
+    this wrapper discards the per-segment confidence average for callers that
+    only need the text (e.g. the live-exam archive path)."""
+    text, _confidence = _transcribe_impl(audio_path, language)
+    return text
+
+
+def transcribe_with_confidence(audio_path: str, language: str) -> Tuple[Optional[str], Optional[float]]:
+    """Same as transcribe(), but also returns the word-count-weighted average
+    per-segment ASR confidence (0-1, or None if unavailable) -- used at eval
+    time to populate asr_confidence_avg (see AnswerLengthNode), which feeds
+    both the audioQuality signal and overallConfidence."""
+    return _transcribe_impl(audio_path, language)
+
+
+def _transcribe_impl(audio_path: str, language: str) -> Tuple[Optional[str], Optional[float]]:
     """Transcribe the full audio file.
 
     Uses continuous recognition (start_continuous_recognition), NOT
@@ -141,14 +194,22 @@ def transcribe(audio_path: str, language: str) -> Optional[str]:
     def on_recognized(evt) -> None:
         result = evt.result
         if result.reason != speechsdk.ResultReason.RecognizedSpeech or not result.text:
+            logger.warning(
+                "[transcribe] recognized event with no usable text audio_path=%s reason=%s",
+                audio_path, result.reason,
+            )
             return
         detected = speechsdk.AutoDetectSourceLanguageResult(result).language or language
-        segments.append(_TranscribedSegment(text=result.text, language=detected))
+        segments.append(_TranscribedSegment(text=result.text, language=detected, confidence=_segment_confidence(result)))
 
     def on_canceled(evt) -> None:
         nonlocal canceled_error
         if evt.reason == speechsdk.CancellationReason.Error:
             canceled_error = evt.error_details
+            logger.warning(
+                "[transcribe] recognition canceled with error audio_path=%s error=%s",
+                audio_path, evt.error_details,
+            )
         done.set()
 
     def on_stopped(evt) -> None:
@@ -163,18 +224,36 @@ def transcribe(audio_path: str, language: str) -> Optional[str]:
 
     recognizer.start_continuous_recognition()
     try:
-        done.wait(timeout=timeout_seconds)
+        finished = done.wait(timeout=timeout_seconds)
     finally:
         recognizer.stop_continuous_recognition()
+
+    if not finished:
+        logger.warning(
+            "[transcribe] timed out waiting for recognition to finish audio_path=%s "
+            "audio_duration=%s timeout=%s segments_so_far=%d",
+            audio_path, audio_duration, timeout_seconds, len(segments),
+        )
 
     if canceled_error:
         raise RuntimeError(f"Azure continuous recognition canceled: {canceled_error}")
 
     if not segments:
-        return None
+        logger.warning(
+            "[transcribe] no speech segments recognized audio_path=%s audio_duration=%s",
+            audio_path, audio_duration,
+        )
+        return None, None
 
     parts = [
         seg.text if seg.language.lower().startswith(target_prefix) else _wrap_non_target_segment(seg.text, seg.language)
         for seg in segments
     ]
-    return " ".join(parts)
+
+    confidences = [seg.confidence for seg in segments if seg.confidence is not None]
+    # Weighted by word count so a short segment's confidence doesn't count as much as a long
+    # one -- mirrors merge_pronunciation_summaries' weighting in pronunciation_eval_node_config.
+    weights = [max(len(seg.text.split()), 1) for seg in segments if seg.confidence is not None]
+    avg_confidence = sum(c * w for c, w in zip(confidences, weights)) / sum(weights) if confidences else None
+
+    return " ".join(parts), avg_confidence

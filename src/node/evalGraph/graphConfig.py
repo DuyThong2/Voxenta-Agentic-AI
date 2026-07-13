@@ -3,7 +3,6 @@
 from langgraph.graph import END, START, StateGraph
 
 from node.evalGraph.GraphState import GraphState
-from node.evalGraph.CorrectionNode.correction_node_config import correction_node
 from node.evalGraph.CoherenceEvalNode.coherence_eval_node_config import coherence_eval_node
 from node.evalGraph.GrammarEvalNode.grammar_eval_node_config import grammar_eval_node
 from node.evalGraph.LexicalEvalNode.lexical_eval_node_config import lexical_eval_node
@@ -18,7 +17,7 @@ from node.evalGraph.ValidityNode.validity_node_config import validity_node
 
 
 def route_after_validity(state: GraphState) -> str:
-    """Route to END if validity rejects, otherwise continue to correction."""
+    """Route to END if validity rejects, otherwise continue to pronunciation_eval."""
     validity = state.get("validity")
     if validity and getattr(validity, "action", None) == "reject_or_zero":
         return "end"
@@ -36,13 +35,17 @@ def build_graph(checkpointer=None):
 
     g.add_node("start", start_node)
     g.add_node("strict_validity_check", validity_node)
-    g.add_node("correction", correction_node)
     g.add_node("pronunciation_eval", pronunciation_eval_node)
     g.add_node("answer_length_analysis", answer_length_analysis_node)
     g.add_node("coherence_eval", coherence_eval_node)
     g.add_node("lexical_eval", lexical_eval_node)
     g.add_node("grammar_eval", grammar_eval_node)
 
+    # No CorrectionNode: it fed an LLM-rewritten transcript into validity/pronunciation
+    # scoring, but the rewrite was frequently wrong (over-corrected disfluencies, mangled
+    # code-switched wording) -- both scoring and display now go straight off Azure's own
+    # transcription (speech_client.transcribe(), which already handles code-switched
+    # Vietnamese via auto-detect + language tagging), no LLM rewrite step in between.
     g.add_edge(START, "start")
     g.add_conditional_edges(
         "start",
@@ -56,15 +59,6 @@ def build_graph(checkpointer=None):
     g.add_conditional_edges(
         "strict_validity_check",
         route_after_validity,
-        {
-            "end": END,
-            "continue": "correction",
-        },
-    )
-
-    g.add_conditional_edges(
-        "correction",
-        route_on_error,
         {
             "end": END,
             "continue": "pronunciation_eval",

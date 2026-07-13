@@ -3,7 +3,7 @@ import os
 
 from node.evalGraph.GraphState import GraphState
 from schemas.enums import SpeakingMode
-from utils.speech_client import normalize_text, transcribe
+from utils.speech_client import normalize_text, transcribe_with_confidence
 
 logger = logging.getLogger(__name__)
 
@@ -39,30 +39,30 @@ def start_node(state: GraphState) -> dict:
     logger.info("[eval:start] transcribing answer_id=%s turn=%s audio_path=%s", answer_id, turn_order, audio_path)
 
     try:
-        transcript = transcribe(audio_path, speaking_input.language)
+        transcript, asr_confidence = transcribe_with_confidence(audio_path, speaking_input.language)
 
-        if speaking_input.mode == SpeakingMode.UNSCRIPTED and not transcript:
-            return {
-                **state,
-                "status": "error",
-                "error": "Audio transcription failed for unscripted mode",
-                "metadata": {
-                    **state.get("metadata", {}),
-                    "recognition_reason": "not_recognized",
-                },
-            }
-
-        normalized_transcript = normalize_text(transcript)
+        # No usable speech recognized (genuine silence, or every segment rejected by ASR) is
+        # NOT treated as a hard error here -- returning status="error" would abort this
+        # turn's graph.invoke() with an exception, which in the multi-turn exam consumer
+        # (_evaluate_turn) crashes the ENTIRE answer's evaluation (all turns, not just this
+        # one), publishing evaluation_failed with no score AND no transcript for any turn.
+        # validity_node's own "audio.no_speech" rule already exists to classify an empty
+        # transcript as reject_or_zero (scored 0, but still a complete, recorded turn with
+        # whatever transcript exists) -- let it reach that rule instead of dying here. A
+        # genuine Azure API failure (network/auth/timeout) still raises inside
+        # transcribe_with_confidence and is caught by the except block below, unchanged.
+        transcript = transcript or ""
 
         if speaking_input.mode == SpeakingMode.SCRIPTED:
             # For scripted mode, reference_text is authoritative and should be normalized.
             speaking_input.reference_text = normalize_text(speaking_input.reference_text)
 
         speaking_input.transcribed_text = transcript
+        speaking_input.asr_confidence = asr_confidence
 
         logger.info(
             "[eval:start] transcribed answer_id=%s turn=%s chars=%d",
-            answer_id, turn_order, len(transcript or ""),
+            answer_id, turn_order, len(transcript),
         )
 
         return {

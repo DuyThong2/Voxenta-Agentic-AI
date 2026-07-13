@@ -47,6 +47,7 @@ def build_user_prompt(speaking_input: SpeakingInput, transcript: str) -> str:
         parts.append(f"Length category: {speaking_input.answer_length_metrics.get('length_category')}")
         parts.append(f"Expected min words: {speaking_input.answer_length_metrics.get('expected_min_words')}")
         parts.append(f"Grammar range cap: {speaking_input.answer_length_metrics.get('grammar_range_cap')}")
+        parts.append(f"Code-switching ratio (non-English words / total words): {speaking_input.answer_length_metrics.get('code_switching_ratio')}")
 
     if mode == SpeakingMode.SCRIPTED:
         parts.append("\nThis is a scripted read-aloud test. Grammar scores are diagnostic only.")

@@ -85,12 +85,6 @@ class AttemptConnection:
         question_payload = message.get("question") or {}
         question = QuestionContext.model_validate(question_payload) if question_payload else None
         session_prompt_text = question_payload.get("question_text") if isinstance(question_payload, dict) else None
-        # WPF always includes "prompt_text" in the question_start payload (as an explicit null
-        # when an asset gate defers it to a later present_question message -- see
-        # RealtimeSessionClient.cs::SendQuestionStartAsync), so a plain .get() already yields
-        # None in that case without needing a fallback to session_prompt_text here.
-        prompt_text = message.get("prompt_text")
-        instruction_text = question_payload.get("instruction_text") if isinstance(question_payload, dict) else None
         section_instruction = message.get("section_instruction")
         language = message.get("language", "en-US")
 
@@ -131,15 +125,13 @@ class AttemptConnection:
             self.exam_attempt_id, answer_id,
         )
         await self.websocket.send_json({"type": "question_start_ack", "answer_id": answer_id})
-        # The avatar reads any lead-in instructions (e.g. "Briefly explain your reasoning.")
-        # before the question itself, mirroring a real examiner -- prompt_text alone (used above
-        # for the evaluation session/decision context) stays the bare question text for grading.
-        spoken_text = " ".join(
-            part.strip()
-            for part in (section_instruction, instruction_text, prompt_text)
-            if part and part.strip()
-        )
-        self._speak(spoken_text)
+        # question_start only speaks the section-level lead-in (when this question starts a new
+        # section). instruction_text and the question prompt are spoken via separate
+        # present_question messages the WPF client sends afterwards -- with a deliberate pause and
+        # concurrent asset display in between -- so this stays a single, short utterance instead of
+        # bundling section + instruction + prompt together. See
+        # RealtimeExamFlowService.cs::RunQuestionAsync for the sequencing this pairs with.
+        self._speak((section_instruction or "").strip())
 
     async def _handle_present_question(self, message: dict) -> None:
         prompt_text = message.get("prompt_text")
@@ -168,11 +160,23 @@ class AttemptConnection:
             await session.wait_for_pending_transcript()
             transcript = session.current_transcript
 
+        logger.info(
+            "[realtime_transcript] exam_attempt_id=%s answer_id=%s turn_order=%d text=%r",
+            self.exam_attempt_id, session.answer_id, session.turn_order, transcript,
+        )
+
         word_count = message.get("word_count")
         if word_count is None:
             word_count = len(transcript.split()) if transcript else 0
 
         decision = session.decide_next_step(transcript, word_count)
+        if message.get("is_last_allowed_turn") and decision.get("should_continue"):
+            # WPF's own MaxTurnsPerQuestion is about to force this question closed regardless of
+            # what we decide -- if we still spoke a follow-up here, the student would hear a
+            # question read aloud and then get bounced to the next one before ever answering it
+            # (confirmed live: this is exactly what was happening). Match WPF's outcome instead of
+            # racing it.
+            decision = {**decision, "should_continue": False, "next_prompt_text": None, "reason": "client_max_turns_reached"}
         await self.websocket.send_json({
             "type": "decision",
             "answer_id": session.answer_id,
@@ -196,6 +200,14 @@ class AttemptConnection:
     async def _speak_and_notify(self, text: Optional[str], sequence: int, slow: bool) -> None:
         try:
             if text:
+                session = self.active_session
+                logger.info(
+                    "[realtime_ai_speech] exam_attempt_id=%s answer_id=%s turn_order=%s sequence=%d text=%r",
+                    self.exam_attempt_id,
+                    session.answer_id if session else None,
+                    session.turn_order if session else None,
+                    sequence, text,
+                )
                 await avatar_speech.speak(
                     self.exam_attempt_id,
                     text,

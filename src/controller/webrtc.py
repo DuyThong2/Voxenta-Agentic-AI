@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -31,6 +32,17 @@ MAX_CONNECTIONS = int(os.getenv("WEBRTC_MAX_CONNECTIONS", "100"))
 YOLO_MODEL = os.getenv("YOLO_MODEL", "yolov8n.pt")
 FRAME_SKIP = int(os.getenv("YOLO_FRAME_SKIP", "10"))
 YOLO_CONFIDENCE = float(os.getenv("YOLO_CONFIDENCE", "0.5"))
+# Minimum seconds between repeated alerts of the same type for the same session, once that
+# alert type is already active -- without this, PERSON_MISSING/MULTIPLE_PERSONS fire on every
+# processed frame (every FRAME_SKIP frames) for as long as the condition holds, flooding SSE/logs/
+# the gRPC alert push with duplicates instead of one alert per actual state change.
+ALERT_COOLDOWN_SECONDS = float(os.getenv("PROCTORING_ALERT_COOLDOWN_SECONDS", "5"))
+# Consecutive processed frames a condition must hold before it's treated as real rather than
+# single-frame detector noise (e.g. YOLO confidence dipping just under YOLO_CONFIDENCE for one
+# frame while a person is genuinely on camera -- lighting/angle/motion blur). Without this,
+# _should_emit_alert's edge-trigger fires immediately on every such blip, since each 0<->1 flap
+# looks like a fresh state change.
+ALERT_STREAK_FRAMES = int(os.getenv("PROCTORING_ALERT_STREAK_FRAMES", "3"))
 
 # --------------- State ---------------
 pcs: Set[RTCPeerConnection] = set()
@@ -40,6 +52,12 @@ session_map: Dict[str, RTCPeerConnection] = {}
 session_events: Dict[str, List[dict]] = defaultdict(list)
 # session_id -> set of SSE subscribers (asyncio.Queue)
 session_subscribers: Dict[str, Set[asyncio.Queue]] = defaultdict(set)
+# session_id -> set of alert types currently considered "active" (condition still holds)
+_active_alert_types: Dict[str, Set[str]] = defaultdict(set)
+# session_id -> {alert_type: monotonic time it was last emitted}
+_alert_last_emitted_at: Dict[str, Dict[str, float]] = defaultdict(dict)
+# session_id -> {alert_type: consecutive processed-frame count the condition has held}
+_condition_streak: Dict[str, Dict[str, int]] = defaultdict(dict)
 
 yolo_model = YOLO(YOLO_MODEL)
 _ALERT_TYPE_MAP = {
@@ -73,6 +91,43 @@ def _map_alert_type(event: dict) -> str:
     if event.get("type") == "OBJECT_DETECTED":
         return "PHONE_DETECTED" if event.get("object") == "cell phone" else "OBJECT_DETECTED"
     return _ALERT_TYPE_MAP.get(str(event.get("type") or ""), str(event.get("type") or ""))
+
+
+def _should_emit_alert(session_id: str, alert_type: str) -> bool:
+    """Edge-triggered + cooldown gate: fires immediately the first time a condition
+    appears, then at most once per ALERT_COOLDOWN_SECONDS while it keeps holding."""
+    now = time.monotonic()
+    active = _active_alert_types[session_id]
+    last_emitted = _alert_last_emitted_at[session_id]
+
+    is_new = alert_type not in active
+    cooldown_elapsed = alert_type not in last_emitted or (now - last_emitted[alert_type]) >= ALERT_COOLDOWN_SECONDS
+
+    if not (is_new or cooldown_elapsed):
+        return False
+
+    active.add(alert_type)
+    last_emitted[alert_type] = now
+    return True
+
+
+def _clear_alert(session_id: str, alert_type: str) -> None:
+    """Condition no longer holds -- next occurrence is treated as a fresh edge, not
+    a continuation still waiting out the old cooldown."""
+    _active_alert_types[session_id].discard(alert_type)
+
+
+def _condition_confirmed(session_id: str, alert_type: str) -> bool:
+    """Hysteresis: increments the consecutive-frame streak for this condition and returns
+    True only once it has held for ALERT_STREAK_FRAMES processed frames in a row. Call
+    _reset_streak instead the moment the condition stops holding."""
+    streaks = _condition_streak[session_id]
+    streaks[alert_type] = streaks.get(alert_type, 0) + 1
+    return streaks[alert_type] >= ALERT_STREAK_FRAMES
+
+
+def _reset_streak(session_id: str, alert_type: str) -> None:
+    _condition_streak[session_id][alert_type] = 0
 
 
 def _schedule_alert(session_id: str, event: dict) -> None:
@@ -181,23 +236,31 @@ async def process_video_track(track, session_id: str):
             )
 
         if person_count == 0:
-            events.append(
-                build_event(
-                    event_type="PERSON_MISSING",
-                    message="Không thấy người trong camera",
-                    confidence=0.9,
+            if _condition_confirmed(session_id, "PERSON_MISSING") and _should_emit_alert(session_id, "PERSON_MISSING"):
+                events.append(
+                    build_event(
+                        event_type="PERSON_MISSING",
+                        message="Không thấy người trong camera",
+                        confidence=0.9,
+                    )
                 )
-            )
+        else:
+            _reset_streak(session_id, "PERSON_MISSING")
+            _clear_alert(session_id, "PERSON_MISSING")
 
         if person_count > 1:
-            events.append(
-                build_event(
-                    event_type="MULTIPLE_PERSONS",
-                    message="Phát hiện nhiều hơn một người trong camera",
-                    confidence=0.9,
-                    person_count=person_count,
+            if _condition_confirmed(session_id, "MULTIPLE_PERSONS") and _should_emit_alert(session_id, "MULTIPLE_PERSONS"):
+                events.append(
+                    build_event(
+                        event_type="MULTIPLE_PERSONS",
+                        message="Phát hiện nhiều hơn một người trong camera",
+                        confidence=0.9,
+                        person_count=person_count,
+                    )
                 )
-            )
+        else:
+            _reset_streak(session_id, "MULTIPLE_PERSONS")
+            _clear_alert(session_id, "MULTIPLE_PERSONS")
 
         for event in events:
             await broadcast_event(session_id, event)
@@ -216,6 +279,9 @@ async def cleanup_session(session_id: str):
     for queue in session_subscribers.get(session_id, set()):
         await queue.put({"type": "SESSION_ENDED", "timestamp": utc_now()})
     session_subscribers.pop(session_id, None)
+    _active_alert_types.pop(session_id, None)
+    _alert_last_emitted_at.pop(session_id, None)
+    _condition_streak.pop(session_id, None)
 
     logger.info("[WEBRTC] Session %s cleaned up. Active: %d", session_id, len(pcs))
 

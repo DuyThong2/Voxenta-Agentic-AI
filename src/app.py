@@ -15,12 +15,30 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
 import logging
+import logging.handlers
+import os
+
+_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "var", "logs")
+os.makedirs(_LOG_DIR, exist_ok=True)
+_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
 logging.basicConfig(
     level=logging.INFO,
     stream=sys.stdout,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    format=_LOG_FORMAT,
 )
+
+# Console output alone requires catching it live -- durably persist every log line to disk too,
+# so a failure can be diagnosed after the fact from the file instead of needing to have been
+# watching the terminal at the time. Rotates at 10MB x 5 files so it can't grow unbounded.
+_file_handler = logging.handlers.RotatingFileHandler(
+    os.path.join(_LOG_DIR, "agents.log"),
+    maxBytes=10 * 1024 * 1024,
+    backupCount=5,
+    encoding="utf-8",
+)
+_file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+logging.getLogger().addHandler(_file_handler)
 
 logging.getLogger("infra.message_broker.external_events_handlers.kafka_consumer").setLevel(logging.INFO)
 logging.getLogger("vector.indexer").setLevel(logging.INFO)

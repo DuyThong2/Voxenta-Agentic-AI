@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 from fastapi import APIRouter, Form, HTTPException, Request
@@ -36,7 +37,12 @@ async def archive_turn(
 
     graph = request.app.state.archive_graph
     try:
-        result = await graph.ainvoke(
+        # graph.invoke (sync) not .ainvoke -- archive_graph is compiled with the
+        # sync PostgresSaver checkpointer (app.py), whose aget_tuple raises
+        # NotImplementedError. Running the sync call in a thread keeps this
+        # route non-blocking without needing an async checkpointer.
+        result = await asyncio.to_thread(
+            graph.invoke,
             {
                 "answer_id": answer_id,
                 "audio_ref": audio_ref,

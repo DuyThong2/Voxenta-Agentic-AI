@@ -26,6 +26,7 @@ from mappers.exam_event_builder import (
     build_feedback_payload,
     build_signals,
     build_turn_detail,
+    display_transcript,
 )
 from node.evalGraph.AnswerLengthNode.answer_length_analysis_node_config import (
     answer_length_analysis_node,
@@ -36,6 +37,7 @@ from node.evalGraph.LexicalEvalNode.lexical_eval_node_config import lexical_eval
 from node.state_models import QuestionAssetContext, QuestionContext, SpeakingInput, TopicContext
 from node.state_models.pronunciation import FormattedPronunciationResult
 from schemas.enums import SpeakingMode
+from utils.speech_client import unwrap_language_tags
 
 logger = logging.getLogger(__name__)
 
@@ -48,11 +50,17 @@ def _real_transcript_for_turn(result: Dict[str, Any]) -> str:
     Python's start_node does, per-turn, at graph.invoke() time. Anything that wants
     "what did the student actually say for this turn" must read it from here
     (result["speaking_input"].transcribed_text), not from turn.transcript.
+
+    Delegates to display_transcript (exam_event_builder.py), which is just
+    speaking_input.transcribed_text -- Azure's own transcription, no LLM rewrite step.
+
+    Unwrapped for display: transcribed_text may still contain "[VI: ...]"
+    code-switch markers (see speech_client._wrap_non_target_segment) that scoring
+    nodes rely on, but a reader just wants to read the sentence naturally --
+    unwrap_language_tags drops the "[XX: ]" bookkeeping punctuation while keeping the
+    actual words in place.
     """
-    speaking_input = result.get("speaking_input")
-    if speaking_input is None:
-        return ""
-    return speaking_input.transcribed_text or speaking_input.corrected_transcript or ""
+    return unwrap_language_tags(display_transcript(result, result.get("speaking_input")))
 
 
 def _combine_transcript(per_turn_results: List[Tuple[Any, Dict[str, Any]]]) -> str:
@@ -309,7 +317,7 @@ def _build_multi_turn_completed_event(
             turn_type=turn.turn_type or "MAIN",
             prompt_text=turn.prompt_text,
             audio_url=turn.audio_ref,
-            transcript=turn.transcript,
+            transcript=_real_transcript_for_turn(result),
             duration_seconds=turn.duration_seconds,
         )
         for turn, result in per_turn_results

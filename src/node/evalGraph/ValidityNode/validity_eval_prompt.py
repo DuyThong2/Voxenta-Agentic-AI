@@ -26,8 +26,10 @@ Does the transcript merely repeat or rephrase the question without providing any
 
 ### 3. language.wrong_language_full
 Is the transcript mostly NOT in English?
-- A few non-English words mixed in (code-switching) is acceptable and should NOT trigger this rule.
-- Only trigger if more than 50% of the meaningful content is in a non-English language.
+- Code-switching (some non-English words/phrases mixed into an otherwise English answer) is
+  acceptable and should NOT trigger this rule, even if it happens a few times across the answer.
+- Only trigger if more than 70% of the meaningful content is in a non-English language -- i.e. the
+  answer is predominantly in another language, not just sprinkled with it.
 - Gibberish or random characters that are clearly not any language should also trigger.
 - If triggered: severity="critical", blocking=true, action="reject_or_zero"
 

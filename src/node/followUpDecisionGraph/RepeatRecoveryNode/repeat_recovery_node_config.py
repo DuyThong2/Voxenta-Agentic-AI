@@ -13,6 +13,7 @@ from node.followUpDecisionGraph.RepeatRecoveryNode.repeat_recovery_node_helper i
     build_paraphrase_text,
     build_wrong_language_redirect_text,
     count_engagement_violations,
+    count_violations_of_type,
     format_history,
     question_attr,
 )
@@ -35,9 +36,10 @@ _ALLOWED_ACTIONS = {
     "skip_requested",
 }
 
-# Reminder-triggering action -> its "budget exhausted" terminal action. These 4 share ONE
-# combined budget (see count_engagement_violations) -- max 2 reminders total, 3rd violation
-# (any of the 4 types) forces the matching move-on variant.
+# Reminder-triggering action -> its "budget exhausted" terminal action. Each of these 4 has
+# its OWN independent budget (see count_violations_of_type) -- 1 reminder for that specific
+# type, then a 2nd occurrence of the SAME type forces its matching move-on variant. A 2nd
+# violation of a DIFFERENT type still gets its own first-time reminder.
 _FIRST_TIME_TO_MOVE_ON = {
     "decline_repair": "decline_move_on",
     "remind_respectfully": "uncooperative_move_on",
@@ -45,7 +47,11 @@ _FIRST_TIME_TO_MOVE_ON = {
     "redirect_wrong_language": "language_move_on",
 }
 _MOVE_ON_TO_FIRST_TIME = {v: k for k, v in _FIRST_TIME_TO_MOVE_ON.items()}
-_ENGAGEMENT_VIOLATION_BUDGET = 2
+_PER_TYPE_VIOLATION_BUDGET = 1
+# On top of each type's own 1-occurrence budget: even with zero repeats (every violation a
+# different type), a 3rd violation of ANY kind still forces a move-on -- 2 violations total
+# tolerated per question, not just 2 per type.
+_TOTAL_VIOLATION_BUDGET = 2
 
 
 def _format_question(question: Any) -> str:
@@ -133,6 +139,10 @@ def _build_prompt(state: Dict[str, Any]) -> str:
         or ""
     )
     engagement_violation_count = count_engagement_violations(history)
+    decline_repair_count = count_violations_of_type(history, "decline_repair")
+    remind_respectfully_count = count_violations_of_type(history, "remind_respectfully")
+    redirect_offtopic_count = count_violations_of_type(history, "redirect_offtopic")
+    redirect_wrong_language_count = count_violations_of_type(history, "redirect_wrong_language")
 
     return (
         "## Question Context\n"
@@ -149,9 +159,15 @@ def _build_prompt(state: Dict[str, Any]) -> str:
         f"Transcript: {latest_turn.get('transcript') or ''}\n"
         f"Word count: {latest_turn.get('word_count') or 0}\n\n"
         "## State Counters\n"
-        f"engagement_violation_count={engagement_violation_count}\n"
-        "(counts decline_repair + remind_respectfully + redirect_offtopic + redirect_wrong_language "
-        "combined, over the full history of this question -- max 2 before force move-on)\n"
+        f"engagement_violation_count={engagement_violation_count} (total across all 4 types)\n"
+        f"decline_repair_count={decline_repair_count}\n"
+        f"remind_respectfully_count={remind_respectfully_count}\n"
+        f"redirect_offtopic_count={redirect_offtopic_count}\n"
+        f"redirect_wrong_language_count={redirect_wrong_language_count}\n"
+        "(the system automatically forces a move-on variant if EITHER: this specific type "
+        "has already occurred once before (repeat of the same type), OR "
+        "engagement_violation_count has already reached 2 total, regardless of type mix -- "
+        "your chosen action may be overridden accordingly)\n"
         f"no_meaningful_speech={signals.get('no_meaningful_speech')}\n"
         f"followup_pressure={signals.get('followup_pressure')}\n"
         f"hard_stop={signals.get('hard_stop')}\n\n"
@@ -165,12 +181,19 @@ def _normalize_action(action: Any) -> str:
 
 
 def _enforce_escalation(action: str, turns: List[Dict[str, Any]]) -> str:
-    violation_count = count_engagement_violations(turns)
+    total_violations = count_engagement_violations(turns)
 
-    if action in _FIRST_TIME_TO_MOVE_ON and violation_count >= _ENGAGEMENT_VIOLATION_BUDGET:
-        return _FIRST_TIME_TO_MOVE_ON[action]
-    if action in _MOVE_ON_TO_FIRST_TIME and violation_count < _ENGAGEMENT_VIOLATION_BUDGET:
-        return _MOVE_ON_TO_FIRST_TIME[action]
+    if action in _FIRST_TIME_TO_MOVE_ON:
+        prior_same_type = count_violations_of_type(turns, action)
+        if prior_same_type >= _PER_TYPE_VIOLATION_BUDGET or total_violations >= _TOTAL_VIOLATION_BUDGET:
+            return _FIRST_TIME_TO_MOVE_ON[action]
+        return action
+    if action in _MOVE_ON_TO_FIRST_TIME:
+        first_time_reason = _MOVE_ON_TO_FIRST_TIME[action]
+        prior_same_type = count_violations_of_type(turns, first_time_reason)
+        if prior_same_type < _PER_TYPE_VIOLATION_BUDGET and total_violations < _TOTAL_VIOLATION_BUDGET:
+            return first_time_reason
+        return action
     return action
 
 

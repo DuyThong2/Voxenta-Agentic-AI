@@ -36,18 +36,24 @@ Use these to guide the final score and note, but do not add new output fields.
  - If answer_length_metrics.length_category is too_short, vocabulary range should usually be lower, but accuracy can remain high if words are correct.
  - If a lexical_range_cap is provided, range should usually not exceed that cap.
 
-### 3. Question Type Handling
+### 3. Code-Switching (Non-English Words)
+This is an English speaking exam. If the transcript contains Vietnamese words/phrases mixed into the answer (visible directly in the text, or via a "Code-switching ratio" metric above), those words cannot count as correct English vocabulary — the student reached for their native language instead of the English word, which is itself a lexical resource gap.
+- Do not treat a Vietnamese word as if it were an accurate, natural English word choice.
+- Penalize vocabulary_accuracy proportionally to how much of the answer is non-English: an occasional word mixed into an otherwise fluent English answer is a minor deduction; frequent or sustained code-switching should push both accuracy and range well below what it would otherwise be.
+- Note the code-switching explicitly in your note when it affects the score.
+
+### 4. Question Type Handling
 - read_aloud / scripted: vocabulary is diagnostic only. Compare word accuracy against reference text and say "diagnostic only" in the note.
 - short_answer: simple and accurate vocabulary is acceptable. Do not penalize simple wording if it is correct.
 - long_answer / opinion / description: expect more variety and topic-specific vocabulary, but score fairly if words are accurate even when limited.
 
-### 4. Topic Relevance Levels
+### 5. Topic Relevance Levels
 Use these general lexical expectations:
 - on-topic and answering: vocabulary can be high if words are accurate, even if simple.
 - related_but_not_answering: topic_vocabulary is partial; score should often be 40-60.
 - off_topic: lower topic_vocabulary, but if words are accurate and natural, overall score can still be 25-45 rather than extremely low.
 
-### 5. Vocabulary Quality
+### 6. Vocabulary Quality
 - 80-100: accurate, natural, and appropriately varied vocabulary for the task.
 - 60-79: accurate vocabulary with some variety, but not richly developed.
 - 40-59: correct but limited vocabulary, or partial topic relevance with basic word choice.

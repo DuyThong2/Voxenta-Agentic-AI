@@ -76,10 +76,20 @@ def correction_node(state: Dict[str, Any]) -> Dict[str, Any]:
     transcribed_text = speaking_input.transcribed_text if speaking_input else None
 
     if not transcribed_text:
+        # Nothing to correct (e.g. no speech recognized at all). This node now runs
+        # BEFORE strict_validity_check (see graphConfig.build_graph), so returning
+        # status="error" here would abort the whole turn -- and with it, the entire
+        # multi-turn answer -- before validity_node's own "audio.no_speech" rule ever
+        # gets a chance to classify this turn as reject_or_zero. Skip gracefully instead.
+        logger.info("[eval:correction] skipped (empty transcript) answer_id=%s turn=%s", answer_id, turn_order)
         return {
             **state,
-            "status": "error",
-            "error": "transcribed_text is required for correction_node",
+            "status": "processing",
+            "metadata": {
+                **state.get("metadata", {}),
+                "correction_skipped": True,
+                "correction_reason": "empty transcript",
+            },
         }
 
     logger.info("[eval:correction] correcting transcript answer_id=%s turn=%s", answer_id, turn_order)
@@ -104,9 +114,17 @@ def correction_node(state: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     except Exception as exc:
-        logger.exception("[eval:correction] failed answer_id=%s turn=%s", answer_id, turn_order)
+        # Same reasoning as the empty-transcript branch above: correction now runs
+        # before validity for every turn, so a transient OpenAI failure here must not
+        # abort the whole answer -- fall back to the raw transcript (corrected_transcript
+        # left unset) and let validity/pronunciation continue on that instead.
+        logger.exception("[eval:correction] failed, falling back to raw transcript answer_id=%s turn=%s", answer_id, turn_order)
         return {
             **state,
-            "status": "error",
-            "error": f"Transcript correction failed: {str(exc)}",
+            "speaking_input": speaking_input,
+            "status": "processing",
+            "metadata": {
+                **state.get("metadata", {}),
+                "correction_error": str(exc),
+            },
         }

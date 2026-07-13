@@ -185,6 +185,16 @@ def build_signals(
     )
 
 
+def display_transcript(result: Dict[str, Any], speaking_input: Optional[SpeakingInput]) -> str:
+    """The transcript to show/score against for a turn: Azure's own transcribed_text
+    (speech_client.transcribe(), already auto-detect + language-tagged for code-switched
+    Vietnamese) -- no LLM rewrite step in between. `result` is unused now that there's no
+    violation-dependent choice to make, kept in the signature so callers don't need updating."""
+    if speaking_input is None:
+        return ""
+    return speaking_input.transcribed_text or ""
+
+
 def build_turn_detail(
     result: Dict[str, Any],
     *,
@@ -240,7 +250,7 @@ def build_completed_event(
         turn_type="MAIN",
         prompt_text=speaking_input.question.question_text if speaking_input.question else None,
         audio_url=audio_path,
-        transcript=speaking_input.transcribed_text or speaking_input.corrected_transcript or "",
+        transcript=display_transcript(result, speaking_input),
     )
 
     return ExamAttemptEvaluationCompletedEvent(

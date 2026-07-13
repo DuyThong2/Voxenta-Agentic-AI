@@ -36,9 +36,16 @@ AGENTS_DIR = Path(__file__).resolve().parent.parent.parent
 UTTERANCE_DIR = AGENTS_DIR / "var" / "avatar" / "utterances"
 
 # Margin added to each utterance's measured WAV duration before letting the next queued speak()
-# proceed, since the WAV's own duration doesn't account for the network bridge actually delivering
-# that audio to the listener.
-_PLAYBACK_MARGIN_SECONDS = 0.3
+# proceed AND before avatar_utterance_complete is sent (see attempt_connection.py) -- the WAV's
+# own duration doesn't account for the network bridge (WebRTC jitter buffer, decode/playback on
+# the WPF side) actually delivering that audio to the listener. Confirmed live: 0.3s was too
+# tight under real network conditions -- WPF opened the student's mic (on receiving
+# avatar_utterance_complete) before the student had actually finished hearing the question.
+# There's no true "playback ended" signal from the client to wait on instead (WebRTC audio is a
+# continuous stream with no utterance-boundary event), so this stays a conservative fixed margin
+# -- mirrors the 4s buffer ExamViewModel.cs already uses for the same "make sure audio really
+# finished" concern at exam completion.
+_PLAYBACK_MARGIN_SECONDS = 1.5
 
 # One lock per exam_attempt_id, never explicitly cleaned up -- each is a few bytes for the
 # attempt's lifetime, which is bounded by the process anyway (a fresh attempt_id per exam attempt,

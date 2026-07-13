@@ -1,6 +1,6 @@
-import asyncio
 import logging
 import wave
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -20,6 +20,17 @@ from utils.text_utils import word_count
 from utils.speech_client import transcribe
 
 logger = logging.getLogger(__name__)
+
+# transcribe() runs Azure's continuous speech recognition, which needs timely GIL access for its
+# recognized/canceled callbacks. Running it in a thread (the transcribe_turn_node docstring below
+# explains why this whole node stays sync) still shares the GIL with this same process's YOLO
+# proctoring inference (controller/webrtc.py) -- confirmed by testing: identical audio that failed
+# with zero recognized segments during a live exam (YOLO + avatar rendering running concurrently)
+# transcribed correctly in isolation. A real OS process, not just a thread, is the only way to
+# fully escape that GIL contention. transcribe()'s inputs (a file path, a language string) and
+# output (a plain string) are trivially picklable, so this is a surgical fix -- only the
+# transcription call moves to another process, not the whole archive graph/checkpointer.
+_transcribe_pool = ProcessPoolExecutor(max_workers=2)
 
 
 def _state_without_turns(state: FollowUpGraphState) -> Dict[str, Any]:
@@ -42,12 +53,17 @@ def _wav_duration_seconds(audio_path: str) -> Optional[int]:
         return None
 
 
-async def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
+def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
+    """Sync on purpose: archive_graph is compiled with the sync PostgresSaver
+    checkpointer (see app.py), which only supports sync .invoke() -- LangGraph's
+    sync execution path raises RuntimeError for any async def node. The
+    archive_controller route stays non-blocking by running graph.invoke(...)
+    itself inside asyncio.to_thread(...), not by making this node async."""
     audio_path = state.get("audio_path")
     if not audio_path:
         return {**_state_without_turns(state), "status": "error", "error": "audio_path is required"}
 
-    transcript = await asyncio.to_thread(transcribe, audio_path, state.get("language", "en-US")) or ""
+    transcript = _transcribe_pool.submit(transcribe, audio_path, state.get("language", "en-US")).result() or ""
 
     current_turn = {
         "answer_id": state.get("answer_id"),

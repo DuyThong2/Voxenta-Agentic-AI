@@ -171,6 +171,7 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "note": note,
         "caps_enforced_in_python": ENFORCE_CAP_IN_PYTHON,
         "code_switching_ratio": code_switching_ratio,
+        "asr_confidence_avg": speaking_input.asr_confidence,
     }
 
     if coherence_cap is not None:

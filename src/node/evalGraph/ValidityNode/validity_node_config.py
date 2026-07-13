@@ -1,7 +1,7 @@
 """Strict validity check node — runs immediately after start_node.
 
 Purpose: reject invalid submissions early so downstream nodes
-(correction, pronunciation, LLM scoring) are never invoked.
+(pronunciation, LLM scoring) are never invoked.
 
 Pure logic checks (instant, no API call):
   - audio.no_speech         : transcript is empty or word_count == 0 → reject_or_zero
@@ -165,17 +165,19 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     turn_order = (state.get("metadata") or {}).get("turn_order")
     logger.info("[eval:validity] checking answer_id=%s turn=%s", answer_id, turn_order)
 
-    # Transcript source: prefer transcribed_text from start_node. conversation_transcript
-    # is deliberately NOT used here -- it's the AI/User dialogue scaffold meant only as
-    # extra context for CoherenceEvalNode (see select_text_for_language_scoring's own
-    # docstring in the eval-node helpers); validity must judge the student's own words,
-    # same as grammar/lexical/answer-length. Using it here previously caused false
-    # rejections, since conversation_transcript only ever contains "AI: <question>" lines
-    # at the point an individual turn is validated (the real per-turn transcript hadn't
-    # been merged into it yet), making every answer look like an empty repeat-the-question.
+    # Transcript source: transcribed_text from start_node (Azure's own transcription,
+    # already auto-detect + language-tagged for code-switched Vietnamese -- see
+    # speech_client.transcribe()). conversation_transcript is deliberately NOT used here --
+    # it's the AI/User dialogue scaffold meant only as extra context for CoherenceEvalNode
+    # (see select_text_for_language_scoring's own docstring in the eval-node helpers);
+    # validity must judge the student's own words, same as grammar/lexical/answer-length.
+    # Using it here previously caused false rejections, since conversation_transcript only
+    # ever contains "AI: <question>" lines at the point an individual turn is validated (the
+    # real per-turn transcript hadn't been merged into it yet), making every answer look
+    # like an empty repeat-the-question.
+    text_source = "transcribed_text"
     text = (
         getattr(speaking_input, "transcribed_text", None)
-        or getattr(speaking_input, "corrected_transcript", None)
         or (state.get("metadata") or {}).get("transcription_text")
         or ""
     )
@@ -318,7 +320,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     validity = build_validity_result_from_rules(
         rule_entries=rule_results,
-        transcript_source="transcribed_text",
+        transcript_source=text_source,
         transcript_word_count=transcript_word_count,
     )
 

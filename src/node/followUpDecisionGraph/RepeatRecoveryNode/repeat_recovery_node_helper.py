@@ -52,11 +52,13 @@ def build_wrong_language_redirect_text(active_prompt_text: str | None, question:
 
 
 # `decline_repair`, `remind_respectfully`, `redirect_offtopic`, and `redirect_wrong_language`
-# share ONE combined reminder budget per question (see _enforce_escalation in
-# repeat_recovery_node_config.py) -- max 2 reminders total across all four types combined,
-# counted as a TOTAL over the full turn history (sum, not "reset when a compliant turn
-# appears in between"). This is deliberate: a student who alternates between violating and
-# complying must not be able to reset the budget by giving one clean turn in between.
+# each get their OWN reminder budget (see _enforce_escalation in repeat_recovery_node_config.py)
+# -- 1 reminder per type before that type's own move-on variant is forced on its next
+# occurrence. Types are independent: a 2nd violation of a DIFFERENT type than the 1st still
+# gets its own first-time reminder (it hasn't used its budget yet); only a REPEAT of the SAME
+# type forces escalation. Counted as a TOTAL over the full turn history (sum, not "reset when
+# a compliant turn appears in between") -- a student who alternates between violating and
+# complying must not be able to reset a type's budget by giving one clean turn in between.
 _ENGAGEMENT_VIOLATION_REASONS = {
     "decline_repair",
     "remind_respectfully",
@@ -66,4 +68,13 @@ _ENGAGEMENT_VIOLATION_REASONS = {
 
 
 def count_engagement_violations(turns: List[Dict[str, Any]]) -> int:
+    """Total violations across all 4 types combined -- informational only (shown to the
+    LLM as context); enforcement itself is per-type, see count_violations_of_type."""
     return sum(1 for turn in turns if str(turn.get("decision_reason") or "") in _ENGAGEMENT_VIOLATION_REASONS)
+
+
+def count_violations_of_type(turns: List[Dict[str, Any]], reason: str) -> int:
+    """How many times this SPECIFIC violation reason has already occurred in the turn
+    history -- the count _enforce_escalation actually gates on (each of the 4 reasons has
+    its own independent 1-occurrence budget, not a shared pool)."""
+    return sum(1 for turn in turns if str(turn.get("decision_reason") or "") == reason)

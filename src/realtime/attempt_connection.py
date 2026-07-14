@@ -164,6 +164,14 @@ class AttemptConnection:
             "[realtime_transcript] exam_attempt_id=%s answer_id=%s turn_order=%d text=%r",
             self.exam_attempt_id, session.answer_id, session.turn_order, transcript,
         )
+        # Fire-and-forget: never awaited inline with the turn_end decision response below.
+        # Lets eval-time scoring prefer this (Voice-Live handles code-switched Vietnamese
+        # better than the Speech SDK's re-transcription) -- see start_node_config.py.
+        asyncio.create_task(
+            turn_publisher.persist_realtime_transcript(
+                self.archive_graph, session.answer_id, session.turn_order, transcript,
+            )
+        )
 
         word_count = message.get("word_count")
         if word_count is None:

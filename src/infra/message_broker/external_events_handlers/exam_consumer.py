@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from config.kafka_config import settings
 from events import ExamAttemptEvaluationRequestedEvent
@@ -36,6 +36,7 @@ from node.evalGraph.GrammarEvalNode.grammar_eval_node_config import grammar_eval
 from node.evalGraph.LexicalEvalNode.lexical_eval_node_config import lexical_eval_node
 from node.state_models import QuestionAssetContext, QuestionContext, SpeakingInput, TopicContext
 from node.state_models.pronunciation import FormattedPronunciationResult
+from realtime import turn_publisher
 from schemas.enums import SpeakingMode
 from utils.speech_client import unwrap_language_tags
 
@@ -152,6 +153,7 @@ def _build_initial_state(
     local_audio_path: str,
     conversation_transcript: str,
     raw_payload: Dict[str, Any],
+    realtime_transcript: Optional[str],
 ) -> Dict[str, Any]:
     request_payload = request_event.payload
     return {
@@ -168,6 +170,7 @@ def _build_initial_state(
             criteria_frameworks=request_payload.criteria_frameworks,
             question=_build_question_context(request_payload),
             topic=_build_topic_context(request_payload),
+            realtime_transcript=realtime_transcript,
         ),
         "status": "idle",
         "metadata": {
@@ -179,6 +182,7 @@ def _build_initial_state(
 
 async def _evaluate_turn(
     graph: Any,
+    archive_graph: Any,
     request_event: ExamAttemptEvaluationRequestedEvent,
     turn: Any,
     conversation_transcript: str,
@@ -186,12 +190,16 @@ async def _evaluate_turn(
 ) -> Dict[str, Any]:
     local_audio_path = await download_from_s3_async(turn.audio_ref)
     try:
+        realtime_transcript = await turn_publisher.get_realtime_transcript(
+            archive_graph, request_event.answer_id, turn.turn_order,
+        )
         initial_state = _build_initial_state(
             request_event,
             turn,
             local_audio_path,
             conversation_transcript,
             raw_payload,
+            realtime_transcript,
         )
         result = await asyncio.to_thread(
             graph.invoke,
@@ -351,6 +359,7 @@ async def start_exam_attempt_consumer(app):
         group_id=settings.KAFKA_EXAM_CONSUMER_GROUP,
     )
     graph = app.state.graph
+    archive_graph = app.state.archive_graph
 
     async for message in consumer:
         payload: Dict[str, Any] = {}
@@ -386,6 +395,7 @@ async def start_exam_attempt_consumer(app):
                     # real per-turn transcriptions once they're all known.
                     result = await _evaluate_turn(
                         graph,
+                        archive_graph,
                         request_event,
                         turn,
                         "",

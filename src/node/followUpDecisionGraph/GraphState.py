@@ -38,6 +38,14 @@ class FollowUpGraphState(TypedDict, total=False):
     # here separately by turn_publisher.publish_turn_if_new and merged back
     # onto the archived turns at resume time by turn_publisher.get_resume_state.
     decision_reasons: Annotated[List[Dict[str, Any]], add]
+    # [{"turn_order": int, "text": str}, ...] -- the live Voice-Live (gpt-4o-mini-transcribe)
+    # transcript captured during the exam itself (see attempt_connection.py's
+    # [realtime_transcript] logging), persisted durably here so eval-time scoring can prefer
+    # it over re-transcribing the archived audio via the Azure Speech SDK -- Voice-Live
+    # handles code-switched Vietnamese noticeably better (confirmed: it correctly transcribes
+    # words the Speech SDK sometimes garbles into nonsense English, e.g. "banh MI" instead of
+    # "bánh mì"). See turn_publisher.persist_realtime_transcript / exam_consumer.py.
+    realtime_transcripts: Annotated[List[Dict[str, Any]], add]
     signals: Dict[str, Any]
     edge_case_handled: bool
     decision: Dict[str, Any]

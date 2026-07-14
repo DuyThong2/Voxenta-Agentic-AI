@@ -36,22 +36,35 @@ def start_node(state: GraphState) -> dict:
             "error": f"Audio file not found: {audio_path}",
         }
 
-    logger.info("[eval:start] transcribing answer_id=%s turn=%s audio_path=%s", answer_id, turn_order, audio_path)
-
     try:
-        transcript, asr_confidence = transcribe_with_confidence(audio_path, speaking_input.language)
-
-        # No usable speech recognized (genuine silence, or every segment rejected by ASR) is
-        # NOT treated as a hard error here -- returning status="error" would abort this
-        # turn's graph.invoke() with an exception, which in the multi-turn exam consumer
-        # (_evaluate_turn) crashes the ENTIRE answer's evaluation (all turns, not just this
-        # one), publishing evaluation_failed with no score AND no transcript for any turn.
-        # validity_node's own "audio.no_speech" rule already exists to classify an empty
-        # transcript as reject_or_zero (scored 0, but still a complete, recorded turn with
-        # whatever transcript exists) -- let it reach that rule instead of dying here. A
-        # genuine Azure API failure (network/auth/timeout) still raises inside
-        # transcribe_with_confidence and is caught by the except block below, unchanged.
-        transcript = transcript or ""
+        if speaking_input.realtime_transcript:
+            # Prefer the live Voice-Live transcript (gpt-4o-mini-transcribe) captured during
+            # the exam itself over re-transcribing audio_path via the Azure Speech SDK --
+            # confirmed live: Voice-Live handles code-switched Vietnamese noticeably better
+            # (the Speech SDK sometimes garbles it into nonsense English, e.g. "banh MI"
+            # instead of "bánh mì"). No comparable per-segment confidence signal exists for
+            # this source, so asr_confidence stays None (downstream already handles that --
+            # see exam_event_builder._compute_audio_quality's fallback).
+            transcript = speaking_input.realtime_transcript
+            asr_confidence = None
+            logger.info(
+                "[eval:start] using realtime transcript answer_id=%s turn=%s chars=%d",
+                answer_id, turn_order, len(transcript),
+            )
+        else:
+            logger.info("[eval:start] transcribing answer_id=%s turn=%s audio_path=%s", answer_id, turn_order, audio_path)
+            transcript, asr_confidence = transcribe_with_confidence(audio_path, speaking_input.language)
+            # No usable speech recognized (genuine silence, or every segment rejected by ASR)
+            # is NOT treated as a hard error here -- returning status="error" would abort this
+            # turn's graph.invoke() with an exception, which in the multi-turn exam consumer
+            # (_evaluate_turn) crashes the ENTIRE answer's evaluation (all turns, not just this
+            # one), publishing evaluation_failed with no score AND no transcript for any turn.
+            # validity_node's own "audio.no_speech" rule already exists to classify an empty
+            # transcript as reject_or_zero (scored 0, but still a complete, recorded turn with
+            # whatever transcript exists) -- let it reach that rule instead of dying here. A
+            # genuine Azure API failure (network/auth/timeout) still raises inside
+            # transcribe_with_confidence and is caught by the except block below, unchanged.
+            transcript = transcript or ""
 
         if speaking_input.mode == SpeakingMode.SCRIPTED:
             # For scripted mode, reference_text is authoritative and should be normalized.

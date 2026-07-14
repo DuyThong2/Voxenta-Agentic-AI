@@ -140,6 +140,33 @@ async def persist_question_snapshot(
     })
 
 
+async def persist_realtime_transcript(archive_graph, answer_id: str, turn_order: int, text: str) -> None:
+    """Durably saves this turn's live Voice-Live transcript (see attempt_connection.py's
+    [realtime_transcript] logging) so eval-time scoring can prefer it over re-transcribing the
+    archived audio via the Azure Speech SDK -- see get_realtime_transcript / start_node_config.py.
+    Fire-and-forget from the caller (mirrors publish_turn_if_new's decision_reasons write):
+    never awaited inline with the turn_end decision response."""
+    try:
+        await _aupdate_state(archive_graph, _archive_config(answer_id), {
+            "realtime_transcripts": [{"turn_order": turn_order, "text": text}],
+        })
+    except Exception:
+        logger.exception(
+            "[turn_publisher] failed to persist realtime_transcript: answer_id=%s turn_order=%d",
+            answer_id, turn_order,
+        )
+
+
+async def get_realtime_transcript(archive_graph, answer_id: str, turn_order: int) -> str | None:
+    """The live Voice-Live transcript persisted for this turn (persist_realtime_transcript),
+    or None if never captured (e.g. archived data predates this feature, or the WebSocket
+    dropped before turn_end for this turn)."""
+    state = await _aget_state(archive_graph, _archive_config(answer_id))
+    entries = (state.values or {}).get("realtime_transcripts") or []
+    match = next((e for e in entries if e.get("turn_order") == turn_order), None)
+    return match.get("text") if match else None
+
+
 async def get_resume_state(archive_graph, answer_id: str) -> dict | None:
     """Full durable state for answer_id, in one Postgres round trip -- used
     by both RealtimeExamSession.hydrate_from_archive (turns + the pending

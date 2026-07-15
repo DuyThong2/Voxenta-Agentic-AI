@@ -3,7 +3,10 @@ import logging
 import os
 import re
 import threading
+import wave
 from typing import List, NamedTuple, Optional, Tuple
+
+import numpy as np
 
 import azure.cognitiveservices.speech as speechsdk
 
@@ -143,8 +146,6 @@ def _probe_audio_duration_seconds(audio_path: str) -> Optional[float]:
     for continuous recognition to finish (near-instant recognize_once() used
     to make this moot; continuous recognition runs proportionally to real
     audio length)."""
-    import wave
-
     try:
         with wave.open(audio_path, "rb") as wav_file:
             frames = wav_file.getnframes()
@@ -154,6 +155,50 @@ def _probe_audio_duration_seconds(audio_path: str) -> Optional[float]:
             return frames / float(rate)
     except (wave.Error, OSError, EOFError):
         return None
+
+
+def compute_silence_ratio(audio_path: str) -> Optional[float]:
+    """Fraction of the recording that's near-silence, measured directly from
+    the WAV waveform's short-time RMS energy -- independent of ASR. This is
+    the one audio-quality signal that's always available regardless of
+    transcription source: when the live Voice-Live transcript is used
+    (see start_node_config.py), there's no per-segment ASR confidence at all,
+    so exam_event_builder._compute_audio_quality would otherwise have nothing
+    to fall back to and audioQuality would always come through as null/0."""
+    try:
+        with wave.open(audio_path, "rb") as wav_file:
+            n_channels = wav_file.getnchannels()
+            sample_width = wav_file.getsampwidth()
+            frame_rate = wav_file.getframerate()
+            raw = wav_file.readframes(wav_file.getnframes())
+    except (wave.Error, OSError, EOFError):
+        return None
+
+    if not raw or sample_width != 2 or frame_rate <= 0:
+        return None
+
+    samples = np.frombuffer(raw, dtype=np.int16).astype(np.float64)
+    if n_channels > 1:
+        samples = samples.reshape(-1, n_channels).mean(axis=1)
+
+    window_size = max(1, int(frame_rate * 0.03))  # ~30ms windows
+    n_windows = samples.size // window_size
+    if n_windows == 0:
+        return None
+
+    windows = samples[: n_windows * window_size].reshape(n_windows, window_size)
+    rms = np.sqrt(np.mean(windows ** 2, axis=1))
+
+    # Relative threshold (vs. this clip's own loud passages) rather than a
+    # fixed absolute level, since recording gain varies per device/mic.
+    peak_rms = float(np.percentile(rms, 95))
+    if peak_rms <= 0:
+        return 1.0
+
+    threshold = peak_rms * 0.05
+    silence_windows = int(np.sum(rms < threshold))
+
+    return silence_windows / n_windows
 
 
 def transcribe(audio_path: str, language: str) -> Optional[str]:

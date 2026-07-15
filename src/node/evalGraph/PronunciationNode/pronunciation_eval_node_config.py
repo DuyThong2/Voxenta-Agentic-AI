@@ -24,6 +24,7 @@ from node.state_models.pronunciation import (
     WordFeedback,
 )
 from node.evalGraph.PronunciationNode.pronunciation_node_helper import format_pronunciation_api_response
+from node.evalGraph.PronunciationNode.pronunciation_reference_helper import build_pronunciation_reference
 from utils import load_root_dotenv
 from utils.speech_client import build_speech_config, normalize_text, _probe_audio_duration_seconds
 
@@ -174,7 +175,25 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 "error": "reference_text is required for scripted pronunciation evaluation",
             }
     else:
-        reference_text = speaking_input.transcribed_text or ""
+        raw_transcript = speaking_input.transcribed_text or ""
+        if raw_transcript:
+            try:
+                reference_text = build_pronunciation_reference(raw_transcript, speaking_input.question)
+                logger.info(
+                    "[eval:pronunciation] built reference from raw transcript answer_id=%s turn=%s changed=%s",
+                    answer_id, turn_order, reference_text != raw_transcript,
+                )
+            except Exception:
+                # This reference text only feeds Azure's forced-alignment below -- validity,
+                # grammar/lexical/coherence eval and UI display all keep reading the raw
+                # transcribed_text untouched, so a failure here must not abort the turn.
+                logger.exception(
+                    "[eval:pronunciation] reference correction failed, falling back to raw transcript answer_id=%s turn=%s",
+                    answer_id, turn_order,
+                )
+                reference_text = raw_transcript
+        else:
+            reference_text = ""
 
     if not audio_path:
         return {

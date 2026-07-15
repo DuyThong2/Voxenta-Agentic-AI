@@ -14,7 +14,7 @@ from node.evalGraph.AnswerLengthNode.answer_length_node_helper import (
 )
 from node.state_models import SpeakingInput
 from utils.length_utils import get_expected_min_words
-from utils.speech_client import extract_non_target_segments, strip_non_target_segments
+from utils.speech_client import compute_silence_ratio, extract_non_target_segments, strip_non_target_segments
 
 logger = logging.getLogger(__name__)
 
@@ -172,6 +172,7 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "caps_enforced_in_python": ENFORCE_CAP_IN_PYTHON,
         "code_switching_ratio": code_switching_ratio,
         "asr_confidence_avg": speaking_input.asr_confidence,
+        "silence_ratio": compute_silence_ratio(speaking_input.audio_path) if speaking_input.audio_path else None,
     }
 
     if coherence_cap is not None:

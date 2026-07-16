@@ -152,11 +152,7 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
     speaking_input = state.get("speaking_input")
 
     if speaking_input is None:
-        return {
-            **state,
-            "status": "error",
-            "error": "speaking_input is required for pronunciation_eval_node",
-        }
+        return {"metadata": {"pronunciation_error": "speaking_input is required for pronunciation_eval_node"}}
 
     answer_id = getattr(speaking_input, "answer_id", None)
     turn_order = (state.get("metadata") or {}).get("turn_order")
@@ -169,11 +165,7 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
     if speaking_input.mode == SpeakingMode.SCRIPTED:
         reference_text = normalize_text(speaking_input.reference_text or "") or ""
         if not reference_text:
-            return {
-                **state,
-                "status": "error",
-                "error": "reference_text is required for scripted pronunciation evaluation",
-            }
+            return {"metadata": {"pronunciation_error": "reference_text is required for scripted pronunciation evaluation"}}
     else:
         raw_transcript = speaking_input.transcribed_text or ""
         if raw_transcript:
@@ -196,18 +188,10 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             reference_text = ""
 
     if not audio_path:
-        return {
-            **state,
-            "status": "error",
-            "error": "speaking_input.audio_path is required",
-        }
+        return {"metadata": {"pronunciation_error": "speaking_input.audio_path is required"}}
 
     if not os.path.exists(audio_path):
-        return {
-            **state,
-            "status": "error",
-            "error": f"Audio file not found: {audio_path}",
-        }
+        return {"metadata": {"pronunciation_error": f"Audio file not found: {audio_path}"}}
 
     logger.info("[eval:pronunciation] calling Azure pronunciation assessment answer_id=%s turn=%s", answer_id, turn_order)
 
@@ -304,18 +288,10 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             recognizer.stop_continuous_recognition()
 
         if canceled_error:
-            return {
-                **state,
-                "status": "error",
-                "error": f"Azure continuous recognition canceled: {canceled_error}",
-            }
+            return {"metadata": {"pronunciation_error": f"Azure continuous recognition canceled: {canceled_error}"}}
 
         if not segments_data:
-            return {
-                **state,
-                "status": "error",
-                "error": "Azure speech recognition returned no recognized segments",
-            }
+            return {"metadata": {"pronunciation_error": "Azure speech recognition returned no recognized segments"}}
 
         summary = merge_pronunciation_summaries(segments_data)
         merged_word_feedback: List[WordFeedback] = []
@@ -346,17 +322,8 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             answer_id, turn_order, pronunciation_result.pron_score,
         )
 
-        return {
-            **state,
-            "pronunciation_result": formatted_result,
-            "status": "completed",
-            "error": None,
-        }
+        return {"pronunciation_result": formatted_result}
 
     except Exception as exc:
         logger.exception("[eval:pronunciation] failed answer_id=%s turn=%s", answer_id, turn_order)
-        return {
-            **state,
-            "status": "error",
-            "error": str(exc),
-        }
+        return {"metadata": {"pronunciation_error": str(exc)}}

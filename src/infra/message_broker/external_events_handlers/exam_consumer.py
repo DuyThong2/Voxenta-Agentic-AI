@@ -38,6 +38,7 @@ from node.evalGraph.AnswerLengthNode.answer_length_analysis_node_config import (
 from node.evalGraph.CoherenceEvalNode.coherence_eval_node_config import coherence_eval_node
 from node.evalGraph.GrammarEvalNode.grammar_eval_node_config import grammar_eval_node
 from node.evalGraph.LexicalEvalNode.lexical_eval_node_config import lexical_eval_node
+from node.evalGraph.MergeScoresNode.merge_scores_node_config import merge_scores_node
 from node.state_models import QuestionAssetContext, QuestionContext, SpeakingInput, TopicContext
 from node.state_models.pronunciation import FormattedPronunciationResult
 from infra.database import archive_store
@@ -244,7 +245,6 @@ def _run_aggregate_text_evaluation(
     speaking_input = base_speaking_input.model_copy(update={
         "transcribed_text": merged_transcript,
         "conversation_transcript": dialogue_transcript,
-        "answer_length_metrics": None,
     })
     # A turn whose validity_node rejected it (action=reject_or_zero) routes straight to
     # END without ever reaching pronunciation_eval_node, so "pronunciation_result" is
@@ -269,10 +269,20 @@ def _run_aggregate_text_evaluation(
         "validity": per_turn_results[0][1].get("validity"),
     }
 
+    # These 4 node functions now return ONLY their own delta keys (not the whole state --
+    # see GraphState._merge_metadata's docstring, added so they're safe to run as
+    # concurrent branches inside graph.invoke()'s compiled graph). Called directly here in
+    # a plain sequential loop instead, so each delta must be folded into `state` by hand;
+    # merge_scores_node is what actually checks each node's namespaced metadata error key
+    # and combines coherence/lexical/grammar's criteria into pronunciation_result -- same
+    # merge logic the compiled graph's own "merge_scores" node runs, reused here so the two
+    # paths can't silently drift apart.
     for node in (answer_length_analysis_node, coherence_eval_node, lexical_eval_node, grammar_eval_node):
-        state = node(state)
-        if state.get("status") == "error":
-            raise RuntimeError(state.get("error") or f"{node.__name__} failed during aggregate text evaluation")
+        state = {**state, **node(state)}
+
+    state = {**state, **merge_scores_node(state)}
+    if state.get("status") == "error":
+        raise RuntimeError(state.get("error") or "aggregate text evaluation failed")
 
     return state
 

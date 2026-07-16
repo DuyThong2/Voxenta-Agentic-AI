@@ -12,16 +12,31 @@ from node.evalGraph.PronunciationNode.pronunciation_eval_node_config import (
 from node.evalGraph.AnswerLengthNode.answer_length_analysis_node_config import (
     answer_length_analysis_node,
 )
+from node.evalGraph.MergeScoresNode.merge_scores_node_config import merge_scores_node
 from node.evalGraph.StartNode.start_node_config import start_node
 from node.evalGraph.ValidityNode.validity_node_config import validity_node
 
 
-def route_after_validity(state: GraphState) -> str:
-    """Route to END if validity rejects, otherwise continue to pronunciation_eval."""
+def route_after_validity(state: GraphState) -> list[str] | str:
+    """Route to END if validity rejects. Otherwise fan out to pronunciation_eval AND
+    answer_length_analysis -- the two are mutually independent (neither reads the
+    other's output), so LangGraph runs them concurrently in the same superstep."""
     validity = state.get("validity")
     if validity and getattr(validity, "action", None) == "reject_or_zero":
         return "end"
-    return "continue"
+    return ["pronunciation_eval", "answer_length_analysis"]
+
+
+def route_after_answer_length(state: GraphState) -> list[str] | str:
+    """coherence_eval/lexical_eval/grammar_eval all need answer_length_metrics (for their
+    score caps), so they can only fan out AFTER answer_length_analysis completes -- but
+    they're mutually independent of EACH OTHER and of pronunciation_eval, so all three run
+    concurrently here. If answer_length_analysis itself failed, skip straight to
+    merge_scores instead of paying for three LLM calls that would just get discarded."""
+    metadata = state.get("metadata") or {}
+    if metadata.get("answer_length_error"):
+        return "merge_scores"
+    return ["coherence_eval", "lexical_eval", "grammar_eval"]
 
 
 def route_on_error(state: GraphState) -> str:
@@ -40,6 +55,7 @@ def build_graph(checkpointer=None):
     g.add_node("coherence_eval", coherence_eval_node)
     g.add_node("lexical_eval", lexical_eval_node)
     g.add_node("grammar_eval", grammar_eval_node)
+    g.add_node("merge_scores", merge_scores_node)
 
     # No CorrectionNode: it fed an LLM-rewritten transcript into validity/pronunciation
     # scoring, but the rewrite was frequently wrong (over-corrected disfluencies, mangled
@@ -56,26 +72,43 @@ def build_graph(checkpointer=None):
         },
     )
 
+    # Fan-out #1: pronunciation_eval (Azure Speech SDK call) and answer_length_analysis
+    # (word/sentence counting + optional LLM length judgment) run concurrently -- neither
+    # depends on the other's output.
     g.add_conditional_edges(
         "strict_validity_check",
         route_after_validity,
         {
             "end": END,
-            "continue": "pronunciation_eval",
+            "pronunciation_eval": "pronunciation_eval",
+            "answer_length_analysis": "answer_length_analysis",
         },
     )
+
+    # Fan-out #2: once answer_length_analysis has produced the score caps, coherence/
+    # lexical/grammar run concurrently -- each is an independent LLM call that only needs
+    # the transcript + those caps, not each other's output.
     g.add_conditional_edges(
-        "pronunciation_eval",
-        route_on_error,
+        "answer_length_analysis",
+        route_after_answer_length,
         {
-            "end": END,
-            "continue": "answer_length_analysis",
+            "merge_scores": "merge_scores",
+            "coherence_eval": "coherence_eval",
+            "lexical_eval": "lexical_eval",
+            "grammar_eval": "grammar_eval",
         },
     )
-    g.add_edge("answer_length_analysis", "coherence_eval")
-    g.add_edge("coherence_eval", "lexical_eval")
-    g.add_edge("lexical_eval", "grammar_eval")
-    g.add_edge("grammar_eval", END)
+
+    # Fan-in: merge_scores waits for pronunciation_eval + whichever of
+    # coherence_eval/lexical_eval/grammar_eval actually ran, combines their four
+    # independent result keys into one pronunciation_result, and is the only node
+    # allowed to set the shared status/error after this point (see
+    # MergeScoresNode.merge_scores_node_config's docstring).
+    g.add_edge("pronunciation_eval", "merge_scores")
+    g.add_edge("coherence_eval", "merge_scores")
+    g.add_edge("lexical_eval", "merge_scores")
+    g.add_edge("grammar_eval", "merge_scores")
+    g.add_edge("merge_scores", END)
 
     if checkpointer is not None:
         return g.compile(checkpointer=checkpointer)

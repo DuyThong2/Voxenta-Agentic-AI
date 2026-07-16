@@ -79,7 +79,7 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
     speaking_input = state.get("speaking_input")
 
     if speaking_input is None:
-        return {**state, "status": "error", "error": "speaking_input is required for answer_length_analysis_node"}
+        return {"metadata": {"answer_length_error": "speaking_input is required for answer_length_analysis_node"}}
 
     answer_id = getattr(speaking_input, "answer_id", None)
     turn_order = (state.get("metadata") or {}).get("turn_order")
@@ -187,19 +187,17 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
     if length_judgment_error is not None:
         metrics["length_judgment_error"] = length_judgment_error
 
-    speaking_input.answer_length_metrics = metrics
-
     logger.info(
         "[eval:answer_length] done answer_id=%s turn=%s word_count=%d category=%s",
         answer_id, turn_order, word_count, length_category,
     )
 
+    # Own dedicated state key, not nested in metadata/speaking_input -- coherence_eval/
+    # lexical_eval/grammar_eval read this directly (see graphConfig.build_graph: they all
+    # fan out from this node once it completes). Runs in parallel with pronunciation_eval,
+    # so this return must NOT include "speaking_input"/"status"/"error" -- those are either
+    # single-writer-elsewhere or merged via merge_scores_node, never written by two
+    # concurrent branches in the same superstep.
     return {
-        **state,
-        "speaking_input": speaking_input,
-        "status": "processing",
-        "metadata": {
-            **state.get("metadata", {}),
-            "answer_length_metrics": metrics,
-        },
+        "answer_length_metrics": metrics,
     }

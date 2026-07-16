@@ -94,7 +94,11 @@ def _build_old_response(
             "topic_description": topic.topic_description if topic else None,
         },
         "result": result.get("pronunciation_result"),
-        "metadata": result.get("metadata", {}),
+        # answer_length_metrics is its own top-level GraphState key now (not nested inside
+        # metadata -- see GraphState.py), added back in here so
+        # assessment_response_adapter.py's existing metadata["answer_length_metrics"] lookup
+        # keeps working unchanged.
+        "metadata": {**result.get("metadata", {}), "answer_length_metrics": result.get("answer_length_metrics")},
         "validity": result.get("validity"),
     }
 
@@ -166,8 +170,11 @@ def build_signals(
     if speaking_input is None:
         speaking_input = result.get("speaking_input")
 
-    metrics = speaking_input.answer_length_metrics if speaking_input is not None else {}
-    metrics = metrics or {}
+    # answer_length_metrics is its own top-level GraphState key now, written by
+    # answer_length_analysis_node directly (not nested inside speaking_input -- that node
+    # runs in parallel with pronunciation_eval, see graphConfig.build_graph, and no longer
+    # mutates the shared speaking_input object).
+    metrics = result.get("answer_length_metrics") or {}
     return EvaluationSignals(
         duration_seconds=duration_seconds,
         word_count=metrics.get("word_count", 0),

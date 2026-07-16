@@ -7,6 +7,8 @@ Transcript priority: transcribed_text > corrected_transcript > reference_text (f
 See coherence_eval_node_helper for details.
 """
 
+from typing import Any, Dict, Optional
+
 from node.evalGraph.CoherenceEvalNode.coherence_eval_node_helper import (
     build_framework_criterion_context,
     build_question_context,
@@ -17,7 +19,7 @@ from node.state_models import SpeakingInput
 from schemas.enums import SpeakingMode
 
 
-def build_user_prompt(speaking_input: SpeakingInput, transcript: str) -> str:
+def build_user_prompt(speaking_input: SpeakingInput, transcript: str, metrics: Optional[Dict[str, Any]] = None) -> str:
     mode = speaking_input.mode or SpeakingMode.UNSCRIPTED
     question_context = build_question_context(speaking_input)
     framework_block = build_framework_criterion_context(speaking_input, "coherence")
@@ -51,13 +53,13 @@ def build_user_prompt(speaking_input: SpeakingInput, transcript: str) -> str:
         )
         parts.append(speaking_input.conversation_transcript)
 
-    if speaking_input.answer_length_metrics:
+    if metrics:
         parts.append("\n## Answer Length Metrics")
-        parts.append(f"Word count: {speaking_input.answer_length_metrics.get('word_count')}")
-        parts.append(f"Sentence count: {speaking_input.answer_length_metrics.get('sentence_count')}")
-        parts.append(f"Length category: {speaking_input.answer_length_metrics.get('length_category')}")
-        parts.append(f"Expected min words: {speaking_input.answer_length_metrics.get('expected_min_words')}")
-        parts.append(f"Coherence cap: {speaking_input.answer_length_metrics.get('coherence_cap')}")
+        parts.append(f"Word count: {metrics.get('word_count')}")
+        parts.append(f"Sentence count: {metrics.get('sentence_count')}")
+        parts.append(f"Length category: {metrics.get('length_category')}")
+        parts.append(f"Expected min words: {metrics.get('expected_min_words')}")
+        parts.append(f"Coherence cap: {metrics.get('coherence_cap')}")
 
     if mode == SpeakingMode.SCRIPTED:
         parts.append("\nThis is a scripted read-aloud test. Coherence scores are diagnostic only.")
@@ -68,4 +70,7 @@ def build_user_prompt(speaking_input: SpeakingInput, transcript: str) -> str:
 
 
 def coherence_eval_node(state: dict) -> dict:
-    return run_eval_node(state, "coherence", SYSTEM_PROMPT, build_user_prompt, "coherence")
+    return run_eval_node(
+        state, SYSTEM_PROMPT, build_user_prompt, "coherence",
+        result_key="coherence_criterion", confidence_key="coherence_confidence",
+    )

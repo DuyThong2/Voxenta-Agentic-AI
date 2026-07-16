@@ -16,13 +16,26 @@ events AttemptConnection forwards back out.
 import json
 import logging
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 
+from realtime import turn_publisher
 from realtime.attempt_connection import AttemptConnection
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/realtime", tags=["Realtime"])
+
+
+@router.get("/attempts/{exam_attempt_id}/current-answer")
+async def get_current_answer(request: Request, exam_attempt_id: str):
+    """Which answer_id (question) exam_attempt_id was last on, per
+    turn_publisher.set_current_answer_id -- for a client that lost all local state (full app
+    close, not just a WS reconnect) to find out where to resume before it even opens the realtime
+    WebSocket. answer_id is null if this attempt never started any question yet (see
+    task/realtime-exam-flow-review.md for why this doesn't rely on Kafka's
+    answer-turns-recorded topic)."""
+    answer_id = await turn_publisher.get_current_answer_id(request.app.state.archive_graph, exam_attempt_id)
+    return {"answer_id": answer_id}
 
 
 @router.websocket("/attempts/{exam_attempt_id}")

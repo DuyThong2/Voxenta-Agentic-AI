@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from config.kafka_config import settings
@@ -14,12 +15,15 @@ from events.exam_attempt_evaluation_failed import (
     ExamAttemptEvaluationFailedEvent,
     ExamAttemptEvaluationFailedPayload,
 )
+from events.exam_attempt_evaluation_shared import EvaluationSignals
 from infra.message_broker.connection import get_topic_consumer
 from infra.message_broker.publishers.exam_publisher import (
     publish_exam_attempt_evaluation_completed,
     publish_exam_attempt_evaluation_failed,
 )
 from infra.storage.audio_storage import download_from_s3_async
+from schemas.scoring import CriterionScore
+from schemas.validity import RuleResult, ValidityResult
 from mappers.exam_event_builder import (
     build_completed_event,
     build_criteria_payload,
@@ -353,6 +357,60 @@ def _build_multi_turn_completed_event(
     )
 
 
+def _build_no_answer_completed_event(
+    request_event: ExamAttemptEvaluationRequestedEvent,
+) -> ExamAttemptEvaluationCompletedEvent:
+    """A question with zero archived turns (request_payload.turns is empty) means the student
+    never answered it at all -- e.g. the exam session ended/disconnected before they got to speak
+    (task/exam-interrupted-session-grading.txt). That is a normal, expected outcome that must
+    still produce a graded result, not an evaluation failure: previously the bare `if not turns`
+    check below raised ValueError, which retried KAFKA_MAX_RETRY times against the same
+    never-changing payload (always failing identically) and ended in
+    ExamAttemptEvaluationFailedEvent -- an "evaluation broke" state, not "student skipped this,
+    scored 0" like it should be.
+
+    Mirrors ValidityNode's existing per-turn "audio.no_speech" rule (action=reject_or_zero,
+    status=zeroed) but at the whole-question level, since there is no turn/audio at all here to
+    run that per-turn rule against."""
+    no_turns_rule = RuleResult(
+        rule_id="answer.no_turns",
+        category="validity",
+        status="triggered",
+        severity="none",
+        action="reject_or_zero",
+        message="Student did not answer this question (no turns recorded).",
+    )
+    validity = ValidityResult(
+        valid_for_scoring=False,
+        action="reject_or_zero",
+        rule_results=[no_turns_rule],
+        transcript_source="none",
+        transcript_word_count=0,
+    )
+    signals = EvaluationSignals(duration_seconds=0, word_count=0, sentence_count=0, expected_min_words=0)
+    criteria = {
+        name: CriterionScore(score=0, level="not_scored", status="zeroed", source="rule")
+        for name in ("pronunciation", "fluency", "grammar", "vocabulary", "coherence")
+    }
+
+    return ExamAttemptEvaluationCompletedEvent(
+        exam_attempt_id=request_event.exam_attempt_id,
+        answer_id=request_event.answer_id,
+        question_id=request_event.question_id,
+        payload=ExamAttemptEvaluationCompletedPayload(
+            turns=[],
+            criteria=criteria,
+            signals=signals,
+            validity=validity,
+            feedback_summary="Hoc sinh khong tra loi cau hoi nay.",
+            suggestions=[],
+            model_version="rule-based-no-answer",
+            prompt_version="v1",
+            evaluated_at=datetime.now(timezone.utc).isoformat(),
+        ),
+    )
+
+
 async def start_exam_attempt_consumer(app):
     consumer = await get_topic_consumer(
         settings.KAFKA_EXAM_REQUEST_TOPIC,
@@ -371,7 +429,19 @@ async def start_exam_attempt_consumer(app):
                 request_payload = request_event.payload
                 turns = sorted(request_payload.turns, key=lambda turn: turn.turn_order)
                 if not turns:
-                    raise ValueError("exam evaluation request does not contain any turns")
+                    # Not an error -- the student simply never answered this question (see
+                    # _build_no_answer_completed_event's docstring). Publish a 0-point completed
+                    # result directly instead of raising into the retry/failed path below, which
+                    # would just fail identically every retry since this payload never changes.
+                    logger.info(
+                        "[exam-consumer] no turns recorded, publishing 0-point result answer_id=%s exam_attempt_id=%s",
+                        request_event.answer_id, request_event.exam_attempt_id,
+                    )
+                    await publish_exam_attempt_evaluation_completed(
+                        _build_no_answer_completed_event(request_event)
+                    )
+                    await consumer.commit()
+                    break
 
                 logger.info(
                     "[exam-consumer] received answer_id=%s exam_attempt_id=%s turns=%d",

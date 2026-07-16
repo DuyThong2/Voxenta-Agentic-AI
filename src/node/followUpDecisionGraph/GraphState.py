@@ -7,6 +7,17 @@ from node.state_models import QuestionContext
 class FollowUpGraphState(TypedDict, total=False):
     answer_id: str
     exam_attempt_id: str
+    # Attempt-scoped, not question-scoped like the rest of this state -- deliberately "borrowed"
+    # onto the same archive_graph checkpointer (task/realtime-exam-flow-review.md), keyed by
+    # exam_attempt_id as its own thread_id instead of answer_id. Written by
+    # turn_publisher.set_current_answer_id right when _handle_question_start fires (before any
+    # turn/decision exists for that question), read back by turn_publisher.get_current_answer_id
+    # so a client that lost all local state (app fully closed, not just a WS reconnect) can ask
+    # "which question was I on" without depending on Kafka's answer-turns-recorded topic, which
+    # only fires after a turn completes and would otherwise be blind to a question that was
+    # started but never got that far. LastValue (no reducer) -- each question_start simply
+    # overwrites the previous value.
+    current_answer_id: Optional[str]
     candidate_id: Optional[str]
     audio_ref: str
     paper_item_id: Optional[str]

@@ -19,9 +19,18 @@ back out to the client.
 
 Phase 4: whenever the avatar needs to speak (the question prompt at
 question_start, or decision.next_prompt_text/CLOSING_REPLY after a turn_end),
-this class schedules realtime.avatar_speech.speak as a fire-and-forget
-background task -- never awaited inline, so a slow render never delays the
-question_start_ack/decision response already being sent back to the client.
+this class schedules _speak_and_notify as a fire-and-forget background task --
+never awaited inline, so it never delays the question_start_ack/decision
+response already being sent back to the client.
+
+Prototype (task/performance.txt): _speak_and_notify sends a `speak` WS message
+(text + rate) instead of calling realtime.avatar_speech.speak -- WPF now
+synthesizes via Azure TTS and plays it locally (Services/LocalAvatarSpeaker.cs)
+instead of this process synthesizing server-side and streaming it back over
+the avatar WebRTC audio track. realtime/avatar_speech.py and the avatar WebRTC
+media path (realtime/avatar_webrtc.py) are unused by this path but left in
+place -- the avatar WebRTC connection itself still opens per attempt, it just
+carries nothing but idle silence now.
 """
 
 import asyncio
@@ -32,7 +41,7 @@ from fastapi import WebSocket
 
 from node.followUpDecisionGraph.constants import CLOSING_REPLY, EXAM_FAREWELL_TEXT
 from node.state_models import QuestionContext
-from realtime import avatar_speech, turn_publisher
+from realtime import turn_publisher
 from realtime.session import RealtimeExamSession
 from realtime.voice_live_client import VoiceLiveClient, VoiceLiveServerEvent
 
@@ -114,6 +123,13 @@ class AttemptConnection:
             question=question, paper_item_id=paper_item_id,
             language=language, prompt_text=session_prompt_text,
         )
+        # Records this as the exam attempt's current question, independent of answer_id's own
+        # checkpoint -- lets a client that lost ALL local state (full app close, not just a WS
+        # reconnect) ask "which question was I on" without depending on Kafka's
+        # answer-turns-recorded topic (which stays silent until a turn actually completes -- see
+        # task/realtime-exam-flow-review.md). Unconditional/idempotent, same as
+        # persist_question_snapshot above.
+        await turn_publisher.set_current_answer_id(self.archive_graph, self.exam_attempt_id, answer_id)
         # Unconditional: restores turn history + the pending follow-up
         # prompt from the durable archive if this answer_id already has some
         # (reconnect / pod restart mid-question on EKS); a no-op for a
@@ -164,12 +180,18 @@ class AttemptConnection:
             "[realtime_transcript] exam_attempt_id=%s answer_id=%s turn_order=%d text=%r",
             self.exam_attempt_id, session.answer_id, session.turn_order, transcript,
         )
+        is_last_allowed_turn = bool(message.get("is_last_allowed_turn"))
+
         # Fire-and-forget: never awaited inline with the turn_end decision response below.
         # Lets eval-time scoring prefer this (Voice-Live handles code-switched Vietnamese
         # better than the Speech SDK's re-transcription) -- see start_node_config.py.
+        # is_last_allowed_turn is persisted here too so _recover_pending_decision can re-apply
+        # WPF's MaxTurnsPerQuestion clamp correctly if this turn's decision has to be recomputed
+        # during a later resume (see turn_publisher.persist_realtime_transcript's docstring).
         asyncio.create_task(
             turn_publisher.persist_realtime_transcript(
                 self.archive_graph, session.answer_id, session.turn_order, transcript,
+                is_last_allowed_turn=is_last_allowed_turn,
             )
         )
 
@@ -177,14 +199,35 @@ class AttemptConnection:
         if word_count is None:
             word_count = len(transcript.split()) if transcript else 0
 
-        decision = session.decide_next_step(transcript, word_count)
-        if message.get("is_last_allowed_turn") and decision.get("should_continue"):
+        # decide_next_step ultimately calls ChatOpenAI.invoke() (sync) -- running it inline here
+        # would block this process's single asyncio event loop for the full LLM round-trip,
+        # freezing every other exam_attempt's WebRTC (avatar/proctoring) and WS traffic along with
+        # it. Confirmed live: under degraded network this call took >20s and the avatar WebRTC
+        # peer connection was declared failed mid-call because no RTP/keepalive could be sent
+        # while the loop was blocked. asyncio.to_thread keeps this a plain sync call while freeing
+        # the loop for everything else, exactly like archive_controller.py already does for
+        # archive_graph.invoke.
+        decision = await asyncio.to_thread(session.decide_next_step, transcript, word_count)
+        completed_turn_order = session.turn_order - 1
+        if is_last_allowed_turn and decision.get("should_continue"):
             # WPF's own MaxTurnsPerQuestion is about to force this question closed regardless of
             # what we decide -- if we still spoke a follow-up here, the student would hear a
             # question read aloud and then get bounced to the next one before ever answering it
             # (confirmed live: this is exactly what was happening). Match WPF's outcome instead of
             # racing it.
             decision = {**decision, "should_continue": False, "next_prompt_text": None, "reason": "client_max_turns_reached"}
+
+        # MUST run on this event-loop thread (not inside the asyncio.to_thread call above) --
+        # schedule_publish's asyncio.create_task raises "no running event loop" otherwise. Uses
+        # the already-clamped decision so what's persisted (and what a later resume recovers)
+        # matches what was actually decided, not the pre-clamp raw graph output.
+        session.schedule_publish(
+            completed_turn_order,
+            reason=decision.get("reason", ""),
+            should_continue=bool(decision.get("should_continue")),
+            next_prompt_text=decision.get("next_prompt_text"),
+        )
+
         await self.websocket.send_json({
             "type": "decision",
             "answer_id": session.answer_id,
@@ -206,34 +249,32 @@ class AttemptConnection:
         asyncio.create_task(self._speak_and_notify(text, self._utterance_sequence, slow))
 
     async def _speak_and_notify(self, text: Optional[str], sequence: int, slow: bool) -> None:
+        """Prototype (task/performance.txt): sends the text to speak over the realtime WS instead
+        of synthesizing it here and streaming it back over the avatar WebRTC audio track
+        (realtime/avatar_speech.py, now unused by this path). WPF's RealtimeSessionClient
+        synthesizes+plays it locally (Services/LocalAvatarSpeaker.cs) and raises its own
+        OnAvatarUtteranceComplete once local playback finishes -- this process no longer needs to
+        wait for or confirm playback, so this just fires the message and returns."""
+        session = self.active_session
+        logger.info(
+            "[realtime_ai_speech] exam_attempt_id=%s answer_id=%s turn_order=%s sequence=%d text=%r",
+            self.exam_attempt_id,
+            session.answer_id if session else None,
+            session.turn_order if session else None,
+            sequence, text,
+        )
         try:
-            if text:
-                session = self.active_session
-                logger.info(
-                    "[realtime_ai_speech] exam_attempt_id=%s answer_id=%s turn_order=%s sequence=%d text=%r",
-                    self.exam_attempt_id,
-                    session.answer_id if session else None,
-                    session.turn_order if session else None,
-                    sequence, text,
-                )
-                await avatar_speech.speak(
-                    self.exam_attempt_id,
-                    text,
-                    sequence=sequence,
-                    rate="-20%" if slow else None,
-                )
-        finally:
-            try:
-                await self.websocket.send_json({
-                    "type": "avatar_utterance_complete",
-                    "sequence": sequence,
-                    "text": text or "",
-                })
-            except Exception:
-                logger.exception(
-                    "[attempt_connection] failed to send avatar_utterance_complete exam_attempt_id=%s sequence=%d",
-                    self.exam_attempt_id, sequence,
-                )
+            await self.websocket.send_json({
+                "type": "speak",
+                "sequence": sequence,
+                "text": text or "",
+                "rate": "-20%" if slow else None,
+            })
+        except Exception:
+            logger.exception(
+                "[attempt_connection] failed to send speak exam_attempt_id=%s sequence=%d",
+                self.exam_attempt_id, sequence,
+            )
 
     async def _handle_resume(self, message: dict) -> None:
         """Rebuilds self.active_session purely from the durable archive
@@ -243,7 +284,14 @@ class AttemptConnection:
         (_persist_question_snapshot). Restores turn history, turn_order, and
         the pending follow-up prompt, then re-speaks that prompt so the exam
         actually continues instead of leaving the student in silence with a
-        rebuilt-but-mute session."""
+        rebuilt-but-mute session.
+
+        Also recovers whatever decision a client's still-pending
+        SendTurnEndAndWaitAsync might be waiting on (see
+        _recover_pending_decision) and hands it back in resume_ack -- this is
+        what unblocks a client left awaiting a decision that never arrived
+        because the connection dropped between turn_end being sent and the
+        response reaching it (task/exam-interrupted-session-grading.txt)."""
         answer_id = message.get("answer_id")
         session = await RealtimeExamSession.create_from_archive(
             answer_id=answer_id,
@@ -253,12 +301,15 @@ class AttemptConnection:
         )
 
         last_archived_turn_order = 0
+        recovered_decision: Optional[dict] = None
+        recovered_turn_order: Optional[int] = None
         if session is not None:
             self.active_session = session
             last_archived_turn_order = session.turn_order - 1
+            recovered_decision, recovered_turn_order = await self._recover_pending_decision(session)
             logger.info(
-                "[attempt_connection] resume rebuilt session exam_attempt_id=%s answer_id=%s turn_order=%d",
-                self.exam_attempt_id, answer_id, session.turn_order,
+                "[attempt_connection] resume rebuilt session exam_attempt_id=%s answer_id=%s turn_order=%d recovered_turn_order=%s",
+                self.exam_attempt_id, answer_id, session.turn_order, recovered_turn_order,
             )
         else:
             logger.warning(
@@ -266,14 +317,108 @@ class AttemptConnection:
                 answer_id, self.exam_attempt_id,
             )
 
-        await self.websocket.send_json({
+        ack_payload: dict = {
             "type": "resume_ack",
             "answer_id": answer_id,
             "last_archived_turn_order": last_archived_turn_order,
-        })
+        }
+        if recovered_decision is not None:
+            ack_payload["recovered_turn_order"] = recovered_turn_order
+            ack_payload["decision"] = recovered_decision
+        await self.websocket.send_json(ack_payload)
 
-        if session is not None and session.current_prompt_text:
+        if recovered_decision is not None:
+            # A recovered should_continue=False means the question actually finished --
+            # session.current_prompt_text was NOT updated for that outcome (decide_next_step only
+            # updates it when continuing) and still holds the stale PREVIOUS prompt, so speaking
+            # it here would incorrectly re-ask an already-answered follow-up. Mirror
+            # _handle_turn_end's own next_prompt_text/CLOSING_REPLY logic instead of falling
+            # through to the plain current_prompt_text re-speak below.
+            next_prompt_text = recovered_decision.get("next_prompt_text") or (
+                None if recovered_decision.get("should_continue") else CLOSING_REPLY
+            )
+            self._speak(next_prompt_text)
+        elif session is not None and session.current_prompt_text:
             self._speak(session.current_prompt_text)
+
+    async def _recover_pending_decision(
+        self, session: RealtimeExamSession,
+    ) -> tuple[Optional[dict], Optional[int]]:
+        """Reconstructs whatever decision a client's still-pending
+        SendTurnEndAndWaitAsync might be waiting on, so resume_ack can hand it
+        back directly instead of leaving the client to wait for a WS reply
+        that already came and went (or never will). Two distinct cases,
+        mutually exclusive by construction (they cover different turn_orders)
+        -- checked in this order:
+
+        1. A turn_end whose transcript was durably captured
+           (turn_publisher.persist_realtime_transcript, called right before
+           the slow decide_next_step call in _handle_turn_end) but whose
+           decision was never completed/persisted -- i.e. the connection
+           dropped mid-LLM-call, before decide_next_step finished.
+           session.turn_order (set by _apply_resume_state from the max
+           completed turn_order + 1) is exactly the first turn_order that has
+           NOT completed yet, so that's the only one worth checking. Re-runs
+           the decision now using the durably-saved transcript (no live
+           audio/VAD needed) and persists it exactly like a normal turn_end
+           would.
+        2. The much more likely case: the turn completed and was persisted
+           normally (decide_next_step doesn't depend on the client connection
+           at all -- only the final `await self.websocket.send_json(...)` in
+           _handle_turn_end does), but that reply itself never reached the
+           client. Nothing needs recomputing here -- the answer is just the
+           last entry in session.turns (already restored from the durable
+           archive by _apply_resume_state), at turn_order ==
+           last_archived_turn_order.
+
+        Returns (None, None) only if neither case has anything to offer (a
+        genuinely fresh resume with nothing outstanding)."""
+        pending_turn_order = session.turn_order
+        resume_state = await turn_publisher.get_resume_state(self.archive_graph, session.answer_id)
+        pending_entry = None
+        if resume_state is not None:
+            transcripts = resume_state.get("realtime_transcripts") or []
+            pending_entry = next(
+                (t for t in transcripts if t.get("turn_order") == pending_turn_order), None,
+            )
+
+        if pending_entry is not None:
+            transcript = pending_entry.get("text") or ""
+            word_count = len(transcript.split()) if transcript else 0
+            is_last_allowed_turn = bool(pending_entry.get("is_last_allowed_turn"))
+
+            logger.info(
+                "[attempt_connection] recovering dangling decision exam_attempt_id=%s answer_id=%s turn_order=%d",
+                self.exam_attempt_id, session.answer_id, pending_turn_order,
+            )
+            decision = await asyncio.to_thread(session.decide_next_step, transcript, word_count)
+            if is_last_allowed_turn and decision.get("should_continue"):
+                decision = {**decision, "should_continue": False, "next_prompt_text": None, "reason": "client_max_turns_reached"}
+
+            session.schedule_publish(
+                pending_turn_order,
+                reason=decision.get("reason", ""),
+                should_continue=bool(decision.get("should_continue")),
+                next_prompt_text=decision.get("next_prompt_text"),
+            )
+            return decision, pending_turn_order
+
+        if session.turns:
+            last_turn = session.turns[-1]
+            last_turn_order = last_turn.get("turn_order")
+            if last_turn_order is not None:
+                logger.info(
+                    "[attempt_connection] handing back already-completed decision exam_attempt_id=%s answer_id=%s turn_order=%s",
+                    self.exam_attempt_id, session.answer_id, last_turn_order,
+                )
+                decision = {
+                    "should_continue": bool(last_turn.get("should_continue")),
+                    "next_prompt_text": last_turn.get("next_prompt_text"),
+                    "reason": last_turn.get("decision_reason", ""),
+                }
+                return decision, int(last_turn_order)
+
+        return None, None
 
     async def _on_voice_live_event(self, event: VoiceLiveServerEvent) -> None:
         """Routes a translated Voice Live event to the active session's

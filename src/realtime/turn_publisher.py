@@ -140,15 +140,46 @@ async def persist_question_snapshot(
     })
 
 
-async def persist_realtime_transcript(archive_graph, answer_id: str, turn_order: int, text: str) -> None:
+async def set_current_answer_id(archive_graph, exam_attempt_id: str, answer_id: str) -> None:
+    """Records answer_id as the currently-active question for exam_attempt_id, on the SAME
+    archive_graph checkpointer as everything else in this module but keyed by exam_attempt_id as
+    its own thread_id instead of answer_id -- a deliberate "borrow" of the per-question storage for
+    an attempt-scoped concern (see FollowUpGraphState.current_answer_id's own comment), not a new
+    dedicated store. Call this right at question_start, unconditionally, same as
+    persist_question_snapshot -- it must land before any turn/decision exists for this question, so
+    a client that lost all local state can still find out this question was started even if no
+    turn ever completed for it (get_current_answer_id doesn't depend on Kafka's
+    answer-turns-recorded topic, which only fires after a turn completes)."""
+    await _aupdate_state(archive_graph, _archive_config(exam_attempt_id), {
+        "current_answer_id": answer_id,
+    })
+
+
+async def get_current_answer_id(archive_graph, exam_attempt_id: str) -> str | None:
+    """The answer_id last recorded via set_current_answer_id for this exam_attempt_id, or None if
+    no question has ever been started for it (a genuinely fresh attempt)."""
+    state = await _aget_state(archive_graph, _archive_config(exam_attempt_id))
+    return (state.values or {}).get("current_answer_id")
+
+
+async def persist_realtime_transcript(
+    archive_graph, answer_id: str, turn_order: int, text: str, *, is_last_allowed_turn: bool = False,
+) -> None:
     """Durably saves this turn's live Voice-Live transcript (see attempt_connection.py's
     [realtime_transcript] logging) so eval-time scoring can prefer it over re-transcribing the
     archived audio via the Azure Speech SDK -- see get_realtime_transcript / start_node_config.py.
     Fire-and-forget from the caller (mirrors publish_turn_if_new's decision_reasons write):
-    never awaited inline with the turn_end decision response."""
+    never awaited inline with the turn_end decision response.
+
+    is_last_allowed_turn is persisted here too (not just used in-memory in _handle_turn_end) so
+    _recover_pending_decision can re-apply WPF's own MaxTurnsPerQuestion clamp correctly if this
+    turn's decision never made it back to the client and has to be recomputed during a later
+    resume -- see attempt_connection.py's _handle_resume."""
     try:
         await _aupdate_state(archive_graph, _archive_config(answer_id), {
-            "realtime_transcripts": [{"turn_order": turn_order, "text": text}],
+            "realtime_transcripts": [
+                {"turn_order": turn_order, "text": text, "is_last_allowed_turn": is_last_allowed_turn},
+            ],
         })
     except Exception:
         logger.exception(
@@ -176,26 +207,33 @@ async def get_resume_state(archive_graph, answer_id: str) -> dict | None:
     answer_id (a genuinely new question -- callers should treat that as
     "nothing to resume", not an error).
 
-    turns are returned sorted by turn_order, with decision_reason merged in
-    from the decision_reasons marker (see publish_turn_if_new) since the
-    archived turn record itself never carries it (WPF's POST /turns/archive
-    payload has no such field -- decision_reason is only ever known
-    in-memory, after decide_next_step runs)."""
+    turns are returned sorted by turn_order, with decision_reason/should_continue/next_prompt_text
+    merged in from the decision_reasons marker (see publish_turn_if_new) since the archived turn
+    record itself never carries them (WPF's POST /turns/archive payload has no such fields -- the
+    decision is only ever known in-memory, after decide_next_step runs).
+
+    realtime_transcripts is also returned raw (turn_order/text/is_last_allowed_turn per entry) --
+    used by _recover_pending_decision to detect a turn whose transcript was captured but whose
+    decision never got persisted (the connection dropped between turn_end and decide_next_step
+    finishing)."""
     archived_state = await _aget_state(archive_graph, _archive_config(answer_id))
     values = archived_state.values or {}
     if not values.get("question") and not values.get("turns"):
         return None
 
     turns = list(values.get("turns") or [])
-    reasons_by_turn_order = {
-        int(entry.get("turn_order")): entry.get("reason", "")
+    decisions_by_turn_order = {
+        int(entry.get("turn_order")): entry
         for entry in (values.get("decision_reasons") or [])
         if entry and entry.get("turn_order") is not None
     }
     for turn in turns:
         turn_order = turn.get("turn_order")
-        if turn_order is not None and turn_order in reasons_by_turn_order:
-            turn["decision_reason"] = reasons_by_turn_order[turn_order]
+        entry = decisions_by_turn_order.get(turn_order) if turn_order is not None else None
+        if entry is not None:
+            turn["decision_reason"] = entry.get("reason", "")
+            turn["should_continue"] = entry.get("should_continue", False)
+            turn["next_prompt_text"] = entry.get("next_prompt_text")
     turns.sort(key=lambda t: t.get("turn_order") or 0)
 
     return {
@@ -205,6 +243,7 @@ async def get_resume_state(archive_graph, answer_id: str) -> dict | None:
         "paper_item_id": values.get("paper_item_id"),
         "language": values.get("language"),
         "prompt_text": values.get("prompt_text"),
+        "realtime_transcripts": list(values.get("realtime_transcripts") or []),
     }
 
 
@@ -215,6 +254,8 @@ async def publish_turn_if_new(
     reason: str = "",
     exam_attempt_id: str | None = None,
     active_prompt_text: str | None = None,
+    should_continue: bool = False,
+    next_prompt_text: str | None = None,
 ) -> None:
     """Wait for this specific turn to be archived, then publish it to Kafka
     exactly once, durably. Safe to call multiple times for the same
@@ -239,7 +280,12 @@ async def publish_turn_if_new(
     # whether/when the audio archive itself catches up.
     try:
         await _aupdate_state(archive_graph, config, {
-            "decision_reasons": [{"turn_order": turn_order, "reason": reason}],
+            "decision_reasons": [{
+                "turn_order": turn_order,
+                "reason": reason,
+                "should_continue": should_continue,
+                "next_prompt_text": next_prompt_text,
+            }],
             "active_prompt_text": active_prompt_text,
         })
     except Exception:

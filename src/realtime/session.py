@@ -237,9 +237,15 @@ class RealtimeExamSession:
     def decide_next_step(self, transcript: str, word_count: int) -> Dict[str, Any]:
         """Build FollowUpGraphState input directly from this session's held
         state and invoke the existing stateless text_followup_graph verbatim.
-        Returns the decision dict immediately; schedules the durable
-        archive/Kafka publish as a fire-and-forget background task rather
-        than awaiting it, so Path A never blocks on Path B.
+        Returns the decision dict; does NOT schedule the durable archive/Kafka
+        publish itself (see schedule_publish) -- this method is plain sync and
+        callers now run it via asyncio.to_thread (the LLM call inside
+        self.graph.invoke blocks otherwise), and schedule_publish's
+        asyncio.create_task requires a running event loop in the CURRENT
+        thread, which a to_thread worker thread does not have (confirmed
+        live: raises "RuntimeError: no running event loop"). Callers MUST call
+        schedule_publish themselves right after this returns, back on the
+        event loop thread -- see attempt_connection.py's _handle_turn_end.
         """
         current_turn = self._build_current_turn(transcript, word_count)
         state = {
@@ -276,15 +282,27 @@ class RealtimeExamSession:
                 self.current_prompt_text = next_prompt_text.strip()
         self.current_transcript = ""
 
-        self.schedule_publish(completed_turn_order, reason=decision.get("reason", ""))
-
         return decision
 
-    def schedule_publish(self, turn_order: int, reason: str = "") -> "asyncio.Task[None]":
-        """Fire-and-forget: never awaited by decide_next_step's caller. A
-        reference to the task is returned only so callers/tests that want to
-        await completion explicitly may do so; nothing in the normal flow
-        relies on awaiting it."""
+    def schedule_publish(
+        self,
+        turn_order: int,
+        reason: str = "",
+        *,
+        should_continue: bool = False,
+        next_prompt_text: Optional[str] = None,
+    ) -> "asyncio.Task[None]":
+        """Fire-and-forget: never awaited by the caller. A reference to the
+        task is returned only so callers/tests that want to await completion
+        explicitly may do so; nothing in the normal flow relies on awaiting
+        it. MUST be called from a coroutine running on the event loop (never
+        from inside asyncio.to_thread) -- see decide_next_step's docstring.
+
+        should_continue/next_prompt_text are persisted alongside reason (not
+        just used in-memory) so a later `resume` can reconstruct the exact
+        decision for this turn if the WS reply carrying it never reached the
+        client -- see attempt_connection.py's _handle_resume /
+        _recover_pending_decision."""
         return asyncio.create_task(
             turn_publisher.publish_turn_if_new(
                 self.archive_graph,
@@ -293,5 +311,7 @@ class RealtimeExamSession:
                 reason=reason,
                 exam_attempt_id=self.exam_attempt_id,
                 active_prompt_text=self.current_prompt_text,
+                should_continue=should_continue,
+                next_prompt_text=next_prompt_text,
             )
         )

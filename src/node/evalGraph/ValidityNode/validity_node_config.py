@@ -1,7 +1,7 @@
 """Strict validity check node — runs immediately after start_node.
 
 Purpose: reject invalid submissions early so downstream nodes
-(correction, pronunciation, LLM scoring) are never invoked.
+(pronunciation, LLM scoring) are never invoked.
 
 Pure logic checks (instant, no API call):
   - audio.no_speech         : transcript is empty or word_count == 0 → reject_or_zero
@@ -21,6 +21,7 @@ Only rules with blocking=true and action="reject_or_zero" route to END.
 """
 
 import json
+import logging
 from typing import Any, Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
@@ -32,6 +33,8 @@ from schemas.enums import DifficultyLevel, SpeakingMode
 from mappers.schema_mapper import build_validity_result_from_rules, normalize_rule_result
 from utils.length_utils import get_expected_min_words
 from utils.text_utils import word_count
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -61,6 +64,7 @@ def _rule_attr(rule: Any, key: str) -> Any:
 def _build_llm_prompt(
     text: str,
     question_text: Optional[str],
+    asset_context: Optional[str],
     question_type: Optional[str],
     mode: Optional[str],
     difficulty_level: Optional[str],
@@ -79,6 +83,11 @@ def _build_llm_prompt(
         parts.append("")
         parts.append("## Question")
         parts.append(f'"{question_text}"')
+
+    if asset_context:
+        parts.append("")
+        parts.append("## Question Asset")
+        parts.append(asset_context)
 
     if question_type:
         parts.append(f"Question type: {question_type}")
@@ -101,12 +110,12 @@ def _build_llm_prompt(
 
 
 def _call_llm(text: str, question_text: Optional[str], question_type: Optional[str],
-              mode: Optional[str], difficulty_level: Optional[str], word_count: int,
+              asset_context: Optional[str], mode: Optional[str], difficulty_level: Optional[str], word_count: int,
               off_topic_examples: Optional[str] = None) -> Dict[str, Any]:
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
     user_prompt = _build_llm_prompt(
-        text, question_text, question_type, mode, difficulty_level, word_count,
+        text, question_text, asset_context, question_type, mode, difficulty_level, word_count,
         off_topic_examples=off_topic_examples,
     )
 
@@ -152,7 +161,21 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "error": "speaking_input is required for validity_node",
         }
 
-    # Transcript source: prefer transcribed_text from start_node
+    answer_id = getattr(speaking_input, "answer_id", None)
+    turn_order = (state.get("metadata") or {}).get("turn_order")
+    logger.info("[eval:validity] checking answer_id=%s turn=%s", answer_id, turn_order)
+
+    # Transcript source: transcribed_text from start_node (Azure's own transcription,
+    # already auto-detect + language-tagged for code-switched Vietnamese -- see
+    # speech_client.transcribe()). conversation_transcript is deliberately NOT used here --
+    # it's the AI/User dialogue scaffold meant only as extra context for CoherenceEvalNode
+    # (see select_text_for_language_scoring's own docstring in the eval-node helpers);
+    # validity must judge the student's own words, same as grammar/lexical/answer-length.
+    # Using it here previously caused false rejections, since conversation_transcript only
+    # ever contains "AI: <question>" lines at the point an individual turn is validated (the
+    # real per-turn transcript hadn't been merged into it yet), making every answer look
+    # like an empty repeat-the-question.
+    text_source = "transcribed_text"
     text = (
         getattr(speaking_input, "transcribed_text", None)
         or (state.get("metadata") or {}).get("transcription_text")
@@ -162,6 +185,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     transcript_word_count = word_count(text)
 
     question_text: Optional[str] = speaking_input.question.question_text if speaking_input.question else None
+    asset_context: Optional[str] = None
     question_type: Optional[str] = speaking_input.question.question_type if speaking_input.question else None
     duration_seconds: Optional[int] = speaking_input.question.duration_seconds if speaking_input.question else None
     min_response_seconds: Optional[int] = speaking_input.question.min_response_seconds if speaking_input.question else None
@@ -172,6 +196,22 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
         if speaking_input.question and speaking_input.question.evaluation_guide
         else None
     )
+
+    if speaking_input.question and speaking_input.question.asset:
+        asset = speaking_input.question.asset
+        asset_details = asset.transcript or asset.description or asset.alt_text
+        if asset_details:
+            asset_context = (
+                f"Asset type: {asset.type}\n"
+                f"Asset details: {asset_details}\n"
+                "(Note: this is objective/factual information about the asset's content, "
+                "NOT a model answer or the single correct interpretation. If the question "
+                "asks the student to describe feelings, meaning, or their opinion about the "
+                "asset, a DIFFERENT interpretation than what's described above is still VALID "
+                "as long as it genuinely engages with the asset's actual content and is "
+                "reasonably argued -- do not mark it off-topic or incorrect just because it "
+                "diverges from this description.)"
+            )
 
     rule_results: List[Any] = []
 
@@ -248,6 +288,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 text=text,
                 question_text=question_text,
                 question_type=question_type,
+                asset_context=asset_context,
                 mode=mode,
                 difficulty_level=difficulty_level,
                 word_count=transcript_word_count,
@@ -279,8 +320,14 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     validity = build_validity_result_from_rules(
         rule_entries=rule_results,
-        transcript_source="transcribed_text",
+        transcript_source=text_source,
         transcript_word_count=transcript_word_count,
+    )
+
+    logger.info(
+        "[eval:validity] done answer_id=%s turn=%s action=%s rule_ids=%s transcript=%r",
+        answer_id, turn_order, getattr(validity, "action", None),
+        [_rule_attr(r, "rule_id") for r in rule_results], text[:200],
     )
 
     return {

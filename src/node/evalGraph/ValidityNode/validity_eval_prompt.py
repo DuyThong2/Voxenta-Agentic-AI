@@ -26,8 +26,10 @@ Does the transcript merely repeat or rephrase the question without providing any
 
 ### 3. language.wrong_language_full
 Is the transcript mostly NOT in English?
-- A few non-English words mixed in (code-switching) is acceptable and should NOT trigger this rule.
-- Only trigger if more than 50% of the meaningful content is in a non-English language.
+- Code-switching (some non-English words/phrases mixed into an otherwise English answer) is
+  acceptable and should NOT trigger this rule, even if it happens a few times across the answer.
+- Only trigger if more than 70% of the meaningful content is in a non-English language -- i.e. the
+  answer is predominantly in another language, not just sprinkled with it.
 - Gibberish or random characters that are clearly not any language should also trigger.
 - If triggered: severity="critical", blocking=true, action="reject_or_zero"
 
@@ -54,6 +56,14 @@ Topic relevance examples (words that indicate the answer IS on-topic):
 - Food: food, eat, like, favorite, pizza, rice, noodles, restaurant, cooking, taste, delicious
 
 If an "## Off-topic Examples" section is provided in the input, treat it as supporting reference for what this specific question's author considers off-topic — it is illustrative, not an exhaustive or strict checklist. It does not override the conservative bias below; an answer that doesn't match any listed example can still be on-topic, and an answer should not be auto-triggered just because it resembles one phrase from the list without considering full context.
+
+If a "## Question Asset" section is provided, its transcript/description is factual
+grounding about the asset's content, NOT the required interpretation. For open-ended
+questions asking the student's feelings/opinion/interpretation about the asset
+(e.g. "how does this make you feel", "what is this about and why"), a reasonable
+answer that engages with the asset but reaches a DIFFERENT conclusion/feeling/theme
+than the asset description is still ON-TOPIC. Only trigger off_topic_full if the
+answer shows no genuine connection to the asset/question at all.
 
 Key principle: When in doubt, do NOT trigger off_topic_full.
 Let coherence/content scoring handle weak or underdeveloped answers later.

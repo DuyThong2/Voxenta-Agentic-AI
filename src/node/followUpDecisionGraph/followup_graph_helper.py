@@ -2,7 +2,12 @@ from typing import Any, Dict, Iterable
 
 
 def is_clarification_reason(reason: str | None) -> bool:
-    return str(reason or "").startswith("clarification_")
+    normalized = str(reason or "").strip()
+    return normalized.startswith("clarification_") or normalized in {
+        "clarify_prompt",
+        "decline_repair",
+        "remind_respectfully",
+    }
 
 
 def count_assessment_turns(turns: Iterable[Dict[str, Any]]) -> int:

@@ -24,6 +24,7 @@ class QuestionContext(BaseModel):
     min_response_seconds: Optional[int] = None
     max_response_seconds: Optional[int] = None
     evaluation_guide: Optional[EvaluationGuideInput] = None
+    asset: Optional["QuestionAssetContext"] = None
 
     @field_validator("question_type", mode="before")
     @classmethod
@@ -61,6 +62,13 @@ class QuestionContext(BaseModel):
         return self
 
 
+class QuestionAssetContext(BaseModel):
+    type: Optional[str] = None
+    transcript: Optional[str] = None
+    description: Optional[str] = None
+    alt_text: Optional[str] = None
+
+
 class TopicContext(BaseModel):
     """Topic context for evaluation."""
 
@@ -76,10 +84,18 @@ class SpeakingInput(BaseModel):
     audio_path: str
     reference_text: Optional[str] = None
     transcribed_text: Optional[str] = None
+    conversation_transcript: Optional[str] = None
     corrected_transcript: Optional[str] = None
     mode: SpeakingMode = SpeakingMode.UNSCRIPTED
     language: str = "en-US"
     criteria_frameworks: List[CriterionFramework] = Field(default_factory=list)
     question: Optional[QuestionContext] = None
     topic: Optional[TopicContext] = None
-    answer_length_metrics: Optional[dict] = None
+    asr_confidence: Optional[float] = None
+    # Live Voice-Live transcript for this turn (see archive_store.get_realtime_transcript),
+    # when start_node's caller was able to fetch one -- preferred over re-transcribing
+    # audio_path via the Azure Speech SDK when present (see start_node_config.py).
+    realtime_transcript: Optional[str] = None
+
+
+QuestionContext.model_rebuild()

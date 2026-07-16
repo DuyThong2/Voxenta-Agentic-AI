@@ -15,12 +15,30 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
 import logging
+import logging.handlers
+import os
+
+_LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "var", "logs")
+os.makedirs(_LOG_DIR, exist_ok=True)
+_LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 
 logging.basicConfig(
     level=logging.INFO,
     stream=sys.stdout,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    format=_LOG_FORMAT,
 )
+
+# Console output alone requires catching it live -- durably persist every log line to disk too,
+# so a failure can be diagnosed after the fact from the file instead of needing to have been
+# watching the terminal at the time. Rotates at 10MB x 5 files so it can't grow unbounded.
+_file_handler = logging.handlers.RotatingFileHandler(
+    os.path.join(_LOG_DIR, "agents.log"),
+    maxBytes=10 * 1024 * 1024,
+    backupCount=5,
+    encoding="utf-8",
+)
+_file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
+logging.getLogger().addHandler(_file_handler)
 
 logging.getLogger("infra.message_broker.external_events_handlers.kafka_consumer").setLevel(logging.INFO)
 logging.getLogger("vector.indexer").setLevel(logging.INFO)
@@ -43,11 +61,15 @@ setup_langsmith()
 
 from controller import router
 from controller.webrtc import close_all_connections
-from realtime.avatar_webrtc import close_all_connections as close_all_avatar_connections
+from realtime._legacy_avatar.avatar_webrtc import close_all_connections as close_all_avatar_connections
 from node.followUpDecisionGraph.graphConfig import build_archive_graph, build_text_followup_graph
 from node.evalGraph.graphConfig import build_graph
 from config.postgresDB_config import settings as pg_settings
 from infra.message_broker.external_events_handlers.kafka_consumer import start_outbox_consumer
+from infra.message_broker.external_events_handlers.question_asset_analysis_consumer import (
+    start_question_asset_analysis_consumer,
+)
+from infra.message_broker.external_events_handlers.exam_consumer import start_exam_attempt_consumer
 from infra.message_broker import connection as mq_connection
 from vector.chroma_client import build_chroma_collection
 
@@ -85,12 +107,22 @@ async def lifespan(app: FastAPI):
     consumer_task = asyncio.create_task(start_outbox_consumer(app))
     app.state.outbox_task = consumer_task
 
+    # 4) Start exam-attempt-evaluation-requested consumer (grading pipeline) -- defined in
+    # exam_consumer.py but was never actually started anywhere, so no grading requests from vox
+    # were ever consumed despite the handler being fully implemented.
+    exam_consumer_task = asyncio.create_task(start_exam_attempt_consumer(app))
+    app.state.exam_consumer_task = exam_consumer_task
+    asset_analysis_consumer_task = asyncio.create_task(start_question_asset_analysis_consumer(app))
+    app.state.asset_analysis_consumer_task = asset_analysis_consumer_task
+
     try:
         yield
     finally:
         await close_all_connections()
         await close_all_avatar_connections()
         consumer_task.cancel()
+        exam_consumer_task.cancel()
+        asset_analysis_consumer_task.cancel()
         await mq_connection.close()
         pool.close()
 

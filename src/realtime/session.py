@@ -32,7 +32,8 @@ from typing import Any, Dict, List, Optional
 
 from node.followUpDecisionGraph.graphConfig import build_text_followup_graph
 from node.state_models import QuestionContext
-from realtime import turn_publisher
+from infra.database import archive_store
+from infra.message_broker.publishers import turn_publisher
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,8 @@ class RealtimeExamSession:
         self,
         *,
         answer_id: str,
+        exam_attempt_id: str,
+        paper_item_id: Optional[str],
         question: Optional[QuestionContext],
         prompt_text: Optional[str],
         language: str,
@@ -61,6 +64,8 @@ class RealtimeExamSession:
         graph=None,
     ) -> None:
         self.answer_id = answer_id
+        self.exam_attempt_id = exam_attempt_id
+        self.paper_item_id = paper_item_id
         self.question = question
         self.prompt_text = prompt_text
         self.current_prompt_text = prompt_text
@@ -78,6 +83,44 @@ class RealtimeExamSession:
         self._live_partial: str = ""
         self._awaiting_final_transcript: bool = False
         self._final_transcript_event: asyncio.Event = asyncio.Event()
+
+    @classmethod
+    async def create_from_archive(
+        cls,
+        *,
+        answer_id: str,
+        exam_attempt_id: str,
+        archive_graph: Any,
+        graph=None,
+    ) -> Optional["RealtimeExamSession"]:
+        """Rebuilds a full session purely from the durable archive_graph
+        checkpoint, keyed by answer_id -- used by AttemptConnection's
+        `resume` handler so a reconnect (WebSocket drop, or the serving pod
+        restarting on EKS) can restore an in-progress question WITHOUT the
+        client resending question_start or any question data at all: the
+        question snapshot (question/paper_item_id/language/prompt_text) was
+        durably persisted once, at question_start, by
+        archive_store.persist_question_snapshot; turn history/
+        decision_reasons/the pending follow-up prompt are persisted per-turn
+        by turn_publisher.publish_turn_if_new. Returns None if nothing was
+        ever archived for this answer_id (nothing to resume -- callers
+        should treat that as a resume that can't be honored, not a crash)."""
+        resume_state = await archive_store.get_resume_state(archive_graph, answer_id)
+        if resume_state is None:
+            return None
+
+        session = cls(
+            answer_id=answer_id,
+            exam_attempt_id=exam_attempt_id,
+            paper_item_id=resume_state.get("paper_item_id"),
+            question=resume_state.get("question"),
+            prompt_text=resume_state.get("prompt_text"),
+            language=resume_state.get("language") or "en-US",
+            archive_graph=archive_graph,
+            graph=graph,
+        )
+        session._apply_resume_state(resume_state)
+        return session
 
     def on_speech_start(self) -> None:
         """A new utterance within this turn just started (VAD speech_start).
@@ -131,9 +174,60 @@ class RealtimeExamSession:
             self._live_partial = ""
             self._awaiting_final_transcript = False
 
+    async def hydrate_from_archive(self) -> None:
+        """Restore turn history (+ the pending follow-up prompt) from the
+        durable archive_graph checkpoint if this answer_id already has
+        archived turns -- called unconditionally by AttemptConnection on
+        every question_start, including brand-new questions (where it's a
+        cheap no-op: no checkpoint exists yet for this answer_id). This is
+        what lets a question survive a reconnect where the client resends a
+        fresh question_start (as opposed to a `resume`, which goes through
+        create_from_archive instead) without losing progress, since
+        self.turns/self.turn_order/self.current_prompt_text otherwise only
+        ever lived in this process's memory. Does not restore
+        self.current_transcript or the in-progress-utterance state -- a turn
+        that was still being spoken when the connection dropped is genuinely
+        lost and must be re-answered."""
+        resume_state = await archive_store.get_resume_state(self.archive_graph, self.answer_id)
+        if resume_state is None or not resume_state.get("turns"):
+            return
+        self._apply_resume_state(resume_state)
+
+    def _apply_resume_state(self, resume_state: Dict[str, Any]) -> None:
+        """Shared by hydrate_from_archive and create_from_archive: restores
+        turn history and turn_order from resume_state["turns"], and
+        current_prompt_text from resume_state["active_prompt_text"] -- the
+        pending follow-up prompt persisted by
+        turn_publisher.publish_turn_if_new after the LAST completed turn's
+        decision (should_continue=True case). Falls back to the last
+        archived turn's own prompt_text only if active_prompt_text was never
+        persisted (e.g. archive predates this feature) -- that fallback is
+        the PREVIOUS prompt, not the pending one, so it's a best-effort
+        approximation, not a guarantee."""
+        turns = resume_state.get("turns") or []
+        if not turns:
+            return
+
+        self.turns = turns
+        self.turn_order = max(int(t.get("turn_order") or 0) for t in turns) + 1
+
+        pending_prompt = resume_state.get("active_prompt_text")
+        if isinstance(pending_prompt, str) and pending_prompt.strip():
+            self.current_prompt_text = pending_prompt.strip()
+        else:
+            last_prompt = turns[-1].get("prompt_text")
+            if isinstance(last_prompt, str) and last_prompt.strip():
+                self.current_prompt_text = last_prompt.strip()
+
+        logger.info(
+            "[session] resumed %d archived turn(s) for answer_id=%s, resuming at turn_order=%d",
+            len(turns), self.answer_id, self.turn_order,
+        )
+
     def _build_current_turn(self, transcript: str, word_count: int) -> Dict[str, Any]:
         return {
             "answer_id": self.answer_id,
+            "paper_item_id": self.paper_item_id,
             "turn_order": self.turn_order,
             "turn_type": "MAIN" if self.turn_order == 1 else "FOLLOWUP",
             "prompt_text": self.current_prompt_text or self.prompt_text,
@@ -144,13 +238,20 @@ class RealtimeExamSession:
     def decide_next_step(self, transcript: str, word_count: int) -> Dict[str, Any]:
         """Build FollowUpGraphState input directly from this session's held
         state and invoke the existing stateless text_followup_graph verbatim.
-        Returns the decision dict immediately; schedules the durable
-        archive/Kafka publish as a fire-and-forget background task rather
-        than awaiting it, so Path A never blocks on Path B.
+        Returns the decision dict; does NOT schedule the durable archive/Kafka
+        publish itself (see schedule_publish) -- this method is plain sync and
+        callers now run it via asyncio.to_thread (the LLM call inside
+        self.graph.invoke blocks otherwise), and schedule_publish's
+        asyncio.create_task requires a running event loop in the CURRENT
+        thread, which a to_thread worker thread does not have (confirmed
+        live: raises "RuntimeError: no running event loop"). Callers MUST call
+        schedule_publish themselves right after this returns, back on the
+        event loop thread -- see attempt_connection.py's _handle_turn_end.
         """
         current_turn = self._build_current_turn(transcript, word_count)
         state = {
             "answer_id": self.answer_id,
+            "exam_attempt_id": self.exam_attempt_id,
             "question": self.question,
             "turn_order": self.turn_order,
             "prompt_text": self.prompt_text,
@@ -182,17 +283,36 @@ class RealtimeExamSession:
                 self.current_prompt_text = next_prompt_text.strip()
         self.current_transcript = ""
 
-        self.schedule_publish(completed_turn_order, reason=decision.get("reason", ""))
-
         return decision
 
-    def schedule_publish(self, turn_order: int, reason: str = "") -> "asyncio.Task[None]":
-        """Fire-and-forget: never awaited by decide_next_step's caller. A
-        reference to the task is returned only so callers/tests that want to
-        await completion explicitly may do so; nothing in the normal flow
-        relies on awaiting it."""
+    def schedule_publish(
+        self,
+        turn_order: int,
+        reason: str = "",
+        *,
+        should_continue: bool = False,
+        next_prompt_text: Optional[str] = None,
+    ) -> "asyncio.Task[None]":
+        """Fire-and-forget: never awaited by the caller. A reference to the
+        task is returned only so callers/tests that want to await completion
+        explicitly may do so; nothing in the normal flow relies on awaiting
+        it. MUST be called from a coroutine running on the event loop (never
+        from inside asyncio.to_thread) -- see decide_next_step's docstring.
+
+        should_continue/next_prompt_text are persisted alongside reason (not
+        just used in-memory) so a later `resume` can reconstruct the exact
+        decision for this turn if the WS reply carrying it never reached the
+        client -- see attempt_connection.py's _handle_resume /
+        _recover_pending_decision."""
         return asyncio.create_task(
             turn_publisher.publish_turn_if_new(
-                self.archive_graph, self.answer_id, turn_order, reason=reason,
+                self.archive_graph,
+                self.answer_id,
+                turn_order,
+                reason=reason,
+                exam_attempt_id=self.exam_attempt_id,
+                active_prompt_text=self.current_prompt_text,
+                should_continue=should_continue,
+                next_prompt_text=next_prompt_text,
             )
         )

@@ -154,7 +154,13 @@ def get_current_user_from_request(request: Request, *, required: bool = True) ->
 
     token = _extract_bearer_token_from_request(request)
     if token:
-        user = build_current_user(token)
+        try:
+            user = build_current_user(token)
+        except HTTPException:
+            if required:
+                raise
+            return None
+
         request.state.current_user = user
         request.state.current_user_id = user.user_id
         set_current_user_context(user)

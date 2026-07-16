@@ -1,4 +1,11 @@
-"""Ties TTS -> avatar WebRTC playback together for one utterance (Phase 4 of
+"""Legacy avatar TTS/WebRTC scaffolding kept for possible future hosted-avatar work.
+
+These modules are not part of the live realtime flow today: nothing in the active exam path calls
+this file, and the remaining avatar WebRTC path stays disabled on the WPF side unless
+AppSettings.EnableAvatarWebRtc is turned back on. They remain here as a reference starting point
+if a future hosted avatar (for example Azure realtime avatar synthesis) is wired in.
+
+Ties TTS -> avatar WebRTC playback together for one utterance (Phase 4 of
 docs/realtime-self-hosted-avatar-plan.md, audio-only mode).
 
 Called by AttemptConnection whenever the avatar needs to say something: the question prompt at
@@ -28,7 +35,7 @@ import wave
 from pathlib import Path
 from typing import Dict, Optional
 
-from realtime import avatar_webrtc, tts_client
+from realtime._legacy_avatar import avatar_webrtc, tts_client
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +43,16 @@ AGENTS_DIR = Path(__file__).resolve().parent.parent.parent
 UTTERANCE_DIR = AGENTS_DIR / "var" / "avatar" / "utterances"
 
 # Margin added to each utterance's measured WAV duration before letting the next queued speak()
-# proceed, since the WAV's own duration doesn't account for the network bridge actually delivering
-# that audio to the listener.
-_PLAYBACK_MARGIN_SECONDS = 0.3
+# proceed AND before avatar_utterance_complete is sent (see attempt_connection.py) -- the WAV's
+# own duration doesn't account for the network bridge (WebRTC jitter buffer, decode/playback on
+# the WPF side) actually delivering that audio to the listener. Confirmed live: 0.3s was too
+# tight under real network conditions -- WPF opened the student's mic (on receiving
+# avatar_utterance_complete) before the student had actually finished hearing the question.
+# There's no true "playback ended" signal from the client to wait on instead (WebRTC audio is a
+# continuous stream with no utterance-boundary event), so this stays a conservative fixed margin
+# -- mirrors the 4s buffer ExamViewModel.cs already uses for the same "make sure audio really
+# finished" concern at exam completion.
+_PLAYBACK_MARGIN_SECONDS = 1.5
 
 # One lock per exam_attempt_id, never explicitly cleaned up -- each is a few bytes for the
 # attempt's lifetime, which is bounded by the process anyway (a fresh attempt_id per exam attempt,

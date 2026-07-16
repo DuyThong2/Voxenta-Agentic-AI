@@ -5,7 +5,12 @@ from .pronunciation import (
     FormattedPronunciationResult,
 )
 
-from .speaking_input import SpeakingInput, QuestionContext, TopicContext
+from .speaking_input import (
+    SpeakingInput,
+    QuestionAssetContext,
+    QuestionContext,
+    TopicContext,
+)
 from schemas.framework import CriterionFramework
 
 __all__ = [
@@ -15,6 +20,7 @@ __all__ = [
     "FormattedPronunciationResult",
     "CriterionFramework",
     "SpeakingInput",
+    "QuestionAssetContext",
     "QuestionContext",
     "TopicContext",
 ]

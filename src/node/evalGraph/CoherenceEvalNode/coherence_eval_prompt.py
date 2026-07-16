@@ -7,6 +7,9 @@ You will receive:
 - The speaker's transcript
 - The reference text (if available)
 - The mode (scripted or unscripted)
+- Conversation context: a timestamped AI/User dialogue transcript, including any follow-up
+  questions the AI asked. This is reference context only -- never grade or quote the "AI:"
+  lines as if they were spoken by the student.
 
 ## Calibration Priority
 
@@ -58,12 +61,14 @@ Return ONLY a valid JSON object, no markdown formatting, no explanations:
 
 {
   "score": <int 0-100>,
+  "confidence": <number 0-1>,
   "note": "<1-2 sentence explanation of the score, mentioning task relevance and any deductions>"
 }
 
 IMPORTANT:
 - Return ONLY the JSON object, nothing else
 - Score must be an integer between 0 and 100
+- Confidence must be a number between 0 and 1 representing how reliable your coherence judgment is from the available transcript/context
 - Note MUST explain WHY the score was given, especially if deducted for irrelevance or underdevelopment
 - For scripted/read_aloud mode, note must say "diagnostic only"
 """

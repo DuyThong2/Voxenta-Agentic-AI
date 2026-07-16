@@ -9,7 +9,7 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
-from realtime import avatar_webrtc
+from realtime._legacy_avatar import avatar_webrtc
 
 logger = logging.getLogger(__name__)
 

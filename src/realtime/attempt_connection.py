@@ -37,13 +37,12 @@ import asyncio
 import logging
 from typing import Any, Optional
 
-from fastapi import WebSocket
-
 from node.followUpDecisionGraph.constants import CLOSING_REPLY, EXAM_FAREWELL_TEXT
 from node.state_models import QuestionContext
-from realtime import turn_publisher
+from infra.database import archive_store
+from infra.realtime_socket import RealtimeSocket
 from realtime.session import RealtimeExamSession
-from realtime.voice_live_client import VoiceLiveClient, VoiceLiveServerEvent
+from infra.voice_live_client import VoiceLiveClient, VoiceLiveServerEvent
 
 logger = logging.getLogger(__name__)
 
@@ -54,9 +53,9 @@ class AttemptConnection:
     between questions) and routes incoming control messages/audio/VAD events
     to it."""
 
-    def __init__(self, *, exam_attempt_id: str, websocket: WebSocket, archive_graph: Any, text_followup_graph: Any) -> None:
+    def __init__(self, *, exam_attempt_id: str, socket: RealtimeSocket, archive_graph: Any, text_followup_graph: Any) -> None:
         self.exam_attempt_id = exam_attempt_id
-        self.websocket = websocket
+        self.socket = socket
         self.archive_graph = archive_graph
         self.text_followup_graph = text_followup_graph
         self.active_session: Optional[RealtimeExamSession] = None
@@ -81,7 +80,7 @@ class AttemptConnection:
             await self._handle_resume(message)
         elif message_type == "exam_end":
             self._speak(EXAM_FAREWELL_TEXT)
-            await self.websocket.send_json({"type": "exam_end_ack"})
+            await self.socket.send_json({"type": "exam_end_ack"})
         else:
             logger.warning(
                 "[attempt_connection] unknown message type=%s exam_attempt_id=%s",
@@ -118,7 +117,7 @@ class AttemptConnection:
         # resent by the client. Safe/idempotent: a genuinely new question
         # writes fresh values; the same question re-sent via question_start
         # (rather than resume) overwrites with identical values.
-        await turn_publisher.persist_question_snapshot(
+        await archive_store.persist_question_snapshot(
             self.archive_graph, answer_id,
             question=question, paper_item_id=paper_item_id,
             language=language, prompt_text=session_prompt_text,
@@ -129,7 +128,7 @@ class AttemptConnection:
         # answer-turns-recorded topic (which stays silent until a turn actually completes -- see
         # task/realtime-exam-flow-review.md). Unconditional/idempotent, same as
         # persist_question_snapshot above.
-        await turn_publisher.set_current_answer_id(self.archive_graph, self.exam_attempt_id, answer_id)
+        await archive_store.set_current_answer_id(self.archive_graph, self.exam_attempt_id, answer_id)
         # Unconditional: restores turn history + the pending follow-up
         # prompt from the durable archive if this answer_id already has some
         # (reconnect / pod restart mid-question on EKS); a no-op for a
@@ -140,7 +139,7 @@ class AttemptConnection:
             "[attempt_connection] question_start exam_attempt_id=%s answer_id=%s",
             self.exam_attempt_id, answer_id,
         )
-        await self.websocket.send_json({"type": "question_start_ack", "answer_id": answer_id})
+        await self.socket.send_json({"type": "question_start_ack", "answer_id": answer_id})
         # question_start only speaks the section-level lead-in (when this question starts a new
         # section). instruction_text and the question prompt are spoken via separate
         # present_question messages the WPF client sends afterwards -- with a deliberate pause and
@@ -187,9 +186,9 @@ class AttemptConnection:
         # better than the Speech SDK's re-transcription) -- see start_node_config.py.
         # is_last_allowed_turn is persisted here too so _recover_pending_decision can re-apply
         # WPF's MaxTurnsPerQuestion clamp correctly if this turn's decision has to be recomputed
-        # during a later resume (see turn_publisher.persist_realtime_transcript's docstring).
+        # during a later resume (see archive_store.persist_realtime_transcript's docstring).
         asyncio.create_task(
-            turn_publisher.persist_realtime_transcript(
+            archive_store.persist_realtime_transcript(
                 self.archive_graph, session.answer_id, session.turn_order, transcript,
                 is_last_allowed_turn=is_last_allowed_turn,
             )
@@ -228,7 +227,7 @@ class AttemptConnection:
             next_prompt_text=decision.get("next_prompt_text"),
         )
 
-        await self.websocket.send_json({
+        await self.socket.send_json({
             "type": "decision",
             "answer_id": session.answer_id,
             "decision": decision,
@@ -263,18 +262,12 @@ class AttemptConnection:
             session.turn_order if session else None,
             sequence, text,
         )
-        try:
-            await self.websocket.send_json({
-                "type": "speak",
-                "sequence": sequence,
-                "text": text or "",
-                "rate": "-20%" if slow else None,
-            })
-        except Exception:
-            logger.exception(
-                "[attempt_connection] failed to send speak exam_attempt_id=%s sequence=%d",
-                self.exam_attempt_id, sequence,
-            )
+        await self.socket.send_json({
+            "type": "speak",
+            "sequence": sequence,
+            "text": text or "",
+            "rate": "-20%" if slow else None,
+        })
 
     async def _handle_resume(self, message: dict) -> None:
         """Rebuilds self.active_session purely from the durable archive
@@ -325,7 +318,7 @@ class AttemptConnection:
         if recovered_decision is not None:
             ack_payload["recovered_turn_order"] = recovered_turn_order
             ack_payload["decision"] = recovered_decision
-        await self.websocket.send_json(ack_payload)
+        await self.socket.send_json(ack_payload)
 
         if recovered_decision is not None:
             # A recovered should_continue=False means the question actually finished --
@@ -352,7 +345,7 @@ class AttemptConnection:
         -- checked in this order:
 
         1. A turn_end whose transcript was durably captured
-           (turn_publisher.persist_realtime_transcript, called right before
+           (archive_store.persist_realtime_transcript, called right before
            the slow decide_next_step call in _handle_turn_end) but whose
            decision was never completed/persisted -- i.e. the connection
            dropped mid-LLM-call, before decide_next_step finished.
@@ -364,7 +357,7 @@ class AttemptConnection:
            would.
         2. The much more likely case: the turn completed and was persisted
            normally (decide_next_step doesn't depend on the client connection
-           at all -- only the final `await self.websocket.send_json(...)` in
+           at all -- only the final `await self.socket.send_json(...)` in
            _handle_turn_end does), but that reply itself never reached the
            client. Nothing needs recomputing here -- the answer is just the
            last entry in session.turns (already restored from the durable
@@ -374,7 +367,7 @@ class AttemptConnection:
         Returns (None, None) only if neither case has anything to offer (a
         genuinely fresh resume with nothing outstanding)."""
         pending_turn_order = session.turn_order
-        resume_state = await turn_publisher.get_resume_state(self.archive_graph, session.answer_id)
+        resume_state = await archive_store.get_resume_state(self.archive_graph, session.answer_id)
         pending_entry = None
         if resume_state is not None:
             transcripts = resume_state.get("realtime_transcripts") or []
@@ -442,13 +435,7 @@ class AttemptConnection:
         payload = {"type": event.kind}
         if event.text is not None:
             payload["text"] = event.text
-        try:
-            await self.websocket.send_json(payload)
-        except Exception:
-            logger.exception(
-                "[attempt_connection] failed to forward voice_live event=%s exam_attempt_id=%s",
-                event.kind, self.exam_attempt_id,
-            )
+        await self.socket.send_json(payload)
 
     async def close(self) -> None:
         """Best-effort local cleanup when the connection drops. Durable

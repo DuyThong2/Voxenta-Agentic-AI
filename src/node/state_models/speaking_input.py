@@ -93,7 +93,7 @@ class SpeakingInput(BaseModel):
     topic: Optional[TopicContext] = None
     answer_length_metrics: Optional[dict] = None
     asr_confidence: Optional[float] = None
-    # Live Voice-Live transcript for this turn (see turn_publisher.get_realtime_transcript),
+    # Live Voice-Live transcript for this turn (see archive_store.get_realtime_transcript),
     # when start_node's caller was able to fetch one -- preferred over re-transcribing
     # audio_path via the Azure Speech SDK when present (see start_node_config.py).
     realtime_transcript: Optional[str] = None

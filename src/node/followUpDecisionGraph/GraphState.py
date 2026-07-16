@@ -10,8 +10,8 @@ class FollowUpGraphState(TypedDict, total=False):
     # Attempt-scoped, not question-scoped like the rest of this state -- deliberately "borrowed"
     # onto the same archive_graph checkpointer (task/realtime-exam-flow-review.md), keyed by
     # exam_attempt_id as its own thread_id instead of answer_id. Written by
-    # turn_publisher.set_current_answer_id right when _handle_question_start fires (before any
-    # turn/decision exists for that question), read back by turn_publisher.get_current_answer_id
+    # archive_store.set_current_answer_id right when _handle_question_start fires (before any
+    # turn/decision exists for that question), read back by archive_store.get_current_answer_id
     # so a client that lost all local state (app fully closed, not just a WS reconnect) can ask
     # "which question was I on" without depending on Kafka's answer-turns-recorded topic, which
     # only fires after a turn completes and would otherwise be blind to a question that was
@@ -23,7 +23,7 @@ class FollowUpGraphState(TypedDict, total=False):
     paper_item_id: Optional[str]
     # question/language/prompt_text (below) are also, in archive_graph's
     # checkpoint specifically, the durable "question snapshot" persisted
-    # once by turn_publisher.persist_question_snapshot at question_start --
+    # once by archive_store.persist_question_snapshot at question_start --
     # read back by RealtimeExamSession.create_from_archive so a `resume` can
     # rebuild a full session from nothing but answer_id, with no question
     # data resent by the client.
@@ -35,7 +35,7 @@ class FollowUpGraphState(TypedDict, total=False):
     # Doubles as the decision graph's per-turn input AND (in archive_graph's
     # checkpoint specifically) the durably-persisted pending follow-up
     # prompt -- written by turn_publisher.publish_turn_if_new after each
-    # turn's decision, read back by turn_publisher.get_resume_state /
+    # turn's decision, read back by archive_store.get_resume_state /
     # RealtimeExamSession._apply_resume_state on reconnect. LastValue (no
     # reducer) -- each write simply overwrites the previous one, which is
     # exactly the "latest pending prompt" semantics wanted.
@@ -47,7 +47,7 @@ class FollowUpGraphState(TypedDict, total=False):
     # /turns/archive never carry decision_reason (that's only known in-memory
     # by RealtimeExamSession after decide_next_step runs), so it's persisted
     # here separately by turn_publisher.publish_turn_if_new and merged back
-    # onto the archived turns at resume time by turn_publisher.get_resume_state.
+    # onto the archived turns at resume time by archive_store.get_resume_state.
     decision_reasons: Annotated[List[Dict[str, Any]], add]
     # [{"turn_order": int, "text": str}, ...] -- the live Voice-Live (gpt-4o-mini-transcribe)
     # transcript captured during the exam itself (see attempt_connection.py's
@@ -55,7 +55,7 @@ class FollowUpGraphState(TypedDict, total=False):
     # it over re-transcribing the archived audio via the Azure Speech SDK -- Voice-Live
     # handles code-switched Vietnamese noticeably better (confirmed: it correctly transcribes
     # words the Speech SDK sometimes garbles into nonsense English, e.g. "banh MI" instead of
-    # "bánh mì"). See turn_publisher.persist_realtime_transcript / exam_consumer.py.
+    # "bánh mì"). See archive_store.persist_realtime_transcript / exam_consumer.py.
     realtime_transcripts: Annotated[List[Dict[str, Any]], add]
     signals: Dict[str, Any]
     edge_case_handled: bool

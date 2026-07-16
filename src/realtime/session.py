@@ -32,7 +32,8 @@ from typing import Any, Dict, List, Optional
 
 from node.followUpDecisionGraph.graphConfig import build_text_followup_graph
 from node.state_models import QuestionContext
-from realtime import turn_publisher
+from infra.database import archive_store
+from infra.message_broker.publishers import turn_publisher
 
 logger = logging.getLogger(__name__)
 
@@ -99,12 +100,12 @@ class RealtimeExamSession:
         client resending question_start or any question data at all: the
         question snapshot (question/paper_item_id/language/prompt_text) was
         durably persisted once, at question_start, by
-        turn_publisher.persist_question_snapshot; turn history/
+        archive_store.persist_question_snapshot; turn history/
         decision_reasons/the pending follow-up prompt are persisted per-turn
         by turn_publisher.publish_turn_if_new. Returns None if nothing was
         ever archived for this answer_id (nothing to resume -- callers
         should treat that as a resume that can't be honored, not a crash)."""
-        resume_state = await turn_publisher.get_resume_state(archive_graph, answer_id)
+        resume_state = await archive_store.get_resume_state(archive_graph, answer_id)
         if resume_state is None:
             return None
 
@@ -187,7 +188,7 @@ class RealtimeExamSession:
         self.current_transcript or the in-progress-utterance state -- a turn
         that was still being spoken when the connection dropped is genuinely
         lost and must be re-answered."""
-        resume_state = await turn_publisher.get_resume_state(self.archive_graph, self.answer_id)
+        resume_state = await archive_store.get_resume_state(self.archive_graph, self.answer_id)
         if resume_state is None or not resume_state.get("turns"):
             return
         self._apply_resume_state(resume_state)

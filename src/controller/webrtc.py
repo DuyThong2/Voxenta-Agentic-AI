@@ -3,287 +3,45 @@ WebRTC signaling + YOLO proctoring controller.
 
 Supports up to MAX_CONNECTIONS concurrent peer connections.
 Each connection has its own event log accessible via SSE or REST.
+
+Session bookkeeping, the alert decision policy, and the YOLO/aiortc
+frame-processing loop all live under infra/webrtc/ (proctoring_session.py,
+proctoring_alert_policy.py, proctoring_frame_processor.py, respectively) --
+grouped there by feature at explicit user direction, even though the alert
+policy is decision logic rather than pure infra relay; this file is just the
+thin FastAPI route surface over all three, and the one place that wires
+cleanup_session's on_cleanup hook to the policy module's clear_session (so
+proctoring_session.py itself never has to import proctoring_alert_policy).
 """
 
 import asyncio
 import json
 import logging
-import os
-import time
 import uuid
-from collections import defaultdict
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Set
 
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from ultralytics import YOLO
 
-from infra.alert_client import push_alert
-from realtime import gpu_scheduler
+from config.webrtc_config import settings
+from infra.webrtc import proctoring_alert_policy
+from infra.webrtc import proctoring_session
+from infra.webrtc.proctoring_frame_processor import process_video_track
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/webrtc", tags=["WebRTC"])
 
-# --------------- Configuration ---------------
-MAX_CONNECTIONS = int(os.getenv("WEBRTC_MAX_CONNECTIONS", "100"))
-YOLO_MODEL = os.getenv("YOLO_MODEL", "yolov8n.pt")
-FRAME_SKIP = int(os.getenv("YOLO_FRAME_SKIP", "10"))
-YOLO_CONFIDENCE = float(os.getenv("YOLO_CONFIDENCE", "0.5"))
-# Minimum seconds between repeated alerts of the same type for the same session, once that
-# alert type is already active -- without this, PERSON_MISSING/MULTIPLE_PERSONS fire on every
-# processed frame (every FRAME_SKIP frames) for as long as the condition holds, flooding SSE/logs/
-# the gRPC alert push with duplicates instead of one alert per actual state change.
-ALERT_COOLDOWN_SECONDS = float(os.getenv("PROCTORING_ALERT_COOLDOWN_SECONDS", "5"))
-# Consecutive processed frames a condition must hold before it's treated as real rather than
-# single-frame detector noise (e.g. YOLO confidence dipping just under YOLO_CONFIDENCE for one
-# frame while a person is genuinely on camera -- lighting/angle/motion blur). Without this,
-# _should_emit_alert's edge-trigger fires immediately on every such blip, since each 0<->1 flap
-# looks like a fresh state change.
-ALERT_STREAK_FRAMES = int(os.getenv("PROCTORING_ALERT_STREAK_FRAMES", "3"))
-
-# --------------- State ---------------
-pcs: Set[RTCPeerConnection] = set()
-# session_id -> RTCPeerConnection
-session_map: Dict[str, RTCPeerConnection] = {}
-# session_id -> list of events
-session_events: Dict[str, List[dict]] = defaultdict(list)
-# session_id -> set of SSE subscribers (asyncio.Queue)
-session_subscribers: Dict[str, Set[asyncio.Queue]] = defaultdict(set)
-# session_id -> set of alert types currently considered "active" (condition still holds)
-_active_alert_types: Dict[str, Set[str]] = defaultdict(set)
-# session_id -> {alert_type: monotonic time it was last emitted}
-_alert_last_emitted_at: Dict[str, Dict[str, float]] = defaultdict(dict)
-# session_id -> {alert_type: consecutive processed-frame count the condition has held}
-_condition_streak: Dict[str, Dict[str, int]] = defaultdict(dict)
-
-yolo_model = YOLO(YOLO_MODEL)
-_ALERT_TYPE_MAP = {
-    "PERSON_MISSING": "PERSON_MISSING",
-    "MULTIPLE_PERSONS": "MULTIPLE_PERSONS",
-}
+MAX_CONNECTIONS = settings.WEBRTC_MAX_CONNECTIONS
 
 
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+async def _cleanup_session(session_id: str) -> None:
+    await proctoring_session.cleanup_session(session_id, on_cleanup=proctoring_alert_policy.clear_session)
 
 
-def build_event(event_type: str, message: str, confidence: float = 0.9, **extra):
-    return {
-        "type": event_type,
-        "confidence": confidence,
-        "message": message,
-        "timestamp": utc_now(),
-        **extra,
-    }
-
-
-async def broadcast_event(session_id: str, event: dict):
-    """Push event to all SSE subscribers of a session."""
-    session_events[session_id].append(event)
-    for queue in session_subscribers.get(session_id, set()):
-        await queue.put(event)
-
-
-def _map_alert_type(event: dict) -> str:
-    if event.get("type") == "OBJECT_DETECTED":
-        return "PHONE_DETECTED" if event.get("object") == "cell phone" else "OBJECT_DETECTED"
-    return _ALERT_TYPE_MAP.get(str(event.get("type") or ""), str(event.get("type") or ""))
-
-
-def _should_emit_alert(session_id: str, alert_type: str) -> bool:
-    """Edge-triggered + cooldown gate: fires immediately the first time a condition
-    appears, then at most once per ALERT_COOLDOWN_SECONDS while it keeps holding."""
-    now = time.monotonic()
-    active = _active_alert_types[session_id]
-    last_emitted = _alert_last_emitted_at[session_id]
-
-    is_new = alert_type not in active
-    cooldown_elapsed = alert_type not in last_emitted or (now - last_emitted[alert_type]) >= ALERT_COOLDOWN_SECONDS
-
-    if not (is_new or cooldown_elapsed):
-        return False
-
-    active.add(alert_type)
-    last_emitted[alert_type] = now
-    return True
-
-
-def _clear_alert(session_id: str, alert_type: str) -> None:
-    """Condition no longer holds -- next occurrence is treated as a fresh edge, not
-    a continuation still waiting out the old cooldown."""
-    _active_alert_types[session_id].discard(alert_type)
-
-
-def _condition_confirmed(session_id: str, alert_type: str) -> bool:
-    """Hysteresis: increments the consecutive-frame streak for this condition and returns
-    True only once it has held for ALERT_STREAK_FRAMES processed frames in a row. Call
-    _reset_streak instead the moment the condition stops holding."""
-    streaks = _condition_streak[session_id]
-    streaks[alert_type] = streaks.get(alert_type, 0) + 1
-    return streaks[alert_type] >= ALERT_STREAK_FRAMES
-
-
-def _reset_streak(session_id: str, alert_type: str) -> None:
-    _condition_streak[session_id][alert_type] = 0
-
-
-def _schedule_alert(session_id: str, event: dict) -> None:
-    alert_type = _map_alert_type(event)
-    if not alert_type:
-        return
-
-    try:
-        asyncio.get_running_loop().create_task(
-            push_alert(
-                room_id=session_id,
-                participant_id=session_id,
-                stream_id=session_id,
-                alert_type=alert_type,
-                confidence=float(event.get("confidence") or 1.0),
-            )
-        )
-    except RuntimeError:
-        logger.warning("[PROCTORING] no running loop, skipping alert for session=%s", session_id)
-
-
-async def process_video_track(track, session_id: str):
-    """
-    Receive video frames from WebRTC, run YOLO detection,
-    store and broadcast proctoring events.
-    """
-    frame_count = 0
-
-    while True:
-        try:
-            frame = await track.recv()
-        except Exception as exc:
-            logger.info("[WEBRTC] Track ended for session %s: %s", session_id, exc)
-            break
-
-        frame_count += 1
-        if frame_count % FRAME_SKIP != 0:
-            continue
-
-        img = frame.to_ndarray(format="bgr24")
-
-        # Debug: check if frame is all black (all zeros)
-        if frame_count <= FRAME_SKIP * 3:
-            import numpy as np
-            mean_val = np.mean(img)
-            max_val = np.max(img)
-            non_zero = np.count_nonzero(img)
-            total = img.size
-            logger.info(
-                "[FRAME_DEBUG] session=%s frame=%d mean=%.2f max=%d non_zero=%d/%d (%.1f%%) "
-                "pts=%s time_base=%s format=%s size=%s",
-                session_id, frame_count, mean_val, max_val, non_zero, total,
-                100 * non_zero / total,
-                frame.pts, frame.time_base, frame.format.name, (frame.width, frame.height),
-            )
-
-        # Log frame info every 50 processed frames for debugging
-        if frame_count % (FRAME_SKIP * 5) == 0:
-            h, w = img.shape[:2]
-            logger.info(
-                "[YOLO_DEBUG] session=%s frame=%d size=%dx%d dtype=%s",
-                session_id, frame_count, w, h, img.dtype,
-            )
-
-        events = []
-        person_count = 0
-
-        try:
-            # Shares the GPU with realtime/avatar_renderer.py's LivePortrait/MuseTalk inference --
-            # see gpu_scheduler.py for why this needs to take turns rather than run concurrently.
-            async with gpu_scheduler.gpu_lock():
-                yolo_results = yolo_model(img, verbose=False)
-        except Exception as exc:
-            logger.warning("[YOLO_ERROR] session=%s: %s", session_id, exc)
-            continue
-
-        # Log all raw detections periodically
-        raw_detections = []
-        for result in yolo_results:
-            for box in result.boxes:
-                cls_id = int(box.cls[0])
-                confidence = float(box.conf[0])
-                label = yolo_model.names[cls_id]
-                raw_detections.append(f"{label}({confidence:.2f})")
-
-                if confidence < YOLO_CONFIDENCE:
-                    continue
-
-                if label == "person":
-                    person_count += 1
-
-                if label in ("cell phone", "book", "laptop", "keyboard", "mouse"):
-                    events.append(
-                        build_event(
-                            event_type="OBJECT_DETECTED",
-                            object=label,
-                            confidence=confidence,
-                            message=f"Phát hiện vật thể nghi vấn: {label}",
-                        )
-                    )
-
-        if frame_count % (FRAME_SKIP * 5) == 0:
-            logger.info(
-                "[YOLO_DEBUG] session=%s detections=%s person_count=%d",
-                session_id, raw_detections or "none", person_count,
-            )
-
-        if person_count == 0:
-            if _condition_confirmed(session_id, "PERSON_MISSING") and _should_emit_alert(session_id, "PERSON_MISSING"):
-                events.append(
-                    build_event(
-                        event_type="PERSON_MISSING",
-                        message="Không thấy người trong camera",
-                        confidence=0.9,
-                    )
-                )
-        else:
-            _reset_streak(session_id, "PERSON_MISSING")
-            _clear_alert(session_id, "PERSON_MISSING")
-
-        if person_count > 1:
-            if _condition_confirmed(session_id, "MULTIPLE_PERSONS") and _should_emit_alert(session_id, "MULTIPLE_PERSONS"):
-                events.append(
-                    build_event(
-                        event_type="MULTIPLE_PERSONS",
-                        message="Phát hiện nhiều hơn một người trong camera",
-                        confidence=0.9,
-                        person_count=person_count,
-                    )
-                )
-        else:
-            _reset_streak(session_id, "MULTIPLE_PERSONS")
-            _clear_alert(session_id, "MULTIPLE_PERSONS")
-
-        for event in events:
-            await broadcast_event(session_id, event)
-            logger.info("[PROCTORING] session=%s %s", session_id, json.dumps(event, ensure_ascii=False))
-            _schedule_alert(session_id, event)
-
-
-async def cleanup_session(session_id: str):
-    """Clean up a session's peer connection and resources."""
-    pc = session_map.pop(session_id, None)
-    if pc:
-        await pc.close()
-        pcs.discard(pc)
-
-    # Notify SSE subscribers that session ended
-    for queue in session_subscribers.get(session_id, set()):
-        await queue.put({"type": "SESSION_ENDED", "timestamp": utc_now()})
-    session_subscribers.pop(session_id, None)
-    _active_alert_types.pop(session_id, None)
-    _alert_last_emitted_at.pop(session_id, None)
-    _condition_streak.pop(session_id, None)
-
-    logger.info("[WEBRTC] Session %s cleaned up. Active: %d", session_id, len(pcs))
+async def close_all_connections():
+    """Called on app shutdown to clean up all peer connections."""
+    await proctoring_session.close_all_connections(on_cleanup=proctoring_alert_policy.clear_session)
 
 
 # --------------- REST Endpoints ---------------
@@ -294,12 +52,12 @@ async def offer(request: Request):
     WebRTC signaling: browser sends SDP offer, server returns SDP answer.
     Creates a new proctoring session with YOLO video analysis.
     """
-    if len(pcs) >= MAX_CONNECTIONS:
+    if len(proctoring_session.pcs) >= MAX_CONNECTIONS:
         return JSONResponse(
             status_code=503,
             content={
                 "error": f"Max connections ({MAX_CONNECTIONS}) reached. Try again later.",
-                "active_connections": len(pcs),
+                "active_connections": len(proctoring_session.pcs),
             },
         )
 
@@ -313,14 +71,14 @@ async def offer(request: Request):
 
     session_id = str(params.get("exam_attempt_id") or uuid.uuid4())
     pc = RTCPeerConnection()
-    pcs.add(pc)
-    session_map[session_id] = pc
+    proctoring_session.pcs.add(pc)
+    proctoring_session.session_map[session_id] = pc
 
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
         logger.info("[WEBRTC] Session %s state: %s", session_id, pc.connectionState)
         if pc.connectionState in ("failed", "closed", "disconnected"):
-            await cleanup_session(session_id)
+            await _cleanup_session(session_id)
 
     @pc.on("track")
     def on_track(track):
@@ -348,19 +106,19 @@ async def offer(request: Request):
 def active_connections():
     """Return count and list of active sessions."""
     return {
-        "active_connections": len(pcs),
+        "active_connections": len(proctoring_session.pcs),
         "max_connections": MAX_CONNECTIONS,
-        "sessions": list(session_map.keys()),
+        "sessions": list(proctoring_session.session_map.keys()),
     }
 
 
 @router.get("/connections/{session_id}/events")
 def get_session_events(session_id: str, limit: int = 100):
     """Get stored proctoring events for a session."""
-    if session_id not in session_map and session_id not in session_events:
+    if session_id not in proctoring_session.session_map and session_id not in proctoring_session.session_events:
         return JSONResponse(status_code=404, content={"error": "Session not found"})
 
-    events = session_events.get(session_id, [])
+    events = proctoring_session.session_events.get(session_id, [])
     return {
         "session_id": session_id,
         "total": len(events),
@@ -374,16 +132,16 @@ async def stream_session_events(session_id: str):
     SSE endpoint: stream proctoring events in real-time.
     Client should use EventSource to connect.
     """
-    if session_id not in session_map and session_id not in session_events:
+    if session_id not in proctoring_session.session_map and session_id not in proctoring_session.session_events:
         return JSONResponse(status_code=404, content={"error": "Session not found"})
 
     queue: asyncio.Queue = asyncio.Queue()
-    session_subscribers[session_id].add(queue)
+    proctoring_session.session_subscribers[session_id].add(queue)
 
     async def event_generator():
         try:
             # Send existing events first
-            for event in session_events.get(session_id, []):
+            for event in proctoring_session.session_events.get(session_id, []):
                 yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
             # Stream new events
@@ -395,9 +153,9 @@ async def stream_session_events(session_id: str):
                         break
                 except asyncio.TimeoutError:
                     # Send keepalive
-                    yield f": keepalive {utc_now()}\n\n"
+                    yield f": keepalive {proctoring_session.utc_now()}\n\n"
         finally:
-            session_subscribers[session_id].discard(queue)
+            proctoring_session.session_subscribers[session_id].discard(queue)
 
     return StreamingResponse(
         event_generator(),
@@ -413,18 +171,8 @@ async def stream_session_events(session_id: str):
 @router.delete("/connections/{session_id}")
 async def disconnect_session(session_id: str):
     """Force disconnect a session."""
-    if session_id not in session_map:
+    if session_id not in proctoring_session.session_map:
         return JSONResponse(status_code=404, content={"error": "Session not found"})
 
-    await cleanup_session(session_id)
+    await _cleanup_session(session_id)
     return {"status": "disconnected", "session_id": session_id}
-
-
-# --------------- Lifecycle helpers ---------------
-
-async def close_all_connections():
-    """Called on app shutdown to clean up all peer connections."""
-    logger.info("[WEBRTC] Closing %d active connections...", len(pcs))
-    for session_id in list(session_map.keys()):
-        await cleanup_session(session_id)
-    logger.info("[WEBRTC] All connections closed.")

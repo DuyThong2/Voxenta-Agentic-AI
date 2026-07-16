@@ -61,7 +61,7 @@ setup_langsmith()
 
 from controller import router
 from controller.webrtc import close_all_connections
-from realtime.avatar_webrtc import close_all_connections as close_all_avatar_connections
+from realtime._legacy_avatar.avatar_webrtc import close_all_connections as close_all_avatar_connections
 from node.followUpDecisionGraph.graphConfig import build_archive_graph, build_text_followup_graph
 from node.evalGraph.graphConfig import build_graph
 from config.postgresDB_config import settings as pg_settings

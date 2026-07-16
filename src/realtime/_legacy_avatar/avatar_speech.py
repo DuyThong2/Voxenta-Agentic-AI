@@ -1,4 +1,11 @@
-"""Ties TTS -> avatar WebRTC playback together for one utterance (Phase 4 of
+"""Legacy avatar TTS/WebRTC scaffolding kept for possible future hosted-avatar work.
+
+These modules are not part of the live realtime flow today: nothing in the active exam path calls
+this file, and the remaining avatar WebRTC path stays disabled on the WPF side unless
+AppSettings.EnableAvatarWebRtc is turned back on. They remain here as a reference starting point
+if a future hosted avatar (for example Azure realtime avatar synthesis) is wired in.
+
+Ties TTS -> avatar WebRTC playback together for one utterance (Phase 4 of
 docs/realtime-self-hosted-avatar-plan.md, audio-only mode).
 
 Called by AttemptConnection whenever the avatar needs to say something: the question prompt at
@@ -28,7 +35,7 @@ import wave
 from pathlib import Path
 from typing import Dict, Optional
 
-from realtime import avatar_webrtc, tts_client
+from realtime._legacy_avatar import avatar_webrtc, tts_client
 
 logger = logging.getLogger(__name__)
 

@@ -40,7 +40,7 @@ from node.evalGraph.GrammarEvalNode.grammar_eval_node_config import grammar_eval
 from node.evalGraph.LexicalEvalNode.lexical_eval_node_config import lexical_eval_node
 from node.state_models import QuestionAssetContext, QuestionContext, SpeakingInput, TopicContext
 from node.state_models.pronunciation import FormattedPronunciationResult
-from realtime import turn_publisher
+from infra.database import archive_store
 from schemas.enums import SpeakingMode
 from utils.speech_client import unwrap_language_tags
 
@@ -194,7 +194,7 @@ async def _evaluate_turn(
 ) -> Dict[str, Any]:
     local_audio_path = await download_from_s3_async(turn.audio_ref)
     try:
-        realtime_transcript = await turn_publisher.get_realtime_transcript(
+        realtime_transcript = await archive_store.get_realtime_transcript(
             archive_graph, request_event.answer_id, turn.turn_order,
         )
         initial_state = _build_initial_state(

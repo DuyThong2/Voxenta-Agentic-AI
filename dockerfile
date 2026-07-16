@@ -9,6 +9,7 @@ WORKDIR /app
 # Chỉ giữ system deps tối thiểu (SSL, cert)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
+    ffmpeg \
  && rm -rf /var/lib/apt/lists/*
 
 # Cài uv

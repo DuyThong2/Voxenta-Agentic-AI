@@ -12,6 +12,7 @@ from node.state_models import (
     PhonemeFeedback,
 )
 from schemas.enums import ScoreColor, SpeakingMode
+from schemas.framework import CriterionFramework
 from schemas.scoring import CriteriaScores, CriterionScore
 
 
@@ -35,7 +36,7 @@ def round_score(score: Optional[float]) -> Optional[float]:
     return round(float(score), 1)
 
 
-def get_lowest_phoneme_score(phonemes: List[PhonemeFeedback]) -> Optional[float]:
+def get_average_phoneme_score(phonemes: List[PhonemeFeedback]) -> Optional[float]:
     scores = [
         phoneme.accuracy_score
         for phoneme in phonemes
@@ -45,32 +46,34 @@ def get_lowest_phoneme_score(phonemes: List[PhonemeFeedback]) -> Optional[float]
     if not scores:
         return None
 
-    return min(scores)
+    return sum(scores) / len(scores)
 
 
 def get_effective_word_score(word: WordFeedback) -> Optional[float]:
     """
-    Azure word score can sometimes look high even when one phoneme is very weak.
-    For frontend warning, use the lowest score between word score and phoneme score.
+    Blend the word-level Azure score with the average across all of its
+    phonemes, so one weak phoneme pulls the word's color down proportionally
+    instead of single-handedly forcing it (worst-case min()), while the
+    other, fine phonemes still count too.
 
-    Examples:
-    - word bus = 94, phoneme /s/ = 0 -> effective score = 0
-    - word school = Omission -> effective score = 0
+    Example: word "student" = 94, phonemes average ~90 (one weak /s/=54
+    among several 88-100s) -> effective score ~92, not dragged all the way
+    down to 54.
     """
 
     if word.error_type in ["Omission", "Insertion"]:
         return 0
 
     word_score = word.accuracy_score
-    lowest_phoneme = get_lowest_phoneme_score(word.phonemes)
+    avg_phoneme = get_average_phoneme_score(word.phonemes)
 
     if word_score is None:
-        return lowest_phoneme
+        return avg_phoneme
 
-    if lowest_phoneme is None:
+    if avg_phoneme is None:
         return word_score
 
-    return min(word_score, lowest_phoneme)
+    return (word_score + avg_phoneme) / 2
 
 
 def explain_error_type(error_type: Optional[str]) -> str:
@@ -204,7 +207,52 @@ def build_correction_summary(words: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def build_criteria_scores(result: PronunciationAssessmentResult) -> CriteriaScores:
+def find_band_for_score(framework: CriterionFramework, score: Optional[float]) -> Optional[Any]:
+    if score is None:
+        return None
+    for band in sorted(framework.bands, key=lambda b: b.score_min):
+        if band.score_min <= score <= band.score_max:
+            return band
+    return None
+
+
+def build_pronunciation_framework_note(
+    criteria_frameworks: Optional[List[CriterionFramework]],
+    score: Optional[float],
+) -> Optional[str]:
+    """Look up the "pronunciation" scoring framework (if the exam has one) and
+    describe which band the Azure score falls into. Pronunciation has no LLM
+    step (unlike grammar/lexical/coherence), so the framework's band
+    descriptor/signals are attached directly to the CriterionScore note here
+    instead of being fed into a prompt.
+    """
+    framework = next(
+        (cf for cf in (criteria_frameworks or []) if cf.criterion_key == "pronunciation"),
+        None,
+    )
+    if framework is None:
+        return None
+
+    band = find_band_for_score(framework, score)
+    if band is None:
+        return None
+
+    note = f"Matches framework band {band.code}"
+    if band.label:
+        note += f" ({band.label})"
+    if band.descriptor:
+        note += f": {band.descriptor}"
+    if band.positive_signals:
+        note += f" Positive signals: {', '.join(band.positive_signals)}."
+    if band.negative_signals:
+        note += f" Negative signals: {', '.join(band.negative_signals)}."
+    return note
+
+
+def build_criteria_scores(
+    result: PronunciationAssessmentResult,
+    criteria_frameworks: Optional[List[CriterionFramework]] = None,
+) -> CriteriaScores:
     """
     Build CriteriaScores aligned with schemas.scoring.CriteriaScores:
     pronunciation, fluency, grammar, vocabulary, coherence.
@@ -216,14 +264,17 @@ def build_criteria_scores(result: PronunciationAssessmentResult) -> CriteriaScor
     - grammar: LLM (added by grammar_eval_node)
     """
 
+    pronunciation_score = round_score(result.pron_score or result.accuracy_score)
+    framework_note = build_pronunciation_framework_note(criteria_frameworks, pronunciation_score)
+
     return CriteriaScores(
         pronunciation=CriterionScore(
-            score=round_score(result.pron_score or result.accuracy_score),
+            score=pronunciation_score,
             subscores={
                 "accuracy": round_score(result.accuracy_score),
                 "prosody": round_score(result.prosody_score),
             },
-            note="Based on pronunciation accuracy and prosody from speech assessment.",
+            note=framework_note or "Based on pronunciation accuracy and prosody from speech assessment.",
         ),
         fluency=CriterionScore(
             score=round_score(result.fluency_score),
@@ -250,6 +301,7 @@ def format_pronunciation_api_response(
     mode: str,
     reference_text: Optional[str] = None,
     include_raw: bool = False,
+    criteria_frameworks: Optional[List[CriterionFramework]] = None,
 ) -> FormattedPronunciationResult:
     """
     Format pronunciation result for frontend.
@@ -284,7 +336,7 @@ def format_pronunciation_api_response(
                 else None
             ),
         },
-        "criteria": build_criteria_scores(result),
+        "criteria": build_criteria_scores(result, criteria_frameworks),
         "correction_summary": build_correction_summary(words),
         "word_feedback": words,
         "notes": [

@@ -6,6 +6,8 @@ from schemas.common import _CamelMessage
 
 class AnswerTurnPayload(_CamelMessage):
     answer_id: Optional[str] = None
+    session_id: Optional[str] = None
+    paper_item_id: Optional[str] = None
     turn_order: int
     turn_type: Optional[str] = None
     prompt_text: Optional[str] = None

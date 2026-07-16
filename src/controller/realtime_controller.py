@@ -13,11 +13,12 @@ control protocol (question_start/turn_end/resume) plus the VAD/transcript
 events AttemptConnection forwards back out.
 """
 
-import json
 import logging
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 
+from infra.database import archive_store
+from infra.realtime_socket import RealtimeSocket
 from realtime.attempt_connection import AttemptConnection
 
 logger = logging.getLogger(__name__)
@@ -25,13 +26,26 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/realtime", tags=["Realtime"])
 
 
+@router.get("/attempts/{exam_attempt_id}/current-answer")
+async def get_current_answer(request: Request, exam_attempt_id: str):
+    """Which answer_id (question) exam_attempt_id was last on, per
+    archive_store.set_current_answer_id -- for a client that lost all local state (full app
+    close, not just a WS reconnect) to find out where to resume before it even opens the realtime
+    WebSocket. answer_id is null if this attempt never started any question yet (see
+    task/realtime-exam-flow-review.md for why this doesn't rely on Kafka's
+    answer-turns-recorded topic)."""
+    answer_id = await archive_store.get_current_answer_id(request.app.state.archive_graph, exam_attempt_id)
+    return {"answer_id": answer_id}
+
+
 @router.websocket("/attempts/{exam_attempt_id}")
 async def realtime_attempt_socket(websocket: WebSocket, exam_attempt_id: str):
-    await websocket.accept()
+    socket = RealtimeSocket(websocket)
+    await socket.accept()
 
     connection = AttemptConnection(
         exam_attempt_id=exam_attempt_id,
-        websocket=websocket,
+        socket=socket,
         archive_graph=websocket.app.state.archive_graph,
         text_followup_graph=websocket.app.state.text_followup_graph,
     )
@@ -40,28 +54,19 @@ async def realtime_attempt_socket(websocket: WebSocket, exam_attempt_id: str):
         await connection.start()
     except Exception:
         logger.exception("[realtime] failed to start Voice Live session exam_attempt_id=%s", exam_attempt_id)
-        await websocket.send_json({"type": "error", "text": "voice_live_start_failed"})
-        await websocket.close(code=1011)
+        await socket.send_json({"type": "error", "text": "voice_live_start_failed"})
+        await socket.close(code=1011)
         return
 
     logger.info("[realtime] connection opened exam_attempt_id=%s", exam_attempt_id)
 
     try:
-        while True:
-            message = await websocket.receive()
-            if message["type"] == "websocket.disconnect":
-                raise WebSocketDisconnect(message.get("code", 1000), message.get("reason"))
-
+        async for kind, payload in socket.iter_frames():
             try:
-                if message.get("bytes") is not None:
-                    await connection.handle_audio_frame(message["bytes"])
-                    continue
-
-                text = message.get("text")
-                if text is None:
-                    continue
-                parsed = json.loads(text)
-                await connection.handle_message(parsed)
+                if kind == "audio":
+                    await connection.handle_audio_frame(payload)
+                else:
+                    await connection.handle_message(payload)
             except Exception:
                 logger.exception(
                     "[realtime] error handling message exam_attempt_id=%s",

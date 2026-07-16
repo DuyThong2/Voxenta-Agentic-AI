@@ -38,7 +38,13 @@ Judge grammar based on form and clarity, not whether the answer is on-topic.
 
 - accuracy (0-100): correctness of grammar
 
-### 4. Calibration Notes
+### 4. Code-Switching (Non-English Words)
+This is an English speaking exam. If the transcript contains Vietnamese words/phrases mixed into the answer (visible directly in the text, or via a "Code-switching ratio" metric above), that portion cannot be assessed as English grammar and represents a real language-accuracy gap for this exam.
+- Do not simply ignore or skip over non-English segments when judging grammar.
+- Penalize accuracy proportionally to how much of the answer is non-English: a word or two mixed into an otherwise fluent English answer is a minor deduction; entire clauses/sentences in Vietnamese should push accuracy well below what it would otherwise be.
+- Note the code-switching explicitly in your note when it affects the score.
+
+### 5. Calibration Notes
 - Simple but correct sentence in an easy short answer: grammar should be 85-100.
 - Simple but correct sentence in a medium description/opinion: accuracy high, range lower, overall around 60-80.
 - Simple but correct sentence in a hard opinion question that is off-topic: accuracy should still be high and range moderate; overall may be 60-80.
@@ -50,6 +56,7 @@ Return ONLY a valid JSON object, no markdown formatting, no explanations:
 
 {
   "score": <int 0-100>,
+  "confidence": <number 0-1>,
   "subscores": {
     "range": <int 0-100>,
     "accuracy": <int 0-100>
@@ -60,6 +67,7 @@ Return ONLY a valid JSON object, no markdown formatting, no explanations:
 IMPORTANT:
 - Return ONLY the JSON object, nothing else
 - All scores must be integers between 0 and 100
+- Confidence must be a number between 0 and 1 representing how reliable your grammar judgment is from the available transcript
 - Note MUST explain WHY the score was given
 - For scripted/read_aloud mode, note must say "diagnostic only"
 """

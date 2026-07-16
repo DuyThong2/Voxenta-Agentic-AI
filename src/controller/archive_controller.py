@@ -1,9 +1,10 @@
+import asyncio
 import os
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 
-from infra.storage.audio_storage import download_from_s3
+from infra.storage.audio_storage import download_from_s3_async
 from node.state_models import QuestionContext
 
 router = APIRouter(prefix="/turns", tags=["Archive"])
@@ -20,6 +21,7 @@ async def archive_turn(
     request: Request,
     audio_ref: str = Form(...),
     answer_id: str = Form(...),
+    paper_item_id: str | None = Form(default=None),
     turn_order: int = Form(...),
     prompt_text: str | None = Form(default=None),
     language: str = Form(default="en-US"),
@@ -31,14 +33,20 @@ async def archive_turn(
     No decision logic here — /v1/chat/completions is the only decision-maker
     now (see docs/single-decision-source-plan.md).
     """
-    local_audio_path = download_from_s3(audio_ref)
+    local_audio_path = await download_from_s3_async(audio_ref)
 
     graph = request.app.state.archive_graph
     try:
-        result = graph.invoke(
+        # graph.invoke (sync) not .ainvoke -- archive_graph is compiled with the
+        # sync PostgresSaver checkpointer (app.py), whose aget_tuple raises
+        # NotImplementedError. Running the sync call in a thread keeps this
+        # route non-blocking without needing an async checkpointer.
+        result = await asyncio.to_thread(
+            graph.invoke,
             {
                 "answer_id": answer_id,
                 "audio_ref": audio_ref,
+                "paper_item_id": paper_item_id,
                 "question": _parse_question_payload(question),
                 "language": language,
                 "audio_path": local_audio_path,

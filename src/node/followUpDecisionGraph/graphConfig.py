@@ -1,5 +1,6 @@
 import logging
 import wave
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -19,6 +20,17 @@ from utils.text_utils import word_count
 from utils.speech_client import transcribe
 
 logger = logging.getLogger(__name__)
+
+# transcribe() runs Azure's continuous speech recognition, which needs timely GIL access for its
+# recognized/canceled callbacks. Running it in a thread (the transcribe_turn_node docstring below
+# explains why this whole node stays sync) still shares the GIL with this same process's YOLO
+# proctoring inference (controller/webrtc.py) -- confirmed by testing: identical audio that failed
+# with zero recognized segments during a live exam (YOLO + avatar rendering running concurrently)
+# transcribed correctly in isolation. A real OS process, not just a thread, is the only way to
+# fully escape that GIL contention. transcribe()'s inputs (a file path, a language string) and
+# output (a plain string) are trivially picklable, so this is a surgical fix -- only the
+# transcription call moves to another process, not the whole archive graph/checkpointer.
+_transcribe_pool = ProcessPoolExecutor(max_workers=2)
 
 
 def _state_without_turns(state: FollowUpGraphState) -> Dict[str, Any]:
@@ -42,14 +54,20 @@ def _wav_duration_seconds(audio_path: str) -> Optional[int]:
 
 
 def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
+    """Sync on purpose: archive_graph is compiled with the sync PostgresSaver
+    checkpointer (see app.py), which only supports sync .invoke() -- LangGraph's
+    sync execution path raises RuntimeError for any async def node. The
+    archive_controller route stays non-blocking by running graph.invoke(...)
+    itself inside asyncio.to_thread(...), not by making this node async."""
     audio_path = state.get("audio_path")
     if not audio_path:
         return {**_state_without_turns(state), "status": "error", "error": "audio_path is required"}
 
-    transcript = transcribe(audio_path, state.get("language", "en-US")) or ""
+    transcript = _transcribe_pool.submit(transcribe, audio_path, state.get("language", "en-US")).result() or ""
 
     current_turn = {
         "answer_id": state.get("answer_id"),
+        "paper_item_id": state.get("paper_item_id"),
         "turn_order": state["turn_order"],
         "turn_type": "MAIN" if state["turn_order"] == 1 else "FOLLOWUP",
         "prompt_text": state.get("prompt_text"),
@@ -97,12 +115,37 @@ def route_on_error(state: FollowUpGraphState) -> str:
     return "continue"
 
 
-def route_after_repeat_recovery(state: FollowUpGraphState) -> str:
-    if state.get("status") == "error":
-        return "end"
-    if state.get("edge_case_handled"):
-        return "end"
-    return "continue"
+def merge_decision_node(state: FollowUpGraphState) -> Dict[str, Any]:
+    use_repeat_recovery = bool(state.get("repeat_recovery_edge_case_handled"))
+    final_decision = (
+        state.get("repeat_recovery_decision")
+        if use_repeat_recovery
+        else state.get("followup_decision_result")
+    )
+    final_error = (
+        state.get("repeat_recovery_error")
+        if use_repeat_recovery
+        else state.get("followup_decision_error")
+    )
+
+    if final_decision is None:
+        final_decision = state.get("followup_decision_result") or state.get("repeat_recovery_decision") or {
+            "should_continue": False,
+            "next_prompt_text": None,
+            "reason": "decision_fallback",
+        }
+        final_error = (
+            final_error
+            or state.get("followup_decision_error")
+            or state.get("repeat_recovery_error")
+            or "No decision produced by follow-up graph"
+        )
+
+    return {
+        "decision": final_decision,
+        "status": "completed",
+        "error": final_error,
+    }
 
 
 def build_archive_graph(checkpointer):
@@ -139,17 +182,13 @@ def build_text_followup_graph():
     g.add_node("prepare_turn_signals", prepare_turn_signals_node)
     g.add_node("repeat_recovery", repeat_recovery_node)
     g.add_node("followup_decision", followup_decision_node)
+    g.add_node("merge_decision", merge_decision_node)
 
     g.add_edge(START, "prepare_turn_signals")
     g.add_edge("prepare_turn_signals", "repeat_recovery")
-    g.add_conditional_edges(
-        "repeat_recovery",
-        route_after_repeat_recovery,
-        {
-            "end": END,
-            "continue": "followup_decision",
-        },
-    )
-    g.add_edge("followup_decision", END)
+    g.add_edge("prepare_turn_signals", "followup_decision")
+    g.add_edge("repeat_recovery", "merge_decision")
+    g.add_edge("followup_decision", "merge_decision")
+    g.add_edge("merge_decision", END)
 
     return g.compile()

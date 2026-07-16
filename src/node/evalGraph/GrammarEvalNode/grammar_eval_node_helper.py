@@ -9,6 +9,7 @@ Transcript priority: transcribed_text > corrected_transcript > reference_text (f
 """
 
 import json
+import logging
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from langchain_openai import ChatOpenAI
@@ -18,11 +19,55 @@ from node.state_models import SpeakingInput
 from schemas.enums import SpeakingMode
 from schemas.scoring import CriterionScore
 
+logger = logging.getLogger(__name__)
+
+
+def _format_asset_context(speaking_input: SpeakingInput) -> list[str]:
+    q = speaking_input.question
+    if not q or not q.asset:
+        return []
+
+    asset = q.asset
+    parts = ["\n## Question Asset"]
+    if asset.type:
+        parts.append(f"Asset type: {asset.type}")
+    if asset.transcript:
+        parts.append(f"Asset transcript: {asset.transcript}")
+    elif asset.description:
+        parts.append(f"Asset description: {asset.description}")
+    elif asset.alt_text:
+        parts.append(f"Asset alt text: {asset.alt_text}")
+    if asset.transcript or asset.description or asset.alt_text:
+        parts.append(
+            "(Note: this is objective/factual information about the asset's content, "
+            "NOT a model answer or the single correct interpretation. If the question "
+            "asks the student to describe feelings, meaning, or their opinion about the "
+            "asset, a DIFFERENT interpretation than what's described above is still VALID "
+            "as long as it genuinely engages with the asset's actual content and is "
+            "reasonably argued -- do not mark it off-topic or incorrect just because it "
+            "diverges from this description.)"
+        )
+    return parts
+
+
+def _parse_confidence(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return None
+
 
 def select_text_for_language_scoring(
     speaking_input: SpeakingInput,
 ) -> Tuple[Optional[str], str]:
     """Pick the best transcript for LLM-based language scoring.
+
+    conversation_transcript (the timestamped AI/User dialogue) is deliberately
+    never selected here -- it includes the AI's own prompt/follow-up text,
+    which would inflate this student-only assessment. Only CoherenceEvalNode
+    adds conversation_transcript back in, as separate additional context.
 
     Returns:
         (text, source) where source is one of:
@@ -113,6 +158,7 @@ def build_question_context(speaking_input: SpeakingInput) -> str:
             parts.append(f"Scoring hints: {g.scoring_hints}")
         if g.common_mistakes:
             parts.append(f"Common mistakes for this question (supporting context, not exhaustive): {g.common_mistakes}")
+    parts.extend(_format_asset_context(speaking_input))
 
     return "\n".join(parts) if parts else "No question context provided."
 
@@ -174,53 +220,67 @@ def call_llm(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
     return json.loads(content)
 
 
-def merge_criterion(pronunciation_result: Any, criterion_key: str, llm_response: Dict[str, Any]) -> Any:
-    """Merge LLM score into pronunciation_result.criteria.<criterion_key>."""
-    criterion = CriterionScore(
-        score=llm_response["score"],
-        subscores=llm_response.get("subscores", {}),
-        note=llm_response.get("note", "Evaluated by LLM based on transcript analysis."),
-    )
-    setattr(pronunciation_result.criteria, criterion_key, criterion)
-    return pronunciation_result
-
-
 def run_eval_node(
     state: Dict[str, Any],
-    criterion_key: str,
     system_prompt: str,
-    build_user_prompt_fn: Callable[[SpeakingInput, str], str],
+    build_user_prompt_fn: Callable[[SpeakingInput, str, Optional[Dict[str, Any]]], str],
     node_name: str,
+    result_key: str,
+    confidence_key: str,
 ) -> Dict[str, Any]:
-    """Run the grammar eval node: guards, transcript selection, LLM call, merge, error handling."""
+    """Run the grammar eval node: guards, transcript selection, LLM call, error handling.
+
+    Runs in PARALLEL with coherence_eval/lexical_eval/pronunciation_eval (see
+    graphConfig.build_graph) -- returns ONLY its own dedicated result_key plus a
+    namespaced metadata error flag ("<node_name>_error"), never the shared
+    pronunciation_result/status/error keys, so LangGraph's concurrent-branch
+    state merge never conflicts with the other nodes running alongside it.
+    merge_scores_node is what checks each "<node_name>_error" key and combines
+    the four result keys back into one pronunciation_result.criteria.
+    """
     speaking_input = state.get("speaking_input")
-    pronunciation_result = state.get("pronunciation_result")
+    answer_id = getattr(speaking_input, "answer_id", None)
+    turn_order = (state.get("metadata") or {}).get("turn_order")
+    error_meta_key = f"{node_name}_error"
 
     if speaking_input is None:
-        return {**state, "status": "error", "error": f"speaking_input is required for {node_name}_eval_node"}
-
-    if pronunciation_result is None:
-        return {**state, "status": "error", "error": "pronunciation_result is required. Run pronunciation_eval first."}
+        return {"metadata": {error_meta_key: f"speaking_input is required for {node_name}_eval_node"}}
 
     transcript, source = select_text_for_language_scoring(speaking_input)
 
     if transcript is None:
-        return {**state, "status": "error", "error": f"No transcript available for {node_name} evaluation"}
+        return {"metadata": {error_meta_key: f"No transcript available for {node_name} evaluation"}}
 
     scoring_meta = build_scoring_metadata(source, speaking_input.mode)
+    metrics = state.get("answer_length_metrics")
+
+    logger.info("[eval:%s] calling LLM answer_id=%s turn=%s", node_name, answer_id, turn_order)
 
     try:
-        user_prompt = build_user_prompt_fn(speaking_input, transcript)
+        user_prompt = build_user_prompt_fn(speaking_input, transcript, metrics)
         llm_response = call_llm(system_prompt, user_prompt)
-        updated_result = merge_criterion(pronunciation_result, criterion_key, llm_response)
+        criterion = CriterionScore(
+            score=llm_response["score"],
+            subscores=llm_response.get("subscores", {}),
+            note=llm_response.get("note", "Evaluated by LLM based on transcript analysis."),
+        )
 
-        existing_meta = state.get("metadata") or {}
-        merged_meta = {**existing_meta, **scoring_meta}
+        confidence = _parse_confidence(llm_response.get("confidence"))
+        merged_meta = {
+            **scoring_meta,
+            **({confidence_key: confidence} if confidence is not None else {}),
+        }
 
-        return {**state, "pronunciation_result": updated_result, "metadata": merged_meta, "status": "completed", "error": None}
+        logger.info(
+            "[eval:%s] done answer_id=%s turn=%s score=%s",
+            node_name, answer_id, turn_order, llm_response.get("score"),
+        )
+        return {result_key: criterion, "metadata": merged_meta}
 
     except json.JSONDecodeError as exc:
-        return {**state, "status": "error", "error": f"LLM returned invalid JSON: {str(exc)}"}
+        logger.exception("[eval:%s] LLM returned invalid JSON answer_id=%s turn=%s", node_name, answer_id, turn_order)
+        return {"metadata": {error_meta_key: f"LLM returned invalid JSON: {str(exc)}"}}
 
     except Exception as exc:
-        return {**state, "status": "error", "error": f"{node_name} evaluation failed: {str(exc)}"}
+        logger.exception("[eval:%s] failed answer_id=%s turn=%s", node_name, answer_id, turn_order)
+        return {"metadata": {error_meta_key: f"{node_name} evaluation failed: {str(exc)}"}}

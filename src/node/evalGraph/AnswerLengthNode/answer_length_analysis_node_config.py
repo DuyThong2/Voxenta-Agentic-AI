@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 from typing import Any, Dict, Optional
@@ -13,6 +14,9 @@ from node.evalGraph.AnswerLengthNode.answer_length_node_helper import (
 )
 from node.state_models import SpeakingInput
 from utils.length_utils import get_expected_min_words
+from utils.speech_client import compute_silence_ratio, extract_non_target_segments, strip_non_target_segments
+
+logger = logging.getLogger(__name__)
 
 
 ENFORCE_CAP_IN_PYTHON = os.getenv("ENFORCE_CAP_IN_PYTHON", "true").lower() == "true"
@@ -75,16 +79,35 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
     speaking_input = state.get("speaking_input")
 
     if speaking_input is None:
-        return {**state, "status": "error", "error": "speaking_input is required for answer_length_analysis_node"}
+        return {"metadata": {"answer_length_error": "speaking_input is required for answer_length_analysis_node"}}
+
+    answer_id = getattr(speaking_input, "answer_id", None)
+    turn_order = (state.get("metadata") or {}).get("turn_order")
+    logger.info("[eval:answer_length] analyzing answer_id=%s turn=%s", answer_id, turn_order)
 
     # Select transcript: transcribed_text > corrected_transcript > reference_text (fallback).
     transcript, _source = select_text_for_language_scoring(speaking_input)
     transcript = transcript or ""
 
-    words = re.findall(r"\b\w+\b", transcript or "")
+    # Code-switched segments (wrapped "[XX: ...]" by speech_client.transcribe) are excluded
+    # from word/sentence counts -- only target-language words feed the length signal.
+    target_language_text = strip_non_target_segments(transcript)
+
+    words = re.findall(r"\b\w+\b", target_language_text)
     word_count = len(words)
-    sentences = [s.strip() for s in re.split(r"[.!?]+", transcript) if s.strip()]
+    sentences = [s.strip() for s in re.split(r"[.!?]+", target_language_text) if s.strip()]
     sentence_count = len(sentences)
+
+    non_target_word_count = sum(
+        len(re.findall(r"\b\w+\b", segment))
+        for segment in extract_non_target_segments(transcript)
+    )
+    total_words_all_languages = word_count + non_target_word_count
+    code_switching_ratio = (
+        round(non_target_word_count / total_words_all_languages, 2)
+        if total_words_all_languages > 0
+        else 0.0
+    )
 
     question_type = (speaking_input.question.question_type if speaking_input.question else None) or "unknown"
     difficulty_level = (speaking_input.question.difficulty_level if speaking_input.question else None) or "unknown"
@@ -147,6 +170,9 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "length_category": length_category,
         "note": note,
         "caps_enforced_in_python": ENFORCE_CAP_IN_PYTHON,
+        "code_switching_ratio": code_switching_ratio,
+        "asr_confidence_avg": speaking_input.asr_confidence,
+        "silence_ratio": compute_silence_ratio(speaking_input.audio_path) if speaking_input.audio_path else None,
     }
 
     if coherence_cap is not None:
@@ -161,14 +187,17 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
     if length_judgment_error is not None:
         metrics["length_judgment_error"] = length_judgment_error
 
-    speaking_input.answer_length_metrics = metrics
+    logger.info(
+        "[eval:answer_length] done answer_id=%s turn=%s word_count=%d category=%s",
+        answer_id, turn_order, word_count, length_category,
+    )
 
+    # Own dedicated state key, not nested in metadata/speaking_input -- coherence_eval/
+    # lexical_eval/grammar_eval read this directly (see graphConfig.build_graph: they all
+    # fan out from this node once it completes). Runs in parallel with pronunciation_eval,
+    # so this return must NOT include "speaking_input"/"status"/"error" -- those are either
+    # single-writer-elsewhere or merged via merge_scores_node, never written by two
+    # concurrent branches in the same superstep.
     return {
-        **state,
-        "speaking_input": speaking_input,
-        "status": "processing",
-        "metadata": {
-            **state.get("metadata", {}),
-            "answer_length_metrics": metrics,
-        },
+        "answer_length_metrics": metrics,
     }

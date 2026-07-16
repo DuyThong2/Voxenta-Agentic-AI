@@ -5,6 +5,7 @@ from events import (
     AnswerTurnsRecordedEvent,
     ExamAttemptEvaluationCompletedEvent,
     ExamAttemptEvaluationFailedEvent,
+    QuestionAssetAnalysisCompletedEvent,
 )
 from infra.message_broker import connection
 
@@ -56,4 +57,14 @@ async def publish_answer_turns_recorded(
         event,
         answer_id=event.answer_id,
         topic=settings.KAFKA_ANSWER_TURN_TOPIC,
+    )
+
+
+async def publish_question_asset_analysis_completed(
+    event: QuestionAssetAnalysisCompletedEvent,
+) -> None:
+    await _publish(
+        event,
+        answer_id=event.asset_id,
+        topic=settings.KAFKA_QUESTION_ASSET_ANALYSIS_COMPLETED_TOPIC,
     )

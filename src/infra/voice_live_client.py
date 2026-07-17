@@ -23,7 +23,9 @@ from typing import Awaitable, Callable, Optional
 
 from azure.ai.voicelive.aio import connect
 from azure.ai.voicelive.models import (
+    AudioEchoCancellation,
     AudioInputTranscriptionOptions,
+    AudioNoiseReduction,
     InputAudioFormat,
     Modality,
     RequestSession,
@@ -91,6 +93,8 @@ class VoiceLiveClient:
                 modalities=[Modality.TEXT, Modality.AUDIO],
                 input_audio_format=InputAudioFormat.PCM16,
                 input_audio_sampling_rate=EXPECTED_SAMPLE_RATE,
+                input_audio_noise_reduction=AudioNoiseReduction(type="azure_deep_noise_suppression"),
+                input_audio_echo_cancellation=AudioEchoCancellation(),
                 input_audio_transcription=AudioInputTranscriptionOptions(
                     model=self._config["transcription_model"],
                 ),

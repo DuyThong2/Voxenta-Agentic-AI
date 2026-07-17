@@ -180,6 +180,11 @@ class AttemptConnection:
             self.exam_attempt_id, session.answer_id, session.turn_order, transcript,
         )
         is_last_allowed_turn = bool(message.get("is_last_allowed_turn"))
+        raw_duration_seconds = message.get("duration_seconds")
+        try:
+            duration_seconds = float(raw_duration_seconds) if raw_duration_seconds is not None else None
+        except (TypeError, ValueError):
+            duration_seconds = None
 
         # Fire-and-forget: never awaited inline with the turn_end decision response below.
         # Lets eval-time scoring prefer this (Voice-Live handles code-switched Vietnamese
@@ -191,6 +196,7 @@ class AttemptConnection:
             archive_store.persist_realtime_transcript(
                 self.archive_graph, session.answer_id, session.turn_order, transcript,
                 is_last_allowed_turn=is_last_allowed_turn,
+                duration_seconds=duration_seconds,
             )
         )
 
@@ -206,7 +212,7 @@ class AttemptConnection:
         # while the loop was blocked. asyncio.to_thread keeps this a plain sync call while freeing
         # the loop for everything else, exactly like archive_controller.py already does for
         # archive_graph.invoke.
-        decision = await asyncio.to_thread(session.decide_next_step, transcript, word_count)
+        decision = await asyncio.to_thread(session.decide_next_step, transcript, word_count, duration_seconds)
         completed_turn_order = session.turn_order - 1
         if is_last_allowed_turn and decision.get("should_continue"):
             # WPF's own MaxTurnsPerQuestion is about to force this question closed regardless of
@@ -379,12 +385,17 @@ class AttemptConnection:
             transcript = pending_entry.get("text") or ""
             word_count = len(transcript.split()) if transcript else 0
             is_last_allowed_turn = bool(pending_entry.get("is_last_allowed_turn"))
+            raw_duration_seconds = pending_entry.get("duration_seconds")
+            try:
+                duration_seconds = float(raw_duration_seconds) if raw_duration_seconds is not None else None
+            except (TypeError, ValueError):
+                duration_seconds = None
 
             logger.info(
                 "[attempt_connection] recovering dangling decision exam_attempt_id=%s answer_id=%s turn_order=%d",
                 self.exam_attempt_id, session.answer_id, pending_turn_order,
             )
-            decision = await asyncio.to_thread(session.decide_next_step, transcript, word_count)
+            decision = await asyncio.to_thread(session.decide_next_step, transcript, word_count, duration_seconds)
             if is_last_allowed_turn and decision.get("should_continue"):
                 decision = {**decision, "should_continue": False, "next_prompt_text": None, "reason": "client_max_turns_reached"}
 

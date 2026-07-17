@@ -74,7 +74,7 @@ def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
         "audio_url": state.get("audio_ref"),
         "transcript": transcript,
         "word_count": word_count(transcript),
-        "duration_seconds": _wav_duration_seconds(audio_path),
+        "duration_seconds": state.get("duration_seconds") or _wav_duration_seconds(audio_path),
         "answered_at": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -140,6 +140,20 @@ def merge_decision_node(state: FollowUpGraphState) -> Dict[str, Any]:
             or state.get("repeat_recovery_error")
             or "No decision produced by follow-up graph"
         )
+
+    # hard_stop is enforced by code in followup_decision_node, but repeat_recovery_node only ever
+    # sees it as text inside its own LLM prompt -- no code-level guarantee there. If
+    # repeat_recovery_node's decision wins the merge above (use_repeat_recovery=True) while
+    # hard_stop is set, its LLM-chosen should_continue=True would otherwise slip through
+    # ungoverned. Enforce hard_stop here, once, as the single point every path converges on,
+    # regardless of which node produced final_decision.
+    signals = state.get("signals") or {}
+    if signals.get("hard_stop") and final_decision.get("should_continue"):
+        final_decision = {
+            "should_continue": False,
+            "next_prompt_text": None,
+            "reason": signals.get("hard_stop_reason") or "max_turns_reached",
+        }
 
     return {
         "decision": final_decision,

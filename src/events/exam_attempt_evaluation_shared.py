@@ -12,7 +12,7 @@ class TurnInput(_CamelMessage):
     prompt_text: Optional[str] = None
     audio_ref: str
     transcript: Optional[str] = None
-    duration_seconds: Optional[int] = None
+    duration_seconds: Optional[float] = None
 
 
 class PronunciationOverallScores(_CamelMessage):
@@ -31,7 +31,7 @@ class TurnDetail(_CamelMessage):
     audio_url: str
     transcript: str
     word_count: int
-    duration_seconds: Optional[int] = None
+    duration_seconds: Optional[float] = None
     asr_confidence: Optional[float] = None
     pronunciation_overall: PronunciationOverallScores = Field(default_factory=PronunciationOverallScores)
     word_feedback: List[WordFeedback] = Field(default_factory=list)

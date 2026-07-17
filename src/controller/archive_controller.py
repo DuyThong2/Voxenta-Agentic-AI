@@ -24,6 +24,7 @@ async def archive_turn(
     paper_item_id: str | None = Form(default=None),
     turn_order: int = Form(...),
     prompt_text: str | None = Form(default=None),
+    duration_seconds: float | None = Form(default=None),
     language: str = Form(default="en-US"),
     question: str | None = Form(default=None),
 ):
@@ -52,6 +53,7 @@ async def archive_turn(
                 "audio_path": local_audio_path,
                 "turn_order": turn_order,
                 "prompt_text": prompt_text,
+                "duration_seconds": duration_seconds,
                 "status": "idle",
             },
             config={"configurable": {"thread_id": answer_id}},

@@ -210,7 +210,7 @@ def build_turn_detail(
     prompt_text: Optional[str],
     audio_url: str,
     transcript: Optional[str],
-    duration_seconds: Optional[int] = None,
+    duration_seconds: Optional[float] = None,
     turn_id: Optional[str] = None,
 ) -> TurnDetail:
     _, overall, word_feedback = _extract_pronunciation_parts(result)

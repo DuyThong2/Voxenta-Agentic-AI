@@ -39,6 +39,7 @@ from node.evalGraph.CoherenceEvalNode.coherence_eval_node_config import coherenc
 from node.evalGraph.GrammarEvalNode.grammar_eval_node_config import grammar_eval_node
 from node.evalGraph.LexicalEvalNode.lexical_eval_node_config import lexical_eval_node
 from node.evalGraph.MergeScoresNode.merge_scores_node_config import merge_scores_node
+from node.followUpDecisionGraph.followup_graph_helper import is_clarification_reason
 from node.state_models import QuestionAssetContext, QuestionContext, SpeakingInput, TopicContext
 from node.state_models.pronunciation import FormattedPronunciationResult
 from infra.database import archive_store
@@ -84,8 +85,8 @@ def _combine_transcript(per_turn_results: List[Tuple[Any, Dict[str, Any]]]) -> s
     return "\n".join(lines)
 
 
-def _format_elapsed(total_seconds: int) -> str:
-    total_seconds = max(0, total_seconds)
+def _format_elapsed(total_seconds: float) -> str:
+    total_seconds = max(0, int(round(total_seconds)))
     minutes, seconds = divmod(total_seconds, 60)
     return f"{minutes:02d}:{seconds:02d}"
 
@@ -104,19 +105,19 @@ def _build_dialogue_transcript(per_turn_results: List[Tuple[Any, Dict[str, Any]]
     after the User line -- ordering/pacing matters here, not precision.
     """
     lines: List[str] = []
-    elapsed = 0
+    elapsed = 0.0
     for turn, result in sorted(per_turn_results, key=lambda item: item[0].turn_order):
         if turn.prompt_text and turn.prompt_text.strip():
             lines.append(f"[{_format_elapsed(elapsed)}] AI: {turn.prompt_text.strip()}")
         text = _real_transcript_for_turn(result).strip()
         if text:
             lines.append(f"[{_format_elapsed(elapsed)}] User: {text}")
-        elapsed += int(turn.duration_seconds or 0)
+        elapsed += float(turn.duration_seconds or 0)
     return "\n".join(lines)
 
 
 def _total_duration_seconds(turns: List[Any]) -> int:
-    return sum(int(turn.duration_seconds or 0) for turn in turns)
+    return int(round(sum(float(turn.duration_seconds or 0) for turn in turns)))
 
 
 def _average_scores(values: List[float]) -> float:
@@ -323,6 +324,7 @@ def _build_multi_turn_completed_event(
     request_event: ExamAttemptEvaluationRequestedEvent,
     aggregate_result: Dict[str, Any],
     aggregate_audio_path: str,
+    turns: List[Any],
     per_turn_results: List[Tuple[Any, Dict[str, Any]]],
     total_duration_seconds: int,
 ) -> ExamAttemptEvaluationCompletedEvent:
@@ -332,25 +334,33 @@ def _build_multi_turn_completed_event(
         speaking_input,
         audio_path=aggregate_audio_path,
     )
-    turns = [
-        build_turn_detail(
-            result,
-            turn_order=turn.turn_order,
-            turn_type=turn.turn_type or "MAIN",
-            prompt_text=turn.prompt_text,
-            audio_url=turn.audio_ref,
-            transcript=_real_transcript_for_turn(result),
-            duration_seconds=turn.duration_seconds,
+    results_by_turn_order = {turn.turn_order: result for turn, result in per_turn_results}
+    completed_turns = []
+    for turn in turns:
+        result = results_by_turn_order.get(turn.turn_order, {})
+        transcript = (
+            _real_transcript_for_turn(result)
+            if result
+            else (turn.transcript or "")
         )
-        for turn, result in per_turn_results
-    ]
+        completed_turns.append(
+            build_turn_detail(
+                result,
+                turn_order=turn.turn_order,
+                turn_type=turn.turn_type or "MAIN",
+                prompt_text=turn.prompt_text,
+                audio_url=turn.audio_ref,
+                transcript=transcript,
+                duration_seconds=turn.duration_seconds,
+            )
+        )
 
     return ExamAttemptEvaluationCompletedEvent(
         exam_attempt_id=request_event.exam_attempt_id,
         answer_id=request_event.answer_id,
         question_id=request_event.question_id,
         payload=ExamAttemptEvaluationCompletedPayload(
-            turns=turns,
+            turns=completed_turns,
             criteria=_merge_multi_turn_criteria(aggregate_result, per_turn_results),
             signals=build_signals(aggregate_result, speaking_input, duration_seconds=total_duration_seconds),
             validity=aggregate_result.get("validity"),
@@ -421,6 +431,65 @@ def _build_no_answer_completed_event(
     )
 
 
+def _build_clarification_only_completed_event(
+    request_event: ExamAttemptEvaluationRequestedEvent,
+    turns: List[Any],
+) -> ExamAttemptEvaluationCompletedEvent:
+    clarification_rule = RuleResult(
+        rule_id="answer.clarification_only",
+        category="validity",
+        status="triggered",
+        severity="none",
+        action="reject_or_zero",
+        message="Only clarification-only turns were recorded for this question.",
+    )
+    validity = ValidityResult(
+        valid_for_scoring=False,
+        action="reject_or_zero",
+        rule_results=[clarification_rule],
+        transcript_source="archive",
+        transcript_word_count=0,
+    )
+    criteria = {
+        name: CriterionScore(score=0, level="not_scored", status="zeroed", source="rule")
+        for name in ("pronunciation", "fluency", "grammar", "vocabulary", "coherence")
+    }
+    completed_turns = [
+        build_turn_detail(
+            {},
+            turn_order=turn.turn_order,
+            turn_type=turn.turn_type or "MAIN",
+            prompt_text=turn.prompt_text,
+            audio_url=turn.audio_ref,
+            transcript=turn.transcript or "",
+            duration_seconds=turn.duration_seconds,
+        )
+        for turn in turns
+    ]
+
+    return ExamAttemptEvaluationCompletedEvent(
+        exam_attempt_id=request_event.exam_attempt_id,
+        answer_id=request_event.answer_id,
+        question_id=request_event.question_id,
+        payload=ExamAttemptEvaluationCompletedPayload(
+            turns=completed_turns,
+            criteria=criteria,
+            signals=EvaluationSignals(
+                duration_seconds=_total_duration_seconds(turns),
+                word_count=0,
+                sentence_count=0,
+                expected_min_words=0,
+            ),
+            validity=validity,
+            feedback_summary="The student only used clarification or repair turns for this question.",
+            suggestions=[],
+            model_version="rule-based-clarification-only",
+            prompt_version="v1",
+            evaluated_at=datetime.now(timezone.utc).isoformat(),
+        ),
+    )
+
+
 async def start_exam_attempt_consumer(app):
     consumer = await get_topic_consumer(
         settings.KAFKA_EXAM_REQUEST_TOPIC,
@@ -460,11 +529,15 @@ async def start_exam_attempt_consumer(app):
 
                 per_turn_results: List[Tuple[Any, Dict[str, Any]]] = []
                 aggregate_audio_path = turns[0].audio_ref
+                scoreable_turns = [
+                    turn for turn in turns
+                    if not is_clarification_reason(getattr(turn, "decision_reason", None))
+                ]
 
-                for turn in turns:
+                for turn in scoreable_turns:
                     logger.info(
                         "[exam-consumer] evaluating turn %d/%d answer_id=%s",
-                        turn.turn_order, len(turns), request_event.answer_id,
+                        turn.turn_order, len(scoreable_turns), request_event.answer_id,
                     )
                     # No merged dialogue_transcript is passed in here -- turn.transcript
                     # (vox's own record) is never populated, so nothing meaningful could be
@@ -484,8 +557,19 @@ async def start_exam_attempt_consumer(app):
                     per_turn_results.append((turn, result))
                     logger.info(
                         "[exam-consumer] turn %d/%d done answer_id=%s",
-                        turn.turn_order, len(turns), request_event.answer_id,
+                        turn.turn_order, len(scoreable_turns), request_event.answer_id,
                     )
+
+                if not scoreable_turns:
+                    logger.info(
+                        "[exam-consumer] clarification-only answer, publishing zero-point result answer_id=%s",
+                        request_event.answer_id,
+                    )
+                    await publish_exam_attempt_evaluation_completed(
+                        _build_clarification_only_completed_event(request_event, turns)
+                    )
+                    await consumer.commit()
+                    break
 
                 merged_transcript = _combine_transcript(per_turn_results)
                 dialogue_transcript = _build_dialogue_transcript(per_turn_results)
@@ -501,6 +585,7 @@ async def start_exam_attempt_consumer(app):
                     request_event,
                     aggregate_result,
                     aggregate_audio_path,
+                    turns,
                     per_turn_results,
                     _total_duration_seconds(turns),
                 )

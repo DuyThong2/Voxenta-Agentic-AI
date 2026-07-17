@@ -135,7 +135,13 @@ async def get_current_answer_id(archive_graph, exam_attempt_id: str) -> str | No
 
 
 async def persist_realtime_transcript(
-    archive_graph, answer_id: str, turn_order: int, text: str, *, is_last_allowed_turn: bool = False,
+    archive_graph,
+    answer_id: str,
+    turn_order: int,
+    text: str,
+    *,
+    is_last_allowed_turn: bool = False,
+    duration_seconds: float | None = None,
 ) -> None:
     """Durably saves this turn's live Voice-Live transcript (see attempt_connection.py's
     [realtime_transcript] logging) so eval-time scoring can prefer it over re-transcribing the
@@ -150,7 +156,12 @@ async def persist_realtime_transcript(
     try:
         await aupdate_state(archive_graph, archive_config(answer_id), {
             "realtime_transcripts": [
-                {"turn_order": turn_order, "text": text, "is_last_allowed_turn": is_last_allowed_turn},
+                {
+                    "turn_order": turn_order,
+                    "text": text,
+                    "is_last_allowed_turn": is_last_allowed_turn,
+                    "duration_seconds": duration_seconds,
+                },
             ],
         })
     except Exception:

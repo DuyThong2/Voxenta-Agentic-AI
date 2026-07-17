@@ -224,7 +224,7 @@ class RealtimeExamSession:
             len(turns), self.answer_id, self.turn_order,
         )
 
-    def _build_current_turn(self, transcript: str, word_count: int) -> Dict[str, Any]:
+    def _build_current_turn(self, transcript: str, word_count: int, duration_seconds: float | None) -> Dict[str, Any]:
         return {
             "answer_id": self.answer_id,
             "paper_item_id": self.paper_item_id,
@@ -233,9 +233,10 @@ class RealtimeExamSession:
             "prompt_text": self.current_prompt_text or self.prompt_text,
             "transcript": transcript,
             "word_count": word_count,
+            "duration_seconds": duration_seconds,
         }
 
-    def decide_next_step(self, transcript: str, word_count: int) -> Dict[str, Any]:
+    def decide_next_step(self, transcript: str, word_count: int, duration_seconds: float | None = None) -> Dict[str, Any]:
         """Build FollowUpGraphState input directly from this session's held
         state and invoke the existing stateless text_followup_graph verbatim.
         Returns the decision dict; does NOT schedule the durable archive/Kafka
@@ -248,7 +249,7 @@ class RealtimeExamSession:
         schedule_publish themselves right after this returns, back on the
         event loop thread -- see attempt_connection.py's _handle_turn_end.
         """
-        current_turn = self._build_current_turn(transcript, word_count)
+        current_turn = self._build_current_turn(transcript, word_count, duration_seconds)
         state = {
             "answer_id": self.answer_id,
             "exam_attempt_id": self.exam_attempt_id,

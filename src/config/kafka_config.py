@@ -32,7 +32,9 @@ class KafkaSettings(BaseSettings):
     KAFKA_ANSWER_TURN_TOPIC: str = "answer-turns-recorded"
     KAFKA_QUESTION_ASSET_ANALYSIS_REQUEST_TOPIC: str = "question-asset-analysis-requested"
     KAFKA_QUESTION_ASSET_ANALYSIS_COMPLETED_TOPIC: str = "question-asset-analysis-completed"
+    KAFKA_EXAM_FORCE_END_TOPIC: str = "exam-attempt-force-end-requested"
     KAFKA_EXAM_CONSUMER_GROUP: str = "exam-attempt-evaluation"
+    KAFKA_EXAM_FORCE_END_CONSUMER_GROUP: str = "exam-attempt-force-end"
     KAFKA_QUESTION_ASSET_ANALYSIS_CONSUMER_GROUP: str = "question-asset-analysis"
     KAFKA_MAX_RETRY: int = 3
 

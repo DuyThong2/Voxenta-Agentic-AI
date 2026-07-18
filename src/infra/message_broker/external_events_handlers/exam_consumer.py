@@ -16,6 +16,7 @@ from events.exam_attempt_evaluation_failed import (
     ExamAttemptEvaluationFailedPayload,
 )
 from events.exam_attempt_evaluation_shared import EvaluationSignals
+from events.exam_attempt_force_end_requested import ExamAttemptForceEndRequestedEvent
 from infra.message_broker.connection import get_topic_consumer
 from infra.message_broker.publishers.exam_publisher import (
     publish_exam_attempt_evaluation_completed,
@@ -43,6 +44,7 @@ from node.followUpDecisionGraph.followup_graph_helper import is_clarification_re
 from node.state_models import QuestionAssetContext, QuestionContext, SpeakingInput, TopicContext
 from node.state_models.pronunciation import FormattedPronunciationResult
 from infra.database import archive_store
+from realtime.attempt_connection import get_attempt_connection
 from schemas.enums import SpeakingMode
 from utils.speech_client import unwrap_language_tags
 
@@ -616,3 +618,36 @@ async def start_exam_attempt_consumer(app):
                     )
                     await consumer.commit()
                     break
+
+
+async def start_exam_attempt_force_end_consumer(app):
+    consumer = await get_topic_consumer(
+        settings.KAFKA_EXAM_FORCE_END_TOPIC,
+        group_id=settings.KAFKA_EXAM_FORCE_END_CONSUMER_GROUP,
+    )
+
+    async for message in consumer:
+        try:
+            payload = json.loads(message.value.decode())
+            event = ExamAttemptForceEndRequestedEvent.model_validate(payload)
+            connection = get_attempt_connection(event.exam_attempt_id)
+            if connection is None:
+                logger.info(
+                    "[exam-force-end-consumer] no local realtime connection exam_attempt_id=%s",
+                    event.exam_attempt_id,
+                )
+            else:
+                await connection.force_end(event.payload.reason or "")
+                logger.info(
+                    "[exam-force-end-consumer] forwarded force_end exam_attempt_id=%s",
+                    event.exam_attempt_id,
+                )
+        except Exception:
+            logger.exception(
+                "[exam-force-end-consumer] failed topic=%s partition=%s offset=%s",
+                message.topic,
+                message.partition,
+                message.offset,
+            )
+        finally:
+            await consumer.commit()

@@ -46,6 +46,34 @@ from infra.voice_live_client import VoiceLiveClient, VoiceLiveServerEvent
 
 logger = logging.getLogger(__name__)
 
+_active_attempt_connections: dict[str, "AttemptConnection"] = {}
+
+
+def register_attempt_connection(connection: "AttemptConnection") -> None:
+    _active_attempt_connections[connection.exam_attempt_id] = connection
+
+
+def unregister_attempt_connection(connection: "AttemptConnection") -> None:
+    existing = _active_attempt_connections.get(connection.exam_attempt_id)
+    if existing is connection:
+        _active_attempt_connections.pop(connection.exam_attempt_id, None)
+
+
+def get_attempt_connection(exam_attempt_id: str) -> Optional["AttemptConnection"]:
+    return _active_attempt_connections.get(exam_attempt_id)
+
+
+async def close_all_attempt_connections() -> None:
+    for connection in list(_active_attempt_connections.values()):
+        try:
+            await connection.close()
+        except Exception:
+            logger.exception(
+                "[attempt_connection] failed to close connection exam_attempt_id=%s",
+                connection.exam_attempt_id,
+            )
+    _active_attempt_connections.clear()
+
 
 class AttemptConnection:
     """Owns one WebSocket (and one VoiceLiveClient) for the duration of one
@@ -447,6 +475,17 @@ class AttemptConnection:
         if event.text is not None:
             payload["text"] = event.text
         await self.socket.send_json(payload)
+
+    async def force_end(self, reason: Optional[str]) -> None:
+        logger.info(
+            "[attempt_connection] force_end exam_attempt_id=%s reason=%r",
+            self.exam_attempt_id, reason,
+        )
+        await self.socket.send_json({
+            "type": "force_end",
+            "reason": reason or "",
+        })
+        await self.socket.close(code=1000)
 
     async def close(self) -> None:
         """Best-effort local cleanup when the connection drops. Durable

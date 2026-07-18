@@ -62,6 +62,7 @@ setup_langsmith()
 from controller import router
 from controller.webrtc import close_all_connections
 from realtime._legacy_avatar.avatar_webrtc import close_all_connections as close_all_avatar_connections
+from realtime.attempt_connection import close_all_attempt_connections
 from node.followUpDecisionGraph.graphConfig import build_archive_graph, build_text_followup_graph
 from node.evalGraph.graphConfig import build_graph
 from config.postgresDB_config import settings as pg_settings
@@ -69,7 +70,10 @@ from infra.message_broker.external_events_handlers.kafka_consumer import start_o
 from infra.message_broker.external_events_handlers.question_asset_analysis_consumer import (
     start_question_asset_analysis_consumer,
 )
-from infra.message_broker.external_events_handlers.exam_consumer import start_exam_attempt_consumer
+from infra.message_broker.external_events_handlers.exam_consumer import (
+    start_exam_attempt_consumer,
+    start_exam_attempt_force_end_consumer,
+)
 from infra.message_broker import connection as mq_connection
 from vector.chroma_client import build_chroma_collection
 
@@ -112,16 +116,20 @@ async def lifespan(app: FastAPI):
     # were ever consumed despite the handler being fully implemented.
     exam_consumer_task = asyncio.create_task(start_exam_attempt_consumer(app))
     app.state.exam_consumer_task = exam_consumer_task
+    force_end_consumer_task = asyncio.create_task(start_exam_attempt_force_end_consumer(app))
+    app.state.force_end_consumer_task = force_end_consumer_task
     asset_analysis_consumer_task = asyncio.create_task(start_question_asset_analysis_consumer(app))
     app.state.asset_analysis_consumer_task = asset_analysis_consumer_task
 
     try:
         yield
     finally:
+        await close_all_attempt_connections()
         await close_all_connections()
         await close_all_avatar_connections()
         consumer_task.cancel()
         exam_consumer_task.cancel()
+        force_end_consumer_task.cancel()
         asset_analysis_consumer_task.cancel()
         await mq_connection.close()
         pool.close()

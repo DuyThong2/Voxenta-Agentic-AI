@@ -19,7 +19,11 @@ from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 
 from infra.database import archive_store
 from infra.realtime_socket import RealtimeSocket
-from realtime.attempt_connection import AttemptConnection
+from realtime.attempt_connection import (
+    AttemptConnection,
+    register_attempt_connection,
+    unregister_attempt_connection,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +63,7 @@ async def realtime_attempt_socket(websocket: WebSocket, exam_attempt_id: str):
         return
 
     logger.info("[realtime] connection opened exam_attempt_id=%s", exam_attempt_id)
+    register_attempt_connection(connection)
 
     try:
         async for kind, payload in socket.iter_frames():
@@ -75,4 +80,5 @@ async def realtime_attempt_socket(websocket: WebSocket, exam_attempt_id: str):
     except WebSocketDisconnect:
         logger.info("[realtime] connection closed exam_attempt_id=%s", exam_attempt_id)
     finally:
+        unregister_attempt_connection(connection)
         await connection.close()

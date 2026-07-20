@@ -95,7 +95,7 @@ jobs:
       - name: Update values.yaml
         run: |
           cd helm-repo
-          yq eval '.image.repository = env(ECR_IMAGE) | .image.tag = env(IMAGE_TAG)' -i charts/agents/values.yaml
+          yq eval '.image.repository = env(ECR_IMAGE) | .image.tag = strenv(IMAGE_TAG)' -i charts/agents/values.yaml
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           if ! git diff --quiet; then

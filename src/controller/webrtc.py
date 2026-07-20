@@ -23,7 +23,7 @@ from aiortc import RTCPeerConnection, RTCSessionDescription
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from config.webrtc_config import settings
+from config.webrtc_config import build_ice_servers, settings
 from infra.webrtc import proctoring_alert_policy
 from infra.webrtc import proctoring_session
 from infra.webrtc.proctoring_frame_processor import process_video_track
@@ -70,7 +70,7 @@ async def offer(request: Request):
         )
 
     session_id = str(params.get("exam_attempt_id") or uuid.uuid4())
-    pc = RTCPeerConnection()
+    pc = RTCPeerConnection(configuration=build_ice_servers())
     proctoring_session.pcs.add(pc)
     proctoring_session.session_map[session_id] = pc
 

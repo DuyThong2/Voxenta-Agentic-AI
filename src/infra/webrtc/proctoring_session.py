@@ -69,6 +69,18 @@ async def cleanup_session(session_id: str, *, on_cleanup: Optional[Callable[[str
         await queue.put({"type": "SESSION_ENDED", "timestamp": utc_now()})
     session_subscribers.pop(session_id, None)
 
+    # Without this, a session_id that reconnects after a real end (same
+    # exam_attempt_id, e.g. retrying the same exam) replays this session's
+    # ENTIRE event history the instant the new SSE stream opens (see
+    # controller/webrtc.py's stream_session_events, "Send existing events
+    # first") -- confirmed live: old proctoring warnings from a prior,
+    # already-ended attempt resurfaced immediately on a fresh connect,
+    # unrelated to the client's actual current camera state. A reconnect
+    # that happens WITHOUT cleanup_session having run yet (e.g. a network
+    # blip mid-session) still replays correctly, since this only clears once
+    # the session is genuinely over.
+    session_events.pop(session_id, None)
+
     if on_cleanup is not None:
         on_cleanup(session_id)
 

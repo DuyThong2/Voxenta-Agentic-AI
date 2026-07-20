@@ -1,7 +1,9 @@
+import asyncio
 import logging
 from typing import Dict, Optional
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+from aiokafka.errors import KafkaConnectionError, KafkaError
 
 from config.kafka_config import settings
 
@@ -9,6 +11,28 @@ logger = logging.getLogger(__name__)
 
 _producer: Optional[AIOKafkaProducer] = None
 _consumers: Dict[str, AIOKafkaConsumer] = {}
+
+# consumer.start() only tries the broker once and raises on failure -- with no
+# retry, a Kafka pod that's mid-restart exactly when this pod boots (a real,
+# recurring race: Karpenter node churn, Kafka rollouts, etc.) permanently
+# kills that consumer's asyncio.create_task() with no trace anywhere (nothing
+# ever awaits it), confirmed for real: exam-attempt-evaluation-requested built
+# up 4 unconsumed messages for ~45 minutes after one such race, invisible
+# until someone manually checked `kafka-consumer-groups.sh` and found the
+# group didn't even exist on the broker.
+async def _start_with_retry(consumer: AIOKafkaConsumer, *, label: str) -> None:
+    delay = 2
+    while True:
+        try:
+            await consumer.start()
+            return
+        except (KafkaConnectionError, KafkaError) as exc:
+            logger.error(
+                "Kafka consumer failed to start (%s), retrying in %ss: %s",
+                label, delay, exc,
+            )
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 30)
 
 
 async def get_producer() -> AIOKafkaProducer:
@@ -39,7 +63,7 @@ async def get_consumer(topic: str) -> AIOKafkaConsumer:
             enable_auto_commit=False,
             auto_offset_reset=settings.KAFKA_AUTO_OFFSET_RESET,
         )
-        await consumer.start()
+        await _start_with_retry(consumer, label=f"topic={topic}")
         _consumers[topic] = consumer
         logger.info("Kafka consumer established.")
     return consumer
@@ -58,7 +82,7 @@ async def get_topic_consumer(topic: str, *, group_id: str) -> AIOKafkaConsumer:
             enable_auto_commit=False,
             auto_offset_reset=settings.KAFKA_AUTO_OFFSET_RESET,
         )
-        await consumer.start()
+        await _start_with_retry(consumer, label=f"topic={topic} group={group_id}")
         _consumers[cache_key] = consumer
     return consumer
 

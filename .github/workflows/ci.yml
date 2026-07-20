@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  # TEMPORARY -- testing the pipeline on testDeploy before trusting it on
+  # main. Revert to `main` before merging any of this.
+  pull_request:
+    branches:
+      - testDeploy
+  push:
+    branches:
+      - testDeploy
+
+jobs:
+  build:
+    name: Compile Python sources
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Compile sources
+        run: python -m compileall src

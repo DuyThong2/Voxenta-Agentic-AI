@@ -12,9 +12,6 @@ import json
 import logging
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage
-
 from node.state_models import SpeakingInput
 from schemas.enums import SpeakingMode
 from schemas.scoring import CriterionScore
@@ -192,24 +189,6 @@ def build_framework_criterion_context(speaking_input: SpeakingInput, criterion_k
     return "\n".join(lines)
 
 
-def call_llm(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
-    """Call LLM and parse JSON response."""
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
-
-    messages = [
-        SystemMessage(content=system_prompt),
-        HumanMessage(content=user_prompt),
-    ]
-
-    response = llm.invoke(messages)
-    content = response.content.strip()
-
-    if content.startswith("```"):
-        lines = content.split("\n")
-        lines = [l for l in lines if not l.strip().startswith("```")]
-        content = "\n".join(lines).strip()
-
-    return json.loads(content)
 
 
 def run_eval_node(
@@ -260,7 +239,6 @@ def run_eval_node(
             None,
         )
         consensus = run_consensus_judgment(
-            call_llm,
             system_prompt,
             user_prompt,
             transcript,

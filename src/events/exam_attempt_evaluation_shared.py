@@ -45,6 +45,13 @@ class ConfidenceCaseSignals(_CamelMessage):
     clipping_ratio: Optional[float] = None
     c_ref: Optional[float] = None
     c_align: Optional[float] = None
+    # 3 thành phần RIÊNG của case (4) -- xem AlignmentConfidence trong confidence_utils.py.
+    # Ngưỡng Vietnam-adjusted (m soft>0.20/hard>0.30, c soft<0.90/hard<0.80, j soft>0.15/hard>0.30)
+    # áp RIÊNG cho từng cái, KHÔNG áp chung 1 ngưỡng lên c_align (composite) -- c_align ở trên chỉ
+    # còn dùng để hiển thị/tính cPfBranch, không dùng để quyết định review nữa.
+    c_align_accuracy: Optional[float] = None
+    c_align_coverage: Optional[float] = None
+    c_align_timing: Optional[float] = None
     c_pf_branch: Optional[float] = None
     c_grammar: Optional[float] = None
     c_vocabulary: Optional[float] = None
@@ -62,7 +69,6 @@ class EvaluationSignals(_CamelMessage):
     off_topic_ratio: Optional[float] = None
     code_switching_ratio: Optional[float] = None
     speech_rate: Optional[float] = None
-    ai_confidence: Optional[float] = None
     audio_quality: Optional[float] = None
     silence_ratio: Optional[float] = None
     confidence_case: Optional[ConfidenceCaseSignals] = None

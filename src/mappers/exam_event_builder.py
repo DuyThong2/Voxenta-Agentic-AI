@@ -131,24 +131,6 @@ def _clamp_unit(value: Optional[float]) -> Optional[float]:
     return max(0.0, min(1.0, float(value)))
 
 
-def _average(values: List[Optional[float]]) -> Optional[float]:
-    normalized = [value for value in values if value is not None]
-    if not normalized:
-        return None
-    return sum(normalized) / len(normalized)
-
-
-def _compute_ai_confidence(result: Dict[str, Any]) -> Optional[float]:
-    metadata = result.get("metadata") or {}
-    return _average(
-        [
-            _clamp_unit(metadata.get("coherence_confidence")),
-            _clamp_unit(metadata.get("grammar_confidence")),
-            _clamp_unit(metadata.get("vocabulary_confidence")),
-        ]
-    )
-
-
 def _compute_audio_quality(metrics: Dict[str, Any]) -> Optional[float]:
     asr_confidence = _clamp_unit(metrics.get("asr_confidence_avg"))
     silence_ratio = _clamp_unit(metrics.get("silence_ratio"))
@@ -190,6 +172,9 @@ def _build_turn_confidence_case(result: Dict[str, Any]) -> ConfidenceCaseSignals
     q_speech = _clamp_unit(metrics.get("q_speech")) if uses_nolog_branch else None
     c_ref = _clamp_unit(metadata.get("c_ref"))
     c_align = _clamp_unit(metadata.get("c_align"))
+    c_align_accuracy = _clamp_unit(metadata.get("c_align_accuracy"))
+    c_align_coverage = _clamp_unit(metadata.get("c_align_coverage"))
+    c_align_timing = _clamp_unit(metadata.get("c_align_timing"))
 
     asr_common = realtime_confidence
     hard_threshold = 0.60
@@ -210,6 +195,9 @@ def _build_turn_confidence_case(result: Dict[str, Any]) -> ConfidenceCaseSignals
         clipping_ratio=_clamp_unit(metrics.get("clipping_ratio")),
         c_ref=c_ref,
         c_align=c_align,
+        c_align_accuracy=c_align_accuracy,
+        c_align_coverage=c_align_coverage,
+        c_align_timing=c_align_timing,
         c_pf_branch=c_pf_branch,
     )
 
@@ -238,6 +226,9 @@ def _aggregate_confidence_cases(
         clipping_ratio=max(clipping_values) if clipping_values else None,
         c_ref=minimum("c_ref"),
         c_align=minimum("c_align"),
+        c_align_accuracy=minimum("c_align_accuracy"),
+        c_align_coverage=minimum("c_align_coverage"),
+        c_align_timing=minimum("c_align_timing"),
         c_pf_branch=minimum("c_pf_branch"),
         c_grammar=_clamp_unit(metadata.get("grammar_confidence")),
         c_vocabulary=_clamp_unit(metadata.get("vocabulary_confidence")),
@@ -276,7 +267,6 @@ def build_signals(
         off_topic_ratio=metrics.get("off_topic_ratio"),
         code_switching_ratio=metrics.get("code_switching_ratio"),
         speech_rate=metrics.get("speech_rate"),
-        ai_confidence=_compute_ai_confidence(result),
         audio_quality=_compute_audio_quality(metrics),
         silence_ratio=metrics.get("silence_ratio"),
         confidence_case=_aggregate_confidence_cases(result, turn_results),

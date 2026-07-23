@@ -1,11 +1,77 @@
+import json
 import math
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from statistics import median
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, TypeVar
+
+from langchain_anthropic import ChatAnthropic
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+from anthropic import RateLimitError as AnthropicRateLimitError
+from openai import RateLimitError as OpenAIRateLimitError
+
+_RateLimitErrors = (OpenAIRateLimitError, AnthropicRateLimitError)
 
 from utils.speech_client import normalize_for_wer, word_error_rate
+
+_T = TypeVar("_T")
+
+# Case (5) (Grammar/Vocabulary/Discourse) và case (3) (pronunciation reference) đều gọi LLM 3
+# lần độc lập song song qua ThreadPoolExecutor(max_workers=3) -- đúng 3 worker cho đúng 3 lượt,
+# không có việc nào khác chờ dùng chung pool đó, nên retry/backoff bên dưới chỉ chặn ĐÚNG 1
+# thread đang giữ lượt gặp lỗi, 2 lượt song song còn lại không bị ảnh hưởng và KHÔNG cần tạo
+# thêm thread nào cho việc retry/fallback -- toàn bộ vẫn nằm trong "async ở tầng ngoài"
+# (exam_consumer.py bọc graph.invoke bằng asyncio.to_thread) đã có sẵn từ trước.
+_RETRY_BACKOFF_SECONDS = 1.0
+_OPENAI_MODEL = "gpt-4o"
+CLAUDE_MODEL = "claude-sonnet-4-6"
+
+
+def _invoke_llm_json(llm: Any, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+    messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
+    response = llm.invoke(messages)
+    content = response.content.strip()
+    if content.startswith("```"):
+        lines = [line for line in content.split("\n") if not line.strip().startswith("```")]
+        content = "\n".join(lines).strip()
+    return json.loads(content)
+
+
+def call_llm_openai(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+    """Gọi GPT-4o, parse JSON response."""
+    return _invoke_llm_json(ChatOpenAI(model=_OPENAI_MODEL, temperature=0), system_prompt, user_prompt)
+
+
+def call_llm_claude(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+    """Gọi Claude Sonnet, parse JSON response -- cần biến môi trường ANTHROPIC_API_KEY (đọc tự
+    động qua langchain-anthropic, giống cách ChatOpenAI đọc OPENAI_API_KEY)."""
+    return _invoke_llm_json(ChatAnthropic(model=CLAUDE_MODEL, temperature=0), system_prompt, user_prompt)
+
+
+def call_with_retry_and_fallback(primary: Callable[[], _T], fallback: Callable[[], _T]) -> _T:
+    """Gọi primary(); nếu bị rate-limit (429, OpenAI hoặc Anthropic tuỳ bên nào đang là primary)
+    thì retry NGẮN 1 lần cùng provider trước khi đổi hẳn sang fallback() -- đa số 429 tự hết sau
+    vài trăm ms tới vài giây, retry ngắn thường đã đủ; lỗi khác (không phải rate-limit) bỏ qua
+    retry, đổi fallback ngay. Nếu fallback() cũng lỗi, exception đó lọt lên caller xử lý (không
+    nuốt) -- caller (VD run_consensus_judgment) đã có sẵn cơ chế coi lỗi đó là 1 lượt chấm thất
+    bại.
+
+    primary/fallback là closure 0-tham số (dùng lambda/partial bind sẵn args) để hàm này dùng
+    chung được cho cả case (5) (trả Dict) lẫn case (3) (trả str), không cần biết chữ ký gốc."""
+    try:
+        return primary()
+    except _RateLimitErrors:
+        time.sleep(_RETRY_BACKOFF_SECONDS)
+        try:
+            return primary()
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return fallback()
 
 
 def clip_unit(value: float) -> float:
@@ -71,14 +137,29 @@ def compute_reference_confidence(
     return medoid, clip_unit(min(stability, 1.0 - drift)), stability, drift
 
 
+@dataclass(frozen=True)
+class AlignmentConfidence:
+    """3 thành phần RIÊNG của case (4), không gộp sẵn -- ngưỡng Vietnam-adjusted trong spec
+    (m soft>0.20/hard>0.30, c soft<0.90/hard<0.80, j soft>0.15/hard>0.30) áp RIÊNG cho từng
+    thành phần, không phải 1 ngưỡng chung cho composite min(). Gộp sớm thành 1 số duy nhất (bản
+    trước) làm ngưỡng nới cho (1-m) -- đúng phần điều chỉnh Vietnam quan trọng nhất (rụng phụ âm
+    cuối) -- bị vô hiệu hoá, vì mọi thành phần khi đó buộc phải đạt ngưỡng của c (0.90) mới qua
+    được composite, xoá mất biên nới 0.80 dành riêng cho (1-m)."""
+
+    accuracy: Optional[float]  # 1 - m
+    coverage: Optional[float]  # c
+    timing: Optional[float]  # 1 - j
+    composite: Optional[float]  # min(accuracy, coverage, timing) -- CHỈ để hiển thị/cPfBranch
+
+
 def compute_alignment_confidence(
     segments_data: Sequence[Dict[str, Any]],
     reference_text: str,
-) -> Optional[float]:
-    """Tính C_align = min(1-m, coverage, 1-j) từ forced-alignment của Azure."""
+) -> AlignmentConfidence:
+    """Tính riêng accuracy (1-m), coverage (c), timing (1-j) từ forced-alignment của Azure."""
     reference_count = len(normalize_for_wer(reference_text).split())
     if reference_count == 0:
-        return None
+        return AlignmentConfidence(None, None, None, None)
 
     words: List[Dict[str, Any]] = []
     for segment in segments_data:
@@ -119,7 +200,11 @@ def compute_alignment_confidence(
             )
     timing_anomaly_ratio = timing_anomalies / max(aligned_count, 1)
 
-    return clip_unit(min(1.0 - miscue_ratio, coverage, 1.0 - timing_anomaly_ratio))
+    accuracy = clip_unit(1.0 - miscue_ratio)
+    coverage = clip_unit(coverage)
+    timing = clip_unit(1.0 - timing_anomaly_ratio)
+    composite = min(accuracy, coverage, timing)
+    return AlignmentConfidence(accuracy, coverage, timing, composite)
 
 
 _CONSENSUS_ORDERS = (
@@ -149,8 +234,19 @@ def _rationale_is_grounded(note: Any, transcript: str) -> bool:
     return not transcript_tokens or bool(transcript_tokens & note_tokens)
 
 
+# (primary, fallback) cho mỗi lượt trong 3 lượt case (5) -- xen O/C/O thay vì 3 lần cùng 1
+# model/weights: nếu GPT-4o có 1 điểm mù/bias hệ thống nào đó, cả 3 lượt cùng model sẽ dính
+# GIỐNG NHAU (Δc thấp giả tạo, trông "tự tin" dù sai đều) -- đổi 1 lượt sang model khác hẳn
+# kiến trúc/dữ liệu train tăng tính độc lập thật của 3 "judge", đúng tinh thần ROVER/cross-
+# system agreement đã dùng cho case (2). Đồng thời giảm tải OpenAI mỗi turn (đỡ 429).
+_CONSENSUS_PROVIDERS: Tuple[Tuple[Callable[[str, str], Dict[str, Any]], Callable[[str, str], Dict[str, Any]]], ...] = (
+    (call_llm_openai, call_llm_claude),
+    (call_llm_claude, call_llm_openai),
+    (call_llm_openai, call_llm_claude),
+)
+
+
 def run_consensus_judgment(
-    call_llm: Callable[[str, str], Dict[str, Any]],
     system_prompt: str,
     user_prompt: str,
     transcript: str,
@@ -158,7 +254,8 @@ def run_consensus_judgment(
     score_min: float = 0.0,
     score_max: float = 100.0,
 ) -> ConsensusJudgment:
-    """Chạy ba lượt độc lập song song và lấy median score cùng C_LLM,c."""
+    """Chạy ba lượt độc lập song song (xen OpenAI/Claude, mỗi lượt tự retry+fallback) và lấy
+    median score cùng C_LLM,c."""
     score_span = score_max - score_min
     if not math.isfinite(score_span) or score_span <= 0:
         score_span = 100.0
@@ -170,7 +267,12 @@ def run_consensus_judgment(
             "Keep the same rubric and score scale. In the note, cite at least one exact "
             "word or phrase from the student's transcript as evidence."
         )
-        return call_llm(system_prompt, user_prompt + variation)
+        primary, fallback = _CONSENSUS_PROVIDERS[index]
+        prompt = user_prompt + variation
+        return call_with_retry_and_fallback(
+            lambda: primary(system_prompt, prompt),
+            lambda: fallback(system_prompt, prompt),
+        )
 
     responses: List[Dict[str, Any]] = []
     invalid_output = False

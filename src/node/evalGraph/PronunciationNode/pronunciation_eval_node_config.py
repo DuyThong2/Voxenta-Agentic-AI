@@ -323,7 +323,7 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             include_raw=False,
             criteria_frameworks=speaking_input.criteria_frameworks,
         )
-        c_align = compute_alignment_confidence(segments_data, reference_text)
+        alignment = compute_alignment_confidence(segments_data, reference_text)
 
         logger.info(
             "[eval:pronunciation] done answer_id=%s turn=%s pron_score=%s",
@@ -334,7 +334,10 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "pronunciation_result": formatted_result,
             "metadata": {
                 "c_ref": c_ref,
-                "c_align": c_align,
+                "c_align": alignment.composite,
+                "c_align_accuracy": alignment.accuracy,
+                "c_align_coverage": alignment.coverage,
+                "c_align_timing": alignment.timing,
             },
         }
 

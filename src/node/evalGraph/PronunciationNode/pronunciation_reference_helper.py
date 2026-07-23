@@ -9,12 +9,13 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
+from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from node.evalGraph.PronunciationNode.pronunciation_reference_prompt import SYSTEM_PROMPT
 from node.state_models.speaking_input import QuestionContext
-from utils.confidence_utils import compute_reference_confidence
+from utils.confidence_utils import CLAUDE_MODEL, call_with_retry_and_fallback, compute_reference_confidence
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +51,20 @@ def _build_context_block(question: Optional[QuestionContext]) -> str:
     return "\n".join(lines)
 
 
-def build_pronunciation_reference(transcript: str, question: Optional[QuestionContext] = None) -> str:
+def build_pronunciation_reference(
+    transcript: str,
+    question: Optional[QuestionContext] = None,
+    *,
+    provider: str = "openai",
+) -> str:
     if not transcript or not transcript.strip():
         return transcript
 
-    llm = ChatOpenAI(model="gpt-5.4", temperature=0.7)
+    llm = (
+        ChatAnthropic(model=CLAUDE_MODEL, temperature=0.7)
+        if provider == "claude"
+        else ChatOpenAI(model="gpt-5.4", temperature=0.7)
+    )
 
     context_block = _build_context_block(question)
     human_content = (
@@ -72,18 +82,38 @@ def build_pronunciation_reference(transcript: str, question: Optional[QuestionCo
     return response.content.strip()
 
 
+# Xen Claude/OpenAI/Claude cho 3 lượt sinh reference -- cùng lý do case (5): tăng tính độc lập
+# thật giữa 3 candidate (không chỉ khác nhờ temperature=0.7 của CÙNG 1 model), và giảm tải
+# OpenAI mỗi turn. Đây là tác vụ SINH VĂN BẢN (không phải chấm điểm JSON), nên retry/fallback
+# vẫn dùng chung call_with_retry_and_fallback (nhận closure 0-tham số) từ confidence_utils.
+_REFERENCE_PROVIDERS: tuple[tuple[str, str], ...] = (
+    ("claude", "openai"),
+    ("openai", "claude"),
+    ("claude", "openai"),
+)
+
+
+def _build_reference_round(transcript: str, question: Optional[QuestionContext], index: int) -> str:
+    primary, fallback = _REFERENCE_PROVIDERS[index]
+    return call_with_retry_and_fallback(
+        lambda: build_pronunciation_reference(transcript, question, provider=primary),
+        lambda: build_pronunciation_reference(transcript, question, provider=fallback),
+    )
+
+
 def build_pronunciation_reference_consensus(
     transcript: str,
     question: Optional[QuestionContext] = None,
 ) -> tuple[str, Optional[float]]:
-    """Sinh ba reference độc lập song song rồi chọn medoid và tính C_ref."""
+    """Sinh ba reference độc lập song song (xen Claude/OpenAI, mỗi lượt tự retry+fallback) rồi
+    chọn medoid và tính C_ref."""
     if not transcript or not transcript.strip():
         return transcript, None
 
     with ThreadPoolExecutor(max_workers=3) as pool:
         futures = [
-            pool.submit(build_pronunciation_reference, transcript, question)
-            for _ in range(3)
+            pool.submit(_build_reference_round, transcript, question, index)
+            for index in range(3)
         ]
         references = [future.result() for future in futures]
 

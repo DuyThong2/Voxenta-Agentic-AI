@@ -84,6 +84,13 @@ class RealtimeExamSession:
         self._awaiting_final_transcript: bool = False
         self._final_transcript_event: asyncio.Event = asyncio.Event()
 
+        # A turn can span multiple utterances, each with C_ASR-log = sqrt(G*T20), so this is
+        # their running word-count-weighted average. It stays None when the transcription
+        # model does not return logprobs.
+        self.current_transcript_confidence: Optional[float] = None
+        self._confidence_weighted_sum: float = 0.0
+        self._confidence_weight_total: int = 0
+
     @classmethod
     async def create_from_archive(
         cls,
@@ -142,13 +149,21 @@ class RealtimeExamSession:
         self._awaiting_final_transcript = True
         self._final_transcript_event.clear()
 
-    def on_final_transcript(self, text: Optional[str]) -> None:
+    def on_final_transcript(self, text: Optional[str], confidence: Optional[float] = None) -> None:
         """Authoritative transcript for the utterance that just completed --
         appended to current_transcript (a turn may span multiple
-        utterances), superseding that utterance's own partial deltas."""
+        utterances), superseding that utterance's own partial deltas.
+        confidence (C_ASR-log from voice_live_client._confidence_from_logprobs) is
+        folded into current_transcript_confidence, word-count-weighted so a
+        short utterance's confidence doesn't count as much as a long one."""
         finalized = (text or self._live_partial or "").strip()
         if finalized:
             self.current_transcript = f"{self.current_transcript} {finalized}".strip()
+            if confidence is not None:
+                weight = max(len(finalized.split()), 1)
+                self._confidence_weighted_sum += confidence * weight
+                self._confidence_weight_total += weight
+                self.current_transcript_confidence = self._confidence_weighted_sum / self._confidence_weight_total
         self._live_partial = ""
         self._awaiting_final_transcript = False
         self._final_transcript_event.set()

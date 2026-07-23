@@ -37,6 +37,20 @@ class TurnDetail(_CamelMessage):
     word_feedback: List[WordFeedback] = Field(default_factory=list)
 
 
+class ConfidenceCaseSignals(_CamelMessage):
+    c_asr_log: Optional[float] = None
+    cross_asr_agreement: Optional[float] = None
+    q_snr: Optional[float] = None
+    q_speech: Optional[float] = None
+    clipping_ratio: Optional[float] = None
+    c_ref: Optional[float] = None
+    c_align: Optional[float] = None
+    c_pf_branch: Optional[float] = None
+    c_grammar: Optional[float] = None
+    c_vocabulary: Optional[float] = None
+    c_discourse: Optional[float] = None
+
+
 class EvaluationSignals(_CamelMessage):
     duration_seconds: int = 0
     word_count: int
@@ -51,3 +65,4 @@ class EvaluationSignals(_CamelMessage):
     ai_confidence: Optional[float] = None
     audio_quality: Optional[float] = None
     silence_ratio: Optional[float] = None
+    confidence_case: Optional[ConfidenceCaseSignals] = None

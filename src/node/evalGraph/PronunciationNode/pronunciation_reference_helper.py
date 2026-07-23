@@ -6,6 +6,7 @@ reference_text; every other consumer (validity, grammar/lexical/coherence eval,
 UI display) keeps reading speaking_input.transcribed_text untouched."""
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
 
 from langchain_openai import ChatOpenAI
@@ -13,6 +14,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from node.evalGraph.PronunciationNode.pronunciation_reference_prompt import SYSTEM_PROMPT
 from node.state_models.speaking_input import QuestionContext
+from utils.confidence_utils import compute_reference_confidence
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +54,7 @@ def build_pronunciation_reference(transcript: str, question: Optional[QuestionCo
     if not transcript or not transcript.strip():
         return transcript
 
-    llm = ChatOpenAI(model="gpt-5.4", temperature=0)
+    llm = ChatOpenAI(model="gpt-5.4", temperature=0.7)
 
     context_block = _build_context_block(question)
     human_content = (
@@ -68,3 +70,31 @@ def build_pronunciation_reference(transcript: str, question: Optional[QuestionCo
 
     response = llm.invoke(messages)
     return response.content.strip()
+
+
+def build_pronunciation_reference_consensus(
+    transcript: str,
+    question: Optional[QuestionContext] = None,
+) -> tuple[str, Optional[float]]:
+    """Sinh ba reference độc lập song song rồi chọn medoid và tính C_ref."""
+    if not transcript or not transcript.strip():
+        return transcript, None
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = [
+            pool.submit(build_pronunciation_reference, transcript, question)
+            for _ in range(3)
+        ]
+        references = [future.result() for future in futures]
+
+    reference, confidence, stability, drift = compute_reference_confidence(
+        transcript,
+        references,
+    )
+    logger.info(
+        "[eval:pronunciation] reference consensus stability=%s drift=%s confidence=%s",
+        stability,
+        drift,
+        confidence,
+    )
+    return reference, confidence

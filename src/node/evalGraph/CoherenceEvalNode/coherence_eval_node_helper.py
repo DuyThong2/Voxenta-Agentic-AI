@@ -18,6 +18,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from node.state_models import SpeakingInput
 from schemas.enums import SpeakingMode
 from schemas.scoring import CriterionScore
+from utils.confidence_utils import run_consensus_judgment
 
 logger = logging.getLogger(__name__)
 
@@ -48,15 +49,6 @@ def _format_asset_context(speaking_input: SpeakingInput) -> list[str]:
             "diverges from this description.)"
         )
     return parts
-
-
-def _parse_confidence(value: Any) -> Optional[float]:
-    if value is None:
-        return None
-    try:
-        return max(0.0, min(1.0, float(value)))
-    except (TypeError, ValueError):
-        return None
 
 
 def select_text_for_language_scoring(
@@ -258,17 +250,35 @@ def run_eval_node(
 
     try:
         user_prompt = build_user_prompt_fn(speaking_input, transcript, metrics)
-        llm_response = call_llm(system_prompt, user_prompt)
+        criterion_key = "vocabulary" if node_name == "lexical" else node_name
+        framework = next(
+            (
+                item
+                for item in (speaking_input.criteria_frameworks or [])
+                if item.criterion_key == criterion_key
+            ),
+            None,
+        )
+        consensus = run_consensus_judgment(
+            call_llm,
+            system_prompt,
+            user_prompt,
+            transcript,
+            score_min=framework.rubric_min_score if framework is not None else 0.0,
+            score_max=framework.rubric_max_score if framework is not None else 100.0,
+        )
+        llm_response = consensus.response
         criterion = CriterionScore(
             score=llm_response["score"],
             subscores=llm_response.get("subscores", {}),
             note=llm_response.get("note", "Evaluated by LLM based on transcript analysis."),
         )
 
-        confidence = _parse_confidence(llm_response.get("confidence"))
+        confidence = consensus.confidence
         merged_meta = {
             **scoring_meta,
-            **({confidence_key: confidence} if confidence is not None else {}),
+            confidence_key: confidence,
+            f"{node_name}_score_delta": consensus.score_delta_on_ten_point_scale,
         }
 
         logger.info(

@@ -194,14 +194,17 @@ class AttemptConnection:
         explicit_text = message.get("text")
         if explicit_text is not None:
             # Manual override (test clients / the old text protocol) — skip the VAD wait below
-            # since the caller is providing the transcript directly.
+            # since the caller is providing the transcript directly. No ASR confidence exists
+            # for text supplied this way.
             transcript = explicit_text
+            transcript_confidence = None
         else:
             # turn_end can arrive right on the heels of vad_speech_end, before that utterance's
             # (slightly slower) final_transcript has landed — wait briefly so this turn's
             # decision isn't made on an incomplete transcript.
             await session.wait_for_pending_transcript()
             transcript = session.current_transcript
+            transcript_confidence = session.current_transcript_confidence
 
         logger.info(
             "[realtime_transcript] exam_attempt_id=%s answer_id=%s turn_order=%d text=%r",
@@ -225,6 +228,7 @@ class AttemptConnection:
                 self.archive_graph, session.answer_id, session.turn_order, transcript,
                 is_last_allowed_turn=is_last_allowed_turn,
                 duration_seconds=duration_seconds,
+                confidence=transcript_confidence,
             )
         )
 
@@ -464,7 +468,7 @@ class AttemptConnection:
         elif event.kind == "vad_speech_end" and self.active_session is not None:
             self.active_session.on_speech_end()
         elif event.kind == "final_transcript" and self.active_session is not None:
-            self.active_session.on_final_transcript(event.text)
+            self.active_session.on_final_transcript(event.text, event.confidence)
         elif event.kind in ("vad_speech_start", "vad_speech_end", "partial_transcript", "final_transcript"):
             logger.warning(
                 "[attempt_connection] voice_live event=%s with no active session exam_attempt_id=%s",

@@ -24,8 +24,11 @@ from node.state_models.pronunciation import (
     WordFeedback,
 )
 from node.evalGraph.PronunciationNode.pronunciation_node_helper import format_pronunciation_api_response
-from node.evalGraph.PronunciationNode.pronunciation_reference_helper import build_pronunciation_reference
+from node.evalGraph.PronunciationNode.pronunciation_reference_helper import (
+    build_pronunciation_reference_consensus,
+)
 from utils import load_root_dotenv
+from utils.confidence_utils import compute_alignment_confidence
 from utils.speech_client import build_speech_config, normalize_text, _probe_audio_duration_seconds
 
 load_root_dotenv()
@@ -159,6 +162,7 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     audio_path = speaking_input.audio_path
     language = speaking_input.language or "en-US"
+    c_ref: Optional[float] = None
     
     # If reference_text is available, compare audio directly against it.
     # Otherwise, for unscripted mode, use Azure's own transcribed_text.
@@ -170,10 +174,13 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
         raw_transcript = speaking_input.transcribed_text or ""
         if raw_transcript:
             try:
-                reference_text = build_pronunciation_reference(raw_transcript, speaking_input.question)
+                reference_text, c_ref = build_pronunciation_reference_consensus(
+                    raw_transcript,
+                    speaking_input.question,
+                )
                 logger.info(
-                    "[eval:pronunciation] built reference from raw transcript answer_id=%s turn=%s changed=%s",
-                    answer_id, turn_order, reference_text != raw_transcript,
+                    "[eval:pronunciation] built reference from raw transcript answer_id=%s turn=%s changed=%s c_ref=%s",
+                    answer_id, turn_order, reference_text != raw_transcript, c_ref,
                 )
             except Exception:
                 # This reference text only feeds Azure's forced-alignment below -- validity,
@@ -316,13 +323,20 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             include_raw=False,
             criteria_frameworks=speaking_input.criteria_frameworks,
         )
+        c_align = compute_alignment_confidence(segments_data, reference_text)
 
         logger.info(
             "[eval:pronunciation] done answer_id=%s turn=%s pron_score=%s",
             answer_id, turn_order, pronunciation_result.pron_score,
         )
 
-        return {"pronunciation_result": formatted_result}
+        return {
+            "pronunciation_result": formatted_result,
+            "metadata": {
+                "c_ref": c_ref,
+                "c_align": c_align,
+            },
+        }
 
     except Exception as exc:
         logger.exception("[eval:pronunciation] failed answer_id=%s turn=%s", answer_id, turn_order)

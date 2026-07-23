@@ -7,6 +7,7 @@ from events.exam_attempt_evaluation_completed import (
     ExamAttemptEvaluationCompletedPayload,
 )
 from events.exam_attempt_evaluation_shared import (
+    ConfidenceCaseSignals,
     EvaluationSignals,
     PronunciationOverallScores,
     TurnDetail,
@@ -161,11 +162,100 @@ def _compute_audio_quality(metrics: Dict[str, Any]) -> Optional[float]:
     return None
 
 
+def _min_available(*values: Optional[float]) -> Optional[float]:
+    available = [float(value) for value in values if value is not None]
+    return min(available) if available else None
+
+
+def _build_turn_confidence_case(result: Dict[str, Any]) -> ConfidenceCaseSignals:
+    metadata = result.get("metadata") or {}
+    metrics = result.get("answer_length_metrics") or {}
+    speaking_input = result.get("speaking_input")
+
+    has_realtime = bool(
+        speaking_input is not None and speaking_input.realtime_transcript
+    )
+    realtime_confidence = (
+        _clamp_unit(speaking_input.realtime_transcript_confidence)
+        if has_realtime
+        else None
+    )
+    uses_nolog_branch = has_realtime and realtime_confidence is None
+    cross_asr_agreement = (
+        _clamp_unit(result.get("cross_asr_agreement"))
+        if uses_nolog_branch
+        else None
+    )
+    q_snr = _clamp_unit(metrics.get("q_snr")) if uses_nolog_branch else None
+    q_speech = _clamp_unit(metrics.get("q_speech")) if uses_nolog_branch else None
+    c_ref = _clamp_unit(metadata.get("c_ref"))
+    c_align = _clamp_unit(metadata.get("c_align"))
+
+    asr_common = realtime_confidence
+    hard_threshold = 0.60
+    if uses_nolog_branch:
+        asr_common = _min_available(cross_asr_agreement, q_snr, q_speech)
+        hard_threshold = 0.70 if (metrics.get("code_switching_ratio") or 0) > 0 else 0.80
+
+    pf_components = [value for value in (c_ref, c_align) if value is not None]
+    c_pf_branch = min(pf_components) if pf_components else None
+    if asr_common is not None and asr_common < hard_threshold:
+        c_pf_branch = 0.0
+
+    return ConfidenceCaseSignals(
+        c_asr_log=realtime_confidence,
+        cross_asr_agreement=cross_asr_agreement,
+        q_snr=q_snr,
+        q_speech=q_speech,
+        clipping_ratio=_clamp_unit(metrics.get("clipping_ratio")),
+        c_ref=c_ref,
+        c_align=c_align,
+        c_pf_branch=c_pf_branch,
+    )
+
+
+def _aggregate_confidence_cases(
+    result: Dict[str, Any],
+    turn_results: Optional[List[Dict[str, Any]]],
+) -> Optional[ConfidenceCaseSignals]:
+    cases = [
+        _build_turn_confidence_case(item)
+        for item in (turn_results or [result])
+    ]
+    metadata = result.get("metadata") or {}
+
+    def minimum(field: str) -> Optional[float]:
+        return _min_available(*(getattr(case, field) for case in cases))
+
+    clipping_values = [
+        case.clipping_ratio for case in cases if case.clipping_ratio is not None
+    ]
+    confidence_case = ConfidenceCaseSignals(
+        c_asr_log=minimum("c_asr_log"),
+        cross_asr_agreement=minimum("cross_asr_agreement"),
+        q_snr=minimum("q_snr"),
+        q_speech=minimum("q_speech"),
+        clipping_ratio=max(clipping_values) if clipping_values else None,
+        c_ref=minimum("c_ref"),
+        c_align=minimum("c_align"),
+        c_pf_branch=minimum("c_pf_branch"),
+        c_grammar=_clamp_unit(metadata.get("grammar_confidence")),
+        c_vocabulary=_clamp_unit(metadata.get("vocabulary_confidence")),
+        c_discourse=_clamp_unit(metadata.get("coherence_confidence")),
+    )
+    return (
+        confidence_case
+        if any(value is not None for value in confidence_case.model_dump().values())
+        else None
+    )
+
+
 def build_signals(
     result: Dict[str, Any],
     speaking_input: Optional[SpeakingInput] = None,
     *,
     duration_seconds: int = 0,
+    turn_results: Optional[List[Dict[str, Any]]] = None,
 ) -> EvaluationSignals:
     if speaking_input is None:
         speaking_input = result.get("speaking_input")
@@ -189,6 +279,7 @@ def build_signals(
         ai_confidence=_compute_ai_confidence(result),
         audio_quality=_compute_audio_quality(metrics),
         silence_ratio=metrics.get("silence_ratio"),
+        confidence_case=_aggregate_confidence_cases(result, turn_results),
     )
 
 

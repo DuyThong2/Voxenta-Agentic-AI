@@ -46,7 +46,11 @@ from node.state_models.pronunciation import FormattedPronunciationResult
 from infra.database import archive_store
 from realtime.attempt_connection import get_attempt_connection
 from schemas.enums import SpeakingMode
-from utils.speech_client import unwrap_language_tags
+from utils.speech_client import (
+    compute_cross_asr_agreement,
+    transcribe_with_confidence,
+    unwrap_language_tags,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +166,7 @@ def _build_initial_state(
     conversation_transcript: str,
     raw_payload: Dict[str, Any],
     realtime_transcript: Optional[str],
+    realtime_transcript_confidence: Optional[float],
 ) -> Dict[str, Any]:
     request_payload = request_event.payload
     return {
@@ -179,6 +184,7 @@ def _build_initial_state(
             question=_build_question_context(request_payload),
             topic=_build_topic_context(request_payload),
             realtime_transcript=realtime_transcript,
+            realtime_transcript_confidence=realtime_transcript_confidence,
         ),
         "status": "idle",
         "metadata": {
@@ -197,10 +203,20 @@ async def _evaluate_turn(
     raw_payload: Dict[str, Any],
 ) -> Dict[str, Any]:
     local_audio_path = await download_from_s3_async(turn.audio_ref)
+    audit_task: Optional[asyncio.Task] = None
     try:
-        realtime_transcript = await archive_store.get_realtime_transcript(
+        realtime_transcript, realtime_transcript_confidence = await archive_store.get_realtime_transcript(
             archive_graph, request_event.answer_id, turn.turn_order,
         )
+        if realtime_transcript and realtime_transcript_confidence is None:
+            audit_task = asyncio.create_task(
+                asyncio.to_thread(
+                    transcribe_with_confidence,
+                    local_audio_path,
+                    request_event.payload.language,
+                )
+            )
+
         initial_state = _build_initial_state(
             request_event,
             turn,
@@ -208,6 +224,7 @@ async def _evaluate_turn(
             conversation_transcript,
             raw_payload,
             realtime_transcript,
+            realtime_transcript_confidence,
         )
         result = await asyncio.to_thread(
             graph.invoke,
@@ -220,8 +237,29 @@ async def _evaluate_turn(
         )
         if result.get("status") == "error":
             raise RuntimeError(result.get("error") or "evaluation graph returned error")
+
+        if audit_task is not None:
+            try:
+                audit_transcript, _audit_confidence = await audit_task
+                if audit_transcript:
+                    primary_transcript = result["speaking_input"].transcribed_text or ""
+                    result["cross_asr_agreement"] = compute_cross_asr_agreement(
+                        primary_transcript,
+                        audit_transcript,
+                    )
+            except Exception:
+                logger.exception(
+                    "[exam-consumer] audit ASR failed; continuing without agreement signal answer_id=%s turn=%s",
+                    request_event.answer_id,
+                    turn.turn_order,
+                )
         return result
     finally:
+        if audit_task is not None:
+            try:
+                await audit_task
+            except Exception:
+                pass
         if local_audio_path != turn.audio_ref and os.path.exists(local_audio_path):
             os.unlink(local_audio_path)
 
@@ -281,7 +319,16 @@ def _run_aggregate_text_evaluation(
     # merge logic the compiled graph's own "merge_scores" node runs, reused here so the two
     # paths can't silently drift apart.
     for node in (answer_length_analysis_node, coherence_eval_node, lexical_eval_node, grammar_eval_node):
-        state = {**state, **node(state)}
+        delta = node(state)
+        if "metadata" in delta:
+            delta = {
+                **delta,
+                "metadata": {
+                    **(state.get("metadata") or {}),
+                    **(delta.get("metadata") or {}),
+                },
+            }
+        state = {**state, **delta}
 
     state = {**state, **merge_scores_node(state)}
     if state.get("status") == "error":
@@ -364,7 +411,12 @@ def _build_multi_turn_completed_event(
         payload=ExamAttemptEvaluationCompletedPayload(
             turns=completed_turns,
             criteria=_merge_multi_turn_criteria(aggregate_result, per_turn_results),
-            signals=build_signals(aggregate_result, speaking_input, duration_seconds=total_duration_seconds),
+            signals=build_signals(
+                aggregate_result,
+                speaking_input,
+                duration_seconds=total_duration_seconds,
+                turn_results=[result for _turn, result in per_turn_results],
+            ),
             validity=aggregate_result.get("validity"),
             feedback_summary=feedback_summary,
             suggestions=suggestions,

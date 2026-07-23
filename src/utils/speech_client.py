@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import threading
+import unicodedata
 import wave
 from typing import List, NamedTuple, Optional, Tuple
 
@@ -199,6 +200,119 @@ def compute_silence_ratio(audio_path: str) -> Optional[float]:
     silence_windows = int(np.sum(rms < threshold))
 
     return silence_windows / n_windows
+
+
+def compute_snr_db(audio_path: str) -> Optional[float]:
+    """Ước lượng segmental SNR (dB) bằng cùng window/ngưỡng với silence ratio.
+
+    Đây không phải WADA-SNR. Cách đo minh bạch này xem các window dưới ngưỡng
+    RMS tương đối là nhiễu nền và các window còn lại là tín hiệu lời nói.
+    """
+    try:
+        with wave.open(audio_path, "rb") as wav_file:
+            n_channels = wav_file.getnchannels()
+            sample_width = wav_file.getsampwidth()
+            frame_rate = wav_file.getframerate()
+            raw = wav_file.readframes(wav_file.getnframes())
+    except (wave.Error, OSError, EOFError):
+        return None
+
+    if not raw or sample_width != 2 or frame_rate <= 0:
+        return None
+
+    samples = np.frombuffer(raw, dtype=np.int16).astype(np.float64)
+    if n_channels > 1:
+        samples = samples.reshape(-1, n_channels).mean(axis=1)
+
+    window_size = max(1, int(frame_rate * 0.03))
+    n_windows = samples.size // window_size
+    if n_windows == 0:
+        return None
+
+    windows = samples[: n_windows * window_size].reshape(n_windows, window_size)
+    power = np.mean(windows ** 2, axis=1)
+    rms = np.sqrt(power)
+    peak_rms = float(np.percentile(rms, 95))
+    if peak_rms <= 0:
+        return None
+
+    threshold = peak_rms * 0.05
+    noise_power = power[rms < threshold]
+    speech_power = power[rms >= threshold]
+    if noise_power.size == 0 or speech_power.size == 0:
+        return None
+
+    mean_noise_power = float(np.mean(noise_power))
+    mean_speech_power = float(np.mean(speech_power))
+    if mean_noise_power <= 0:
+        return None
+
+    return float(10.0 * np.log10(mean_speech_power / mean_noise_power))
+
+
+def compute_clipping_ratio(audio_path: str, *, near_full_scale: float = 0.99) -> Optional[float]:
+    """Trả về tỉ lệ sample WAV PCM 16-bit chạm hoặc gần biên độ tối đa."""
+    try:
+        with wave.open(audio_path, "rb") as wav_file:
+            sample_width = wav_file.getsampwidth()
+            raw = wav_file.readframes(wav_file.getnframes())
+    except (wave.Error, OSError, EOFError):
+        return None
+
+    if not raw or sample_width != 2:
+        return None
+
+    samples = np.frombuffer(raw, dtype=np.int16)
+    if samples.size == 0:
+        return None
+
+    clip_level = near_full_scale * 32767
+    clipped = int(np.sum(np.abs(samples.astype(np.int32)) >= clip_level))
+    return clipped / samples.size
+
+
+def _fold_vietnamese_diacritics(text: str) -> str:
+    """Bỏ dấu tiếng Việt chỉ để so khớp, không dùng cho transcript hiển thị."""
+    text = text.replace("đ", "d").replace("Đ", "D")
+    decomposed = unicodedata.normalize("NFD", text)
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
+def normalize_for_wer(text: str) -> str:
+    """Chuẩn hóa hai transcript trước khi tính WER theo từ."""
+    normalized = _fold_vietnamese_diacritics(unwrap_language_tags(text).lower())
+    normalized = re.sub(r"[^\w\s]", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def word_error_rate(reference_words: List[str], hypothesis_words: List[str]) -> Optional[float]:
+    """Tính WER bằng Levenshtein trên danh sách từ."""
+    if not reference_words and not hypothesis_words:
+        return None
+    if not reference_words:
+        return 1.0
+
+    n, m = len(reference_words), len(hypothesis_words)
+    distances = list(range(m + 1))
+    for i in range(1, n + 1):
+        previous_diagonal, distances[0] = distances[0], i
+        for j in range(1, m + 1):
+            previous_row = distances[j]
+            distances[j] = (
+                previous_diagonal
+                if reference_words[i - 1] == hypothesis_words[j - 1]
+                else 1 + min(previous_diagonal, distances[j], distances[j - 1])
+            )
+            previous_diagonal = previous_row
+    return distances[m] / n
+
+
+def compute_cross_asr_agreement(text_primary: str, text_audit: str) -> Optional[float]:
+    """A = 1 - WER_norm giữa transcript chính và transcript audit."""
+    reference = normalize_for_wer(text_primary).split()
+    hypothesis = normalize_for_wer(text_audit).split()
+    wer = word_error_rate(reference, hypothesis)
+    return None if wer is None else max(0.0, 1.0 - wer)
 
 
 def transcribe(audio_path: str, language: str) -> Optional[str]:

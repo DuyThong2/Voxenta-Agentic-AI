@@ -1,4 +1,5 @@
 import json
+import logging
 import math
 import re
 import time
@@ -16,6 +17,8 @@ from openai import RateLimitError as OpenAIRateLimitError
 _RateLimitErrors = (OpenAIRateLimitError, AnthropicRateLimitError)
 
 from utils.speech_client import normalize_for_wer, word_error_rate
+
+logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
 
@@ -60,18 +63,44 @@ def call_with_retry_and_fallback(primary: Callable[[], _T], fallback: Callable[[
     bại.
 
     primary/fallback là closure 0-tham số (dùng lambda/partial bind sẵn args) để hàm này dùng
-    chung được cho cả case (5) (trả Dict) lẫn case (3) (trả str), không cần biết chữ ký gốc."""
+    chung được cho cả case (5) (trả Dict) lẫn case (3) (trả str), không cần biết chữ ký gốc.
+
+    Mọi lần retry/đổi-fallback đều được log (WARNING) và fallback thành công/thất bại cũng được
+    log -- trước đây toàn bộ nhánh này nuốt exception im lặng nên không thể biết từ log là 429
+    có xảy ra hay fallback Anthropic có chạy/thành công hay không."""
     try:
         return primary()
-    except _RateLimitErrors:
+    except _RateLimitErrors as exc:
+        logger.warning(
+            "LLM primary provider bị rate-limit (%s); retry 1 lần sau %.1fs trước khi fallback",
+            type(exc).__name__,
+            _RETRY_BACKOFF_SECONDS,
+        )
         time.sleep(_RETRY_BACKOFF_SECONDS)
         try:
             return primary()
-        except Exception:
-            pass
-    except Exception:
-        pass
-    return fallback()
+        except Exception as retry_exc:
+            logger.warning(
+                "LLM primary retry vẫn lỗi (%s); đổi sang fallback provider",
+                type(retry_exc).__name__,
+            )
+    except Exception as exc:
+        logger.warning(
+            "LLM primary provider lỗi (%s: %s); đổi sang fallback provider",
+            type(exc).__name__,
+            exc,
+        )
+    try:
+        result = fallback()
+        logger.warning("LLM fallback provider chạy THÀNH CÔNG (đã chuyển provider)")
+        return result
+    except Exception as fb_exc:
+        logger.error(
+            "LLM fallback provider CŨNG lỗi (%s: %s) -- lượt chấm này coi như thất bại",
+            type(fb_exc).__name__,
+            fb_exc,
+        )
+        raise
 
 
 def clip_unit(value: float) -> float:

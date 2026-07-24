@@ -1,7 +1,9 @@
 import math
 import threading
 import unittest
+from unittest import mock
 
+import utils.confidence_utils as confidence_utils
 from infra.voice_live_client import VoiceLiveClient
 from mappers.exam_event_builder import build_signals
 from node.state_models.speaking_input import SpeakingInput
@@ -73,7 +75,7 @@ class ConfidenceLayerTests(unittest.TestCase):
 
         confidence = compute_alignment_confidence(segments, "one two three")
 
-        self.assertAlmostEqual(confidence, 1 / 3)
+        self.assertAlmostEqual(confidence.composite, 1 / 3)
 
     def test_llm_consensus_normalizes_delta_from_100_point_scale(self) -> None:
         responses = [
@@ -87,18 +89,19 @@ class ConfidenceLayerTests(unittest.TestCase):
             with lock:
                 return responses.pop()
 
-        judgment = run_consensus_judgment(
-            fake_call,
-            "system",
-            'Transcript: "I am a student"',
-            "I am a student",
-        )
+        providers = ((fake_call, fake_call),) * 3
+        with mock.patch.object(confidence_utils, "_CONSENSUS_PROVIDERS", providers):
+            judgment = run_consensus_judgment(
+                "system",
+                'Transcript: "I am a student"',
+                "I am a student",
+            )
 
         self.assertEqual(judgment.response["score"], 80)
         self.assertEqual(judgment.score_delta_on_ten_point_scale, 2.0)
         self.assertEqual(judgment.confidence, 0.0)
 
-    def test_event_builder_uses_nolog_branch_and_pf_hard_gate(self) -> None:
+    def test_event_builder_uses_nolog_branch_and_pf_is_min_not_gated(self) -> None:
         speaking_input = SpeakingInput(
             audio_path="unused.wav",
             realtime_transcript="I am a student",
@@ -130,8 +133,14 @@ class ConfidenceLayerTests(unittest.TestCase):
         self.assertIsNone(signals.confidence_case.c_asr_log)
         self.assertEqual(signals.confidence_case.cross_asr_agreement, 0.95)
         self.assertEqual(signals.confidence_case.q_snr, 0.75)
-        self.assertEqual(signals.confidence_case.c_pf_branch, 0.0)
+        # c_pf_branch = min(c_ref, c_align) = min(0.9, 0.85) = 0.85 -- KHÔNG còn bị ép về 0 dù
+        # asr_common (min 0.95/0.75/1.0 = 0.75) < 0.80. Việc route ASR do ConfidenceReviewCalculator
+        # xử lý riêng, c_pf_branch giữ nguyên giá trị thật (khớp giả mã cuối research).
+        self.assertEqual(signals.confidence_case.c_pf_branch, 0.85)
         self.assertEqual(signals.confidence_case.c_discourse, 0.6)
+        # audio_quality: không có asr_confidence_avg/silence_ratio (mai-transcribe-1) -> fallback
+        # min(q_snr, q_speech) = min(0.75, 1.0) = 0.75, thay vì null (UI hiện "-").
+        self.assertEqual(signals.audio_quality, 0.75)
 
     def test_event_builder_aggregates_worst_turn_and_max_clipping(self) -> None:
         def turn(confidence: float, clipping: float):

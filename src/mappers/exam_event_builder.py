@@ -141,6 +141,17 @@ def _compute_audio_quality(metrics: Dict[str, Any]) -> Optional[float]:
         return asr_confidence
     if silence_ratio is not None:
         return 1.0 - silence_ratio
+
+    # Fallback: mai-transcribe-1 không có logprob nên asr_confidence_avg = null, và
+    # silence_ratio nhiều khi cũng chưa tính -> trước đây audio_quality luôn null -> UI hiện "-".
+    # Nhưng ta VẪN có tín hiệu chất lượng audio thật: q_snr (signal-to-noise) và q_speech
+    # (tỉ lệ speech), chính là 2 tín hiệu dùng cho nhánh ASR-nolog. Lấy min (worst-link) làm
+    # audio quality thay vì bỏ trống.
+    q_snr = _clamp_unit(metrics.get("q_snr"))
+    q_speech = _clamp_unit(metrics.get("q_speech"))
+    quality_parts = [value for value in (q_snr, q_speech) if value is not None]
+    if quality_parts:
+        return min(quality_parts)
     return None
 
 
@@ -176,16 +187,14 @@ def _build_turn_confidence_case(result: Dict[str, Any]) -> ConfidenceCaseSignals
     c_align_coverage = _clamp_unit(metadata.get("c_align_coverage"))
     c_align_timing = _clamp_unit(metadata.get("c_align_timing"))
 
-    asr_common = realtime_confidence
-    hard_threshold = 0.60
-    if uses_nolog_branch:
-        asr_common = _min_available(cross_asr_agreement, q_snr, q_speech)
-        hard_threshold = 0.70 if (metrics.get("code_switching_ratio") or 0) > 0 else 0.80
-
+    # c_pf_branch = min(c_ref, c_align), theo ĐÚNG giả mã cuối của research
+    # (02-ket-qua.md, requires_human_review): KHÔNG ép về 0 khi ASR thấp. Việc "ASR hỏng ->
+    # chuyển người" đã được ConfidenceReviewCalculator xử lý ĐỘC LẬP qua ngưỡng asrNolog/cAsrLog
+    # riêng (nó không hề đọc c_pf_branch). Bản cũ ép c_pf_branch=0 ngay ở ngưỡng SOFT 0.80 (nhánh
+    # nolog) -- vừa sai ngưỡng (hard đúng ra là 0.60), vừa sai cơ chế -- khiến overallConfidence
+    # (min mọi c-value phía Java) LUÔN = 0 dù cRef/cAlign rất tốt.
     pf_components = [value for value in (c_ref, c_align) if value is not None]
     c_pf_branch = min(pf_components) if pf_components else None
-    if asr_common is not None and asr_common < hard_threshold:
-        c_pf_branch = 0.0
 
     return ConfidenceCaseSignals(
         c_asr_log=realtime_confidence,

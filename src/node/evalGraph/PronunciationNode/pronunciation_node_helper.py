@@ -259,9 +259,7 @@ def build_criteria_scores(
 
     - pronunciation: Azure speech assessment
     - fluency: Azure fluency score
-    - coherence: LLM (added by coherence_eval_node)
-    - vocabulary: LLM (added by lexical_eval_node)
-    - grammar: LLM (added by grammar_eval_node)
+    - coherence/vocabulary/grammar: LLM (added by language_quality_eval_node)
     """
 
     pronunciation_score = round_score(result.pron_score or result.accuracy_score)

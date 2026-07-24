@@ -36,10 +36,11 @@ from mappers.exam_event_builder import (
 from node.evalGraph.AnswerLengthNode.answer_length_analysis_node_config import (
     answer_length_analysis_node,
 )
-from node.evalGraph.CoherenceEvalNode.coherence_eval_node_config import coherence_eval_node
-from node.evalGraph.GrammarEvalNode.grammar_eval_node_config import grammar_eval_node
-from node.evalGraph.LexicalEvalNode.lexical_eval_node_config import lexical_eval_node
+from node.evalGraph.LanguageQualityEvalNode.language_quality_eval_node_config import (
+    language_quality_eval_node,
+)
 from node.evalGraph.MergeScoresNode.merge_scores_node_config import merge_scores_node
+from node.evalGraph.ValidityNode.validity_node_config import validity_node
 from node.followUpDecisionGraph.followup_graph_helper import is_clarification_reason
 from node.state_models import QuestionAssetContext, QuestionContext, SpeakingInput, TopicContext
 from node.state_models.pronunciation import FormattedPronunciationResult
@@ -100,7 +101,7 @@ def _build_dialogue_transcript(per_turn_results: List[Tuple[Any, Dict[str, Any]]
         [00:00] AI: What is your favorite color?
         [00:05] User: I like blue because the sky is blue.
 
-    Used only as additional context for CoherenceEvalNode (to judge whether
+    Used only as additional context for the discourse judgment (to judge whether
     the answer coherently follows what was actually asked, including
     follow-ups) -- never fed into grammar/lexical/answer-length, which must
     only see the student's own words (see _combine_transcript above).
@@ -124,68 +125,146 @@ def _total_duration_seconds(turns: List[Any]) -> int:
     return int(round(sum(float(turn.duration_seconds or 0) for turn in turns)))
 
 
+def _aggregate_response_duration(turns: List[Any]) -> Optional[float]:
+    durations = [
+        float(turn.duration_seconds)
+        for turn in turns
+        if turn.duration_seconds is not None
+    ]
+    return sum(durations) if durations else None
+
+
 def _severity_rank(value: Optional[str]) -> int:
     ranks = {"none": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
     return ranks.get(str(value or "none").lower(), 0)
 
 
-def _merge_turn_validity(per_turn_results: List[Tuple[Any, Dict[str, Any]]]) -> ValidityResult:
-    """Preserve all per-turn validity evidence without letting one failed follow-up
-    invalidate an otherwise scoreable multi-turn answer.
-    """
-    merged_rules: List[RuleResult] = []
-    transcript_word_count = 0
-    any_scoreable_turn = False
+def _deduplicate_turn_rules(rules: List[RuleResult]) -> List[RuleResult]:
+    grouped: Dict[str, List[RuleResult]] = {}
+    for rule in rules:
+        grouped.setdefault(rule.rule_id, []).append(rule)
 
+    merged: List[RuleResult] = []
+    for rule_id, matches in grouped.items():
+        selected = max(matches, key=lambda item: _severity_rank(item.severity))
+        turn_orders = sorted(
+            {
+                int(rule.evidence["turn_order"])
+                for rule in matches
+                if isinstance(rule.evidence.get("turn_order"), (int, float))
+            }
+        )
+        evidence = {
+            key: value
+            for key, value in (selected.evidence or {}).items()
+            if key not in {"turn_order", "turn_type"}
+        }
+        evidence.update(
+            {
+                "turn_orders": turn_orders,
+                "occurrence_count": len(matches),
+                "aggregation": "deduplicated_by_rule_id",
+            }
+        )
+        merged.append(
+            selected.model_copy(
+                update={
+                    "rule_id": rule_id,
+                    "evidence": evidence,
+                    "target_criteria": sorted(
+                        {
+                            criterion
+                            for rule in matches
+                            for criterion in rule.target_criteria
+                        }
+                    ),
+                }
+            )
+        )
+    return merged
+
+
+def _merge_turn_validity(
+    per_turn_results: List[Tuple[Any, Dict[str, Any]]],
+    aggregate_validity: ValidityResult,
+) -> ValidityResult:
+    """Keep aggregate validity authoritative and preserve only turn-local safety flags."""
+    rules = [
+        rule.model_copy(
+            update={
+                "evidence": {
+                    **(rule.evidence or {}),
+                    "aggregation": "complete_answer",
+                }
+            }
+        )
+        for rule in aggregate_validity.rule_results
+    ]
     for turn, result in sorted(per_turn_results, key=lambda item: item[0].turn_order):
         validity = result.get("validity")
         if not isinstance(validity, ValidityResult):
             continue
-
-        transcript_word_count += int(validity.transcript_word_count or 0)
-        any_scoreable_turn = any_scoreable_turn or bool(validity.valid_for_scoring)
-
         for rule in validity.rule_results:
+            if rule.rule_id != "safety.profanity_or_abuse":
+                continue
             evidence = {
                 **(rule.evidence or {}),
                 "turn_order": turn.turn_order,
                 "turn_type": turn.turn_type or ("MAIN" if turn.turn_order == 1 else "FOLLOWUP"),
+                "aggregation": "turn_safety_backstop",
             }
-            merged_rules.append(rule.model_copy(update={"evidence": evidence}))
+            rules.append(rule.model_copy(update={"evidence": evidence}))
 
-    if not merged_rules:
-        return ValidityResult(
-            transcript_source="multi_turn_transcribed_text",
-            transcript_word_count=transcript_word_count,
-        )
-
-    if not any_scoreable_turn:
-        return ValidityResult(
-            valid_for_scoring=False,
-            action="reject_or_zero",
-            overall_severity="critical",
-            rule_results=merged_rules,
-            score_caps={
+    merged_rules = _deduplicate_turn_rules(rules)
+    has_blocking_reject = any(
+        rule.blocking and rule.action == "reject_or_zero"
+        for rule in merged_rules
+    )
+    valid_for_scoring = (
+        bool(aggregate_validity.valid_for_scoring)
+        and not has_blocking_reject
+    )
+    has_penalty = any(
+        rule.action == "score_with_penalty"
+        for rule in merged_rules
+    )
+    highest = max(
+        (_severity_rank(rule.severity) for rule in merged_rules),
+        default=_severity_rank(aggregate_validity.overall_severity),
+    )
+    severity_by_rank = ["none", "low", "medium", "high", "critical"]
+    score_caps = dict(aggregate_validity.score_caps)
+    if not valid_for_scoring:
+        score_caps.update(
+            {
                 "pronunciation_max": 0,
                 "fluency_max": 0,
                 "grammar_max": 0,
                 "vocabulary_max": 0,
                 "coherence_max": 0,
-            },
-            transcript_source="multi_turn_transcribed_text",
-            transcript_word_count=transcript_word_count,
+            }
         )
 
-    highest = max(_severity_rank(rule.severity) for rule in merged_rules)
-    severity = "high" if highest >= 3 else "medium" if highest == 2 else "low"
     return ValidityResult(
-        valid_for_scoring=True,
-        action="score_with_penalty",
-        overall_severity=severity,
+        valid_for_scoring=valid_for_scoring,
+        action=(
+            "reject_or_zero"
+            if not valid_for_scoring
+            else "score_with_penalty"
+            if has_penalty
+            else "score"
+        ),
+        overall_severity=severity_by_rank[highest],
         rule_results=merged_rules,
+        flags=aggregate_validity.flags,
+        score_caps=score_caps,
+        penalties=aggregate_validity.penalties,
         transcript_source="multi_turn_transcribed_text",
-        transcript_word_count=transcript_word_count,
-        notes=["Multi-turn validity was merged; scoreable turns remain eligible for scoring."],
+        transcript_word_count=aggregate_validity.transcript_word_count,
+        notes=[
+            *aggregate_validity.notes,
+            "Multi-turn validity was evaluated once against the complete answer.",
+        ],
     )
 
 
@@ -254,6 +333,11 @@ def _build_initial_state(
             "request_payload": raw_payload,
             "turn_order": turn.turn_order,
             "actual_response_seconds": turn.duration_seconds,
+            "validity_scope": (
+                "turn_fragment"
+                if len(request_event.payload.turns) > 1
+                else "complete_answer"
+            ),
         },
     }
 
@@ -303,6 +387,7 @@ def _run_aggregate_text_evaluation(
     per_turn_results: List[Tuple[Any, Dict[str, Any]]],
     merged_transcript: str,
     dialogue_transcript: str,
+    total_response_seconds: Optional[float],
 ) -> Dict[str, Any]:
     """Grade grammar/lexical/coherence/answer-length ONCE, against the whole
     multi-turn answer -- not per turn.
@@ -310,12 +395,9 @@ def _run_aggregate_text_evaluation(
     start_node (run inside each per-turn graph.invoke above) unconditionally
     re-transcribes speaking_input.transcribed_text from that turn's own
     audio_path, so there is no way to get a full-answer merged transcript
-    through the compiled graph's normal entry point. Pronunciation/validity/
-    correction are all inherently per-turn/per-audio and already ran once per
-    turn via graph.invoke above; this function instead calls the remaining
-    text-only node functions directly or, bypassing start_node/validity_node/
-    correction_node/pronunciation_eval_node entirely, on a synthetic state
-    whose transcribed_text is the merged, student-only transcript.
+    through the compiled graph's normal entry point. Pronunciation is evaluated
+    per audio turn; this function runs complete-answer validity, answer-length,
+    and language quality against the merged student transcript.
     """
     base_speaking_input = per_turn_results[0][1]["speaking_input"]
     speaking_input = base_speaking_input.model_copy(update={
@@ -341,29 +423,51 @@ def _run_aggregate_text_evaluation(
         "pronunciation_result": pronunciation_result,
         "status": "processing",
         "error": None,
-        "metadata": {},
-        "validity": _merge_turn_validity(per_turn_results),
+        "metadata": (
+            {
+                "actual_response_seconds": total_response_seconds,
+                "validity_scope": "complete_answer",
+            }
+            if total_response_seconds is not None
+            else {"validity_scope": "complete_answer"}
+        ),
+        "validity": ValidityResult(),
     }
 
-    # These 4 node functions now return ONLY their own delta keys (not the whole state --
-    # see GraphState._merge_metadata's docstring, added so they're safe to run as
-    # concurrent branches inside graph.invoke()'s compiled graph). Called directly here in
-    # a plain sequential loop instead, so each delta must be folded into `state` by hand;
-    # merge_scores_node is what actually checks each node's namespaced metadata error key
-    # and combines coherence/lexical/grammar's criteria into pronunciation_result -- same
-    # merge logic the compiled graph's own "merge_scores" node runs, reused here so the two
-    # paths can't silently drift apart.
-    for node in (answer_length_analysis_node, coherence_eval_node, lexical_eval_node, grammar_eval_node):
-        delta = node(state)
-        if "metadata" in delta:
-            delta = {
-                **delta,
-                "metadata": {
-                    **(state.get("metadata") or {}),
-                    **(delta.get("metadata") or {}),
-                },
-            }
-        state = {**state, **delta}
+    state = validity_node(state)
+    aggregate_validity = state.get("validity")
+    if not isinstance(aggregate_validity, ValidityResult):
+        raise RuntimeError("aggregate validity evaluation did not return ValidityResult")
+    state["validity"] = _merge_turn_validity(
+        per_turn_results,
+        aggregate_validity,
+    )
+
+    # Invalid complete answers do not need answer-length or language-quality calls.
+    if not state["validity"].valid_for_scoring:
+        return {**state, **merge_scores_node(state)}
+
+    delta = answer_length_analysis_node(state)
+    if "metadata" in delta:
+        delta = {
+            **delta,
+            "metadata": {
+                **(state.get("metadata") or {}),
+                **(delta.get("metadata") or {}),
+            },
+        }
+    state = {**state, **delta}
+
+    delta = language_quality_eval_node(state)
+    if "metadata" in delta:
+        delta = {
+            **delta,
+            "metadata": {
+                **(state.get("metadata") or {}),
+                **(delta.get("metadata") or {}),
+            },
+        }
+    state = {**state, **delta}
 
     state = {**state, **merge_scores_node(state)}
     if state.get("status") == "error":
@@ -379,6 +483,22 @@ def _merge_multi_turn_criteria(
     criteria = build_criteria_payload(aggregate_result)
     if not criteria:
         return criteria
+
+    validity = aggregate_result.get("validity")
+    if isinstance(validity, ValidityResult) and (
+        not validity.valid_for_scoring
+        or validity.overall_severity == "critical"
+    ):
+        return {
+            name: criterion.model_copy(update={
+                "score": 0,
+                "level": "not_scored",
+                "status": "zeroed",
+                "source": "rule",
+                "note": "Điểm được đưa về 0 do câu trả lời vi phạm validity ở mức critical.",
+            })
+            for name, criterion in criteria.items()
+        }
 
     pronunciation_scores: List[float] = []
     fluency_scores: List[float] = []
@@ -455,8 +575,8 @@ def _build_multi_turn_completed_event(
             validity=aggregate_result.get("validity"),
             feedback_summary=feedback_summary,
             suggestions=suggestions,
-            model_version="gpt-4o",
-            prompt_version="v1",
+            model_version="gpt-4o+claude-sonnet-4-6",
+            prompt_version="language-quality-v2",
             evaluated_at=build_completed_event(
                 aggregate_result,
                 speaking_input,
@@ -628,13 +748,10 @@ async def start_exam_attempt_consumer(app):
                         "[exam-consumer] evaluating turn %d/%d answer_id=%s",
                         turn.turn_order, len(scoreable_turns), request_event.answer_id,
                     )
-                    # No merged dialogue_transcript is passed in here -- turn.transcript
-                    # (vox's own record) is never populated, so nothing meaningful could be
-                    # built yet anyway. Real transcripts only exist after start_node runs,
-                    # per turn, below. Whatever per-turn coherence_eval sees during this
-                    # graph.invoke() is discarded/overridden by the aggregate step further
-                    # down, which rebuilds an accurate merged/dialogue transcript from the
-                    # real per-turn transcriptions once they're all known.
+                    # Multi-turn fragments only run transcription, deterministic local
+                    # validity gates, and pronunciation. Complete-answer semantic validity,
+                    # answer length, and language quality run once after all real per-turn
+                    # transcripts are available.
                     result = await _evaluate_turn(
                         graph,
                         archive_graph,
@@ -669,6 +786,9 @@ async def start_exam_attempt_consumer(app):
                     per_turn_results,
                     merged_transcript,
                     dialogue_transcript,
+                    _aggregate_response_duration(
+                        [turn for turn, _result in per_turn_results]
+                    ),
                 )
                 completed_event = _build_multi_turn_completed_event(
                     request_event,

@@ -18,6 +18,7 @@ from node.followUpDecisionGraph.RepeatRecoveryNode.repeat_recovery_node_helper i
     question_attr,
 )
 from node.followUpDecisionGraph.RepeatRecoveryNode.repeat_recovery_node_prompt import SYSTEM_PROMPT
+from node.followUpDecisionGraph.constants import MAX_CLARIFICATION_TURNS
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +144,7 @@ def _build_prompt(state: Dict[str, Any]) -> str:
     remind_respectfully_count = count_violations_of_type(history, "remind_respectfully")
     redirect_offtopic_count = count_violations_of_type(history, "redirect_offtopic")
     redirect_wrong_language_count = count_violations_of_type(history, "redirect_wrong_language")
+    clarification_count = count_violations_of_type(history, "clarify_prompt")
 
     return (
         "## Question Context\n"
@@ -164,6 +166,7 @@ def _build_prompt(state: Dict[str, Any]) -> str:
         f"remind_respectfully_count={remind_respectfully_count}\n"
         f"redirect_offtopic_count={redirect_offtopic_count}\n"
         f"redirect_wrong_language_count={redirect_wrong_language_count}\n"
+        f"clarification_count={clarification_count} (maximum {MAX_CLARIFICATION_TURNS})\n"
         "(the system automatically forces a move-on variant if EITHER: this specific type "
         "has already occurred once before (repeat of the same type), OR "
         "engagement_violation_count has already reached 2 total, regardless of type mix -- "
@@ -270,6 +273,16 @@ def _resolve_edge_case_decision(state: Dict[str, Any], llm_decision: Dict[str, A
         }
 
     if action == "clarify_prompt":
+        clarification_count = count_violations_of_type(prior_turns, "clarify_prompt") + 1
+        if clarification_count >= MAX_CLARIFICATION_TURNS:
+            return {
+                "repeat_recovery_edge_case_handled": True,
+                "repeat_recovery_decision": _decision_payload(
+                    should_continue=False,
+                    next_prompt_text=None,
+                    reason="clarification_limit_reached",
+                ),
+            }
         rewritten_prompt = active_prompt_text or current_prompt
         reply_text = spoken_text or build_paraphrase_text(rewritten_prompt, question)
         return {

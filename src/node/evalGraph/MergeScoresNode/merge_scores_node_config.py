@@ -1,14 +1,8 @@
-"""Fan-in node: combines the 4 parallel branches (pronunciation_eval,
-coherence_eval, lexical_eval, grammar_eval -- see graphConfig.build_graph)
-into one final pronunciation_result and reports the turn's overall
-status/error.
+"""Fan-in node for pronunciation and combined language-quality scoring.
 
-None of those 4 branches write the shared "status"/"error" keys while
-running in parallel (that would conflict -- see GraphState._merge_metadata's
-docstring); each instead stashes its own outcome under a namespaced
-metadata key ("pronunciation_error", "coherence_error", etc.), only set on
-failure. This node is the single place that reads all of them, so it's the
-only node allowed to set "status"/"error" for this part of the graph.
+Concurrent branches only write namespaced metadata. This node is the single
+place that sets the shared status/error and attaches language criteria to the
+pronunciation result.
 """
 
 from typing import Any, Dict
@@ -16,9 +10,7 @@ from typing import Any, Dict
 _BRANCH_ERROR_KEYS = (
     "pronunciation_error",
     "answer_length_error",
-    "coherence_error",
-    "lexical_error",
-    "grammar_error",
+    "language_quality_error",
 )
 
 

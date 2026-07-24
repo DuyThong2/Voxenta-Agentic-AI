@@ -46,8 +46,8 @@ def select_text_for_language_scoring(
 
     conversation_transcript (the timestamped AI/User dialogue) is deliberately
     never selected here -- it includes the AI's own prompt/follow-up text,
-    which would inflate word_count/sentence_count. Only CoherenceEvalNode
-    adds conversation_transcript back in, as separate additional context.
+    which would inflate word_count/sentence_count. The combined language-quality
+    node adds it back only as context for its discourse judgment.
 
     Returns:
         (text, source) where source is one of:

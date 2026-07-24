@@ -274,6 +274,12 @@ _CONSENSUS_PROVIDERS: Tuple[Tuple[Callable[[str, str], Dict[str, Any]], Callable
     (call_llm_openai, call_llm_claude),
 )
 
+_MULTI_CRITERION_ORDERS = (
+    "grammar, vocabulary, then discourse",
+    "vocabulary, discourse, then grammar",
+    "discourse, grammar, then vocabulary",
+)
+
 
 def run_consensus_judgment(
     system_prompt: str,
@@ -343,3 +349,114 @@ def run_consensus_judgment(
     if ungrounded * 2 > len(scored):
         confidence *= 0.7
     return ConsensusJudgment(selected, confidence, delta_on_ten_point_scale)
+
+
+def run_multi_criterion_consensus_judgment(
+    system_prompt: str,
+    user_prompt: str,
+    transcript: str,
+    score_ranges: Dict[str, Tuple[float, float]],
+) -> Dict[str, ConsensusJudgment]:
+    """Chạy đúng ba request O-C-O song song, mỗi request chấm toàn bộ tiêu chí.
+
+    Việc gộp chỉ xảy ra ở tầng gọi model. Valid-run, median, spread, grounding và confidence
+    vẫn được tính độc lập cho từng tiêu chí để một nhánh JSON lỗi hoặc một rubric dao động
+    không làm mất kết quả đáng tin cậy của các tiêu chí còn lại.
+    """
+    criterion_keys = tuple(score_ranges)
+    scored_by_criterion: Dict[str, List[Tuple[Dict[str, Any], float, bool]]] = {
+        key: [] for key in criterion_keys
+    }
+    first_error: Optional[Exception] = None
+
+    def run_one(index: int) -> Dict[str, Any]:
+        variation = (
+            "\n\n## Independent calibration pass\n"
+            f"Evaluate in this order: {_MULTI_CRITERION_ORDERS[index]}. "
+            "Keep all three rubrics independent: never copy a score, weakness, or overall "
+            "impression from one criterion into another. For every criterion, cite at least "
+            "one exact word or phrase from the student's transcript in evidence_spans."
+        )
+        primary, fallback = _CONSENSUS_PROVIDERS[index]
+        prompt = user_prompt + variation
+        return call_with_retry_and_fallback(
+            lambda: primary(system_prompt, prompt),
+            lambda: fallback(system_prompt, prompt),
+        )
+
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = [pool.submit(run_one, index) for index in range(3)]
+        for future in as_completed(futures):
+            try:
+                response = future.result()
+            except Exception as exc:
+                first_error = first_error or exc
+                continue
+
+            for key in criterion_keys:
+                criterion_response = response.get(key)
+                if not isinstance(criterion_response, dict):
+                    continue
+
+                score_min, score_max = score_ranges[key]
+                try:
+                    score = float(criterion_response["score"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if (
+                    not math.isfinite(score)
+                    or score < score_min
+                    or score > score_max
+                ):
+                    continue
+
+                evidence_spans = criterion_response.get("evidence_spans")
+                if isinstance(evidence_spans, list):
+                    folded_transcript = transcript.casefold()
+                    grounded = any(
+                        isinstance(span, str)
+                        and bool(span.strip())
+                        and span.strip().casefold() in folded_transcript
+                        for span in evidence_spans
+                    )
+                else:
+                    grounded = _rationale_is_grounded(
+                        criterion_response.get("note"),
+                        transcript,
+                    )
+                scored_by_criterion[key].append(
+                    (criterion_response, score, grounded)
+                )
+
+    judgments: Dict[str, ConsensusJudgment] = {}
+    for key, scored in scored_by_criterion.items():
+        if len(scored) < 2:
+            if not scored:
+                if first_error is not None:
+                    raise first_error
+                raise ValueError(f"Không có lượt chấm LLM hợp lệ cho tiêu chí {key}")
+            judgments[key] = ConsensusJudgment(scored[0][0], 0.0, 0.0)
+            continue
+
+        scored.sort(key=lambda item: item[1])
+        selected = scored[len(scored) // 2][0]
+        scores = [item[1] for item in scored]
+        score_min, score_max = score_ranges[key]
+        score_span = score_max - score_min
+        if not math.isfinite(score_span) or score_span <= 0:
+            score_span = 100.0
+        delta_on_ten_point_scale = (
+            (max(scores) - min(scores)) * 10.0 / score_span
+        )
+        confidence = clip_unit(1.0 - delta_on_ten_point_scale / 2.0)
+        ungrounded = sum(1 for item in scored if not item[2])
+        if ungrounded * 2 > len(scored):
+            confidence *= 0.7
+
+        judgments[key] = ConsensusJudgment(
+            selected,
+            confidence,
+            delta_on_ten_point_scale,
+        )
+
+    return judgments

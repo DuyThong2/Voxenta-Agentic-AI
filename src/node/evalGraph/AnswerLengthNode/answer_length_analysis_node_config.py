@@ -227,9 +227,9 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
         answer_id, turn_order, word_count, length_category,
     )
 
-    # Own dedicated state key, not nested in metadata/speaking_input -- coherence_eval/
-    # lexical_eval/grammar_eval read this directly (see graphConfig.build_graph: they all
-    # fan out from this node once it completes). Runs in parallel with pronunciation_eval,
+    # Own dedicated state key, not nested in metadata/speaking_input. The combined
+    # language_quality_eval node reads this after answer-length analysis finishes.
+    # Runs in parallel with pronunciation_eval,
     # so this return must NOT include "speaking_input"/"status"/"error" -- those are either
     # single-writer-elsewhere or merged via merge_scores_node, never written by two
     # concurrent branches in the same superstep.

@@ -195,17 +195,18 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "error": "speaking_input is required for validity_node",
         }
 
-    answer_id = getattr(speaking_input, "answer_id", None)
     metadata = state.get("metadata") or {}
+    answer_id = getattr(speaking_input, "answer_id", None)
     turn_order = metadata.get("turn_order")
+    validity_scope = metadata.get("validity_scope") or "complete_answer"
+    is_turn_fragment = validity_scope == "turn_fragment"
     logger.info("[eval:validity] checking answer_id=%s turn=%s", answer_id, turn_order)
 
     # Transcript source: transcribed_text from start_node (Azure's own transcription,
     # already auto-detect + language-tagged for code-switched Vietnamese -- see
     # speech_client.transcribe()). conversation_transcript is deliberately NOT used here --
-    # it's the AI/User dialogue scaffold meant only as extra context for CoherenceEvalNode
-    # (see select_text_for_language_scoring's own docstring in the eval-node helpers);
-    # validity must judge the student's own words, same as grammar/lexical/answer-length.
+    # it's the AI/User dialogue scaffold meant only as extra context for discourse scoring;
+    # validity must judge the student's own words, same as language-quality/answer-length.
     # Using it here previously caused false rejections, since conversation_transcript only
     # ever contains "AI: <question>" lines at the point an individual turn is validated (the
     # real per-turn transcript hadn't been merged into it yet), making every answer look
@@ -303,7 +304,11 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # Pure logic rule 2: too_short (conditional)
     # ------------------------------------------------------------------
 
-    if mode != SpeakingMode.SCRIPTED and transcript_word_count > 0:
+    if (
+        not is_turn_fragment
+        and mode != SpeakingMode.SCRIPTED
+        and transcript_word_count > 0
+    ):
         expected_min = get_expected_min_words(
             question_type,
             duration_seconds,
@@ -386,7 +391,14 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # LLM rules (semantic understanding)
     # ------------------------------------------------------------------
 
-    if not has_blocking_reject and transcript_word_count > 0:
+    # Multi-turn fragments only receive deterministic local gates. Semantic validity is
+    # evaluated once against the complete merged answer in exam_consumer, preventing
+    # whole-question length/relevance rules from being applied repeatedly to each fragment.
+    if (
+        not is_turn_fragment
+        and not has_blocking_reject
+        and transcript_word_count > 0
+    ):
         try:
             llm_response = _call_llm(
                 text=text,
@@ -431,8 +443,11 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     logger.info(
-        "[eval:validity] done answer_id=%s turn=%s action=%s rule_ids=%s transcript=%r",
-        answer_id, turn_order, getattr(validity, "action", None),
+        (
+            "[eval:validity] done answer_id=%s turn=%s scope=%s "
+            "action=%s rule_ids=%s transcript=%r"
+        ),
+        answer_id, turn_order, validity_scope, getattr(validity, "action", None),
         [_rule_attr(r, "rule_id") for r in rule_results], text[:200],
     )
 

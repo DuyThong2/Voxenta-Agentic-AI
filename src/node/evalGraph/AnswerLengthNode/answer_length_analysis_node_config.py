@@ -17,9 +17,9 @@ from utils.length_utils import get_expected_min_words
 from utils.confidence_utils import quality_from_snr, quality_from_speech_ratio
 from utils.speech_client import (
     compute_clipping_ratio,
+    compute_code_switching_ratio,
     compute_silence_ratio,
     compute_snr_db,
-    extract_non_target_segments,
     strip_non_target_segments,
 )
 
@@ -29,6 +29,14 @@ logger = logging.getLogger(__name__)
 ENFORCE_CAP_IN_PYTHON = os.getenv("ENFORCE_CAP_IN_PYTHON", "true").lower() == "true"
 
 
+def _coerce_positive_float(value: Any) -> Optional[float]:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
 def build_user_prompt(
     speaking_input: SpeakingInput,
     transcript: str,
@@ -36,8 +44,14 @@ def build_user_prompt(
     sentence_count: int,
     expected_min_words: int,
     length_ratio: Optional[float],
+    actual_response_seconds: Optional[float] = None,
 ) -> str:
     question_context = build_question_context(speaking_input)
+    actual_duration_line = (
+        f"Actual response duration: {round(actual_response_seconds, 1)}s\n"
+        if actual_response_seconds is not None
+        else ""
+    )
 
     return (
         "## Question Context\n"
@@ -48,6 +62,7 @@ def build_user_prompt(
         f"Word count: {word_count}\n"
         f"Sentence count: {sentence_count}\n"
         f"Expected min words: {expected_min_words}\n"
+        f"{actual_duration_line}"
         f"Length ratio: {round(length_ratio, 2) if length_ratio is not None else 'N/A'}\n"
         "\nEvaluate the answer length and development based on the question context and transcript."
     )
@@ -60,6 +75,7 @@ def call_llm_length_judgment(
     sentence_count: int,
     expected_min_words: int,
     length_ratio: Optional[float],
+    actual_response_seconds: Optional[float] = None,
 ) -> Dict[str, Any]:
     llm = ChatOpenAI(model="gpt-4o", temperature=0)
 
@@ -68,6 +84,7 @@ def call_llm_length_judgment(
         HumanMessage(content=build_user_prompt(
             speaking_input, transcript, word_count, sentence_count,
             expected_min_words, length_ratio,
+            actual_response_seconds=actual_response_seconds,
         )),
     ]
 
@@ -89,7 +106,8 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
         return {"metadata": {"answer_length_error": "speaking_input is required for answer_length_analysis_node"}}
 
     answer_id = getattr(speaking_input, "answer_id", None)
-    turn_order = (state.get("metadata") or {}).get("turn_order")
+    metadata = state.get("metadata") or {}
+    turn_order = metadata.get("turn_order")
     logger.info("[eval:answer_length] analyzing answer_id=%s turn=%s", answer_id, turn_order)
 
     # Select transcript: transcribed_text > corrected_transcript > reference_text (fallback).
@@ -105,29 +123,27 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
     sentences = [s.strip() for s in re.split(r"[.!?]+", target_language_text) if s.strip()]
     sentence_count = len(sentences)
 
-    non_target_word_count = sum(
-        len(re.findall(r"\b\w+\b", segment))
-        for segment in extract_non_target_segments(transcript)
-    )
-    total_words_all_languages = word_count + non_target_word_count
-    code_switching_ratio = (
-        round(non_target_word_count / total_words_all_languages, 2)
-        if total_words_all_languages > 0
-        else 0.0
-    )
+    code_switching_ratio = compute_code_switching_ratio(transcript)
 
     question_type = (speaking_input.question.question_type if speaking_input.question else None) or "unknown"
     difficulty_level = (speaking_input.question.difficulty_level if speaking_input.question else None) or "unknown"
-    duration_seconds = speaking_input.question.duration_seconds if speaking_input.question else None
+    configured_duration_seconds = speaking_input.question.duration_seconds if speaking_input.question else None
+    actual_response_seconds = _coerce_positive_float(metadata.get("actual_response_seconds"))
+    duration_seconds = actual_response_seconds or configured_duration_seconds
     min_response_seconds = speaking_input.question.min_response_seconds if speaking_input.question else None
     max_response_seconds = speaking_input.question.max_response_seconds if speaking_input.question else None
     expected_min_words = get_expected_min_words(
         question_type,
-        duration_seconds,
+        configured_duration_seconds,
         min_response_seconds=min_response_seconds,
     )
 
     length_ratio = word_count / expected_min_words if expected_min_words > 0 else None
+    speech_rate = (
+        round(word_count / (actual_response_seconds / 60), 2)
+        if actual_response_seconds is not None
+        else None
+    )
 
     if length_ratio is None:
         length_category = "unknown"
@@ -152,6 +168,7 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
             llm_response = call_llm_length_judgment(
                 speaking_input, transcript, word_count, sentence_count,
                 expected_min_words, length_ratio,
+                actual_response_seconds=actual_response_seconds,
             )
             llm_length_judgment = llm_response
             length_category = llm_response.get("length_category", length_category)
@@ -174,6 +191,8 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "question_type": question_type,
         "difficulty_level": difficulty_level,
         "duration_seconds": duration_seconds,
+        "configured_duration_seconds": configured_duration_seconds,
+        "actual_response_seconds": actual_response_seconds,
         "min_response_seconds": min_response_seconds,
         "max_response_seconds": max_response_seconds,
         "expected_min_words": expected_min_words,
@@ -188,6 +207,7 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
         "q_snr": quality_from_snr(snr_db),
         "q_speech": quality_from_speech_ratio(silence_ratio),
         "clipping_ratio": clipping_ratio,
+        "speech_rate": speech_rate,
     }
 
     if coherence_cap is not None:

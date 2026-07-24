@@ -132,26 +132,17 @@ def _clamp_unit(value: Optional[float]) -> Optional[float]:
 
 
 def _compute_audio_quality(metrics: Dict[str, Any]) -> Optional[float]:
-    asr_confidence = _clamp_unit(metrics.get("asr_confidence_avg"))
-    silence_ratio = _clamp_unit(metrics.get("silence_ratio"))
-
-    if asr_confidence is not None and silence_ratio is not None:
-        return 0.7 * asr_confidence + 0.3 * (1.0 - silence_ratio)
-    if asr_confidence is not None:
-        return asr_confidence
-    if silence_ratio is not None:
-        return 1.0 - silence_ratio
-
-    # Fallback: mai-transcribe-1 không có logprob nên asr_confidence_avg = null, và
-    # silence_ratio nhiều khi cũng chưa tính -> trước đây audio_quality luôn null -> UI hiện "-".
-    # Nhưng ta VẪN có tín hiệu chất lượng audio thật: q_snr (signal-to-noise) và q_speech
-    # (tỉ lệ speech), chính là 2 tín hiệu dùng cho nhánh ASR-nolog. Lấy min (worst-link) làm
-    # audio quality thay vì bỏ trống.
+    # Audio soft scalar chỉ dùng tín hiệu âm học. ASR confidence/cross-ASR là triage
+    # transcription, không phải chất lượng audio. Dùng worst-link thay vì average để
+    # không pha loãng một thành phần âm thanh rất xấu.
     q_snr = _clamp_unit(metrics.get("q_snr"))
     q_speech = _clamp_unit(metrics.get("q_speech"))
     quality_parts = [value for value in (q_snr, q_speech) if value is not None]
     if quality_parts:
         return min(quality_parts)
+    silence_ratio = _clamp_unit(metrics.get("silence_ratio"))
+    if silence_ratio is not None:
+        return 1.0 - silence_ratio
     return None
 
 
@@ -173,14 +164,9 @@ def _build_turn_confidence_case(result: Dict[str, Any]) -> ConfidenceCaseSignals
         if has_realtime
         else None
     )
-    uses_nolog_branch = has_realtime and realtime_confidence is None
-    cross_asr_agreement = (
-        _clamp_unit(result.get("cross_asr_agreement"))
-        if uses_nolog_branch
-        else None
-    )
-    q_snr = _clamp_unit(metrics.get("q_snr")) if uses_nolog_branch else None
-    q_speech = _clamp_unit(metrics.get("q_speech")) if uses_nolog_branch else None
+    # Audio gate độc lập với nhánh ASR, nên luôn truyền q_snr/q_speech khi đo được.
+    q_snr = _clamp_unit(metrics.get("q_snr"))
+    q_speech = _clamp_unit(metrics.get("q_speech"))
     c_ref = _clamp_unit(metadata.get("c_ref"))
     c_align = _clamp_unit(metadata.get("c_align"))
     c_align_accuracy = _clamp_unit(metadata.get("c_align_accuracy"))
@@ -198,7 +184,6 @@ def _build_turn_confidence_case(result: Dict[str, Any]) -> ConfidenceCaseSignals
 
     return ConfidenceCaseSignals(
         c_asr_log=realtime_confidence,
-        cross_asr_agreement=cross_asr_agreement,
         q_snr=q_snr,
         q_speech=q_speech,
         clipping_ratio=_clamp_unit(metrics.get("clipping_ratio")),
@@ -229,7 +214,6 @@ def _aggregate_confidence_cases(
     ]
     confidence_case = ConfidenceCaseSignals(
         c_asr_log=minimum("c_asr_log"),
-        cross_asr_agreement=minimum("cross_asr_agreement"),
         q_snr=minimum("q_snr"),
         q_speech=minimum("q_speech"),
         clipping_ratio=max(clipping_values) if clipping_values else None,
@@ -242,6 +226,9 @@ def _aggregate_confidence_cases(
         c_grammar=_clamp_unit(metadata.get("grammar_confidence")),
         c_vocabulary=_clamp_unit(metadata.get("vocabulary_confidence")),
         c_discourse=_clamp_unit(metadata.get("coherence_confidence")),
+        grammar_score_delta=metadata.get("grammar_score_delta"),
+        vocabulary_score_delta=metadata.get("lexical_score_delta"),
+        discourse_score_delta=metadata.get("coherence_score_delta"),
     )
     return (
         confidence_case
@@ -265,6 +252,29 @@ def build_signals(
     # runs in parallel with pronunciation_eval, see graphConfig.build_graph, and no longer
     # mutates the shared speaking_input object).
     metrics = result.get("answer_length_metrics") or {}
+    evidence_reason_codes: List[str] = []
+    if metrics.get("length_category") == "too_short":
+        evidence_reason_codes.append("ANSWER_TOO_SHORT")
+    actual_response_seconds = metrics.get("actual_response_seconds")
+    min_response_seconds = metrics.get("min_response_seconds")
+    length_ratio = metrics.get("length_ratio")
+    try:
+        duration_ratio = (
+            float(actual_response_seconds) / float(min_response_seconds)
+            if actual_response_seconds is not None and min_response_seconds
+            else None
+        )
+    except (TypeError, ValueError, ZeroDivisionError):
+        duration_ratio = None
+    if duration_ratio is not None and duration_ratio < 0.5 and (length_ratio is None or length_ratio < 0.9):
+        evidence_reason_codes.append("RESPONSE_DURATION_TOO_SHORT")
+    code_switching_ratio = _clamp_unit(metrics.get("code_switching_ratio"))
+    if code_switching_ratio is not None and code_switching_ratio > 0.50:
+        evidence_reason_codes.append("TARGET_LANGUAGE_EVIDENCE_TOO_LOW")
+    silence_ratio = _clamp_unit(metrics.get("silence_ratio"))
+    if silence_ratio is not None and silence_ratio >= 0.70:
+        evidence_reason_codes.append("SPEECH_EVIDENCE_TOO_LOW")
+
     return EvaluationSignals(
         duration_seconds=duration_seconds,
         word_count=metrics.get("word_count", 0),
@@ -274,10 +284,14 @@ def build_signals(
         asr_confidence_avg=metrics.get("asr_confidence_avg"),
         topic_relevance_score=metrics.get("topic_relevance_score"),
         off_topic_ratio=metrics.get("off_topic_ratio"),
-        code_switching_ratio=metrics.get("code_switching_ratio"),
+        code_switching_ratio=code_switching_ratio,
         speech_rate=metrics.get("speech_rate"),
         audio_quality=_compute_audio_quality(metrics),
-        silence_ratio=metrics.get("silence_ratio"),
+        silence_ratio=silence_ratio,
+        evidence_status=(
+            "INSUFFICIENT_EVIDENCE" if evidence_reason_codes else "SUFFICIENT"
+        ),
+        evidence_reason_codes=evidence_reason_codes,
         confidence_case=_aggregate_confidence_cases(result, turn_results),
     )
 

@@ -47,8 +47,6 @@ from infra.database import archive_store
 from realtime.attempt_connection import get_attempt_connection
 from schemas.enums import SpeakingMode
 from utils.speech_client import (
-    compute_cross_asr_agreement,
-    transcribe_with_confidence,
     unwrap_language_tags,
 )
 
@@ -126,6 +124,71 @@ def _total_duration_seconds(turns: List[Any]) -> int:
     return int(round(sum(float(turn.duration_seconds or 0) for turn in turns)))
 
 
+def _severity_rank(value: Optional[str]) -> int:
+    ranks = {"none": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
+    return ranks.get(str(value or "none").lower(), 0)
+
+
+def _merge_turn_validity(per_turn_results: List[Tuple[Any, Dict[str, Any]]]) -> ValidityResult:
+    """Preserve all per-turn validity evidence without letting one failed follow-up
+    invalidate an otherwise scoreable multi-turn answer.
+    """
+    merged_rules: List[RuleResult] = []
+    transcript_word_count = 0
+    any_scoreable_turn = False
+
+    for turn, result in sorted(per_turn_results, key=lambda item: item[0].turn_order):
+        validity = result.get("validity")
+        if not isinstance(validity, ValidityResult):
+            continue
+
+        transcript_word_count += int(validity.transcript_word_count or 0)
+        any_scoreable_turn = any_scoreable_turn or bool(validity.valid_for_scoring)
+
+        for rule in validity.rule_results:
+            evidence = {
+                **(rule.evidence or {}),
+                "turn_order": turn.turn_order,
+                "turn_type": turn.turn_type or ("MAIN" if turn.turn_order == 1 else "FOLLOWUP"),
+            }
+            merged_rules.append(rule.model_copy(update={"evidence": evidence}))
+
+    if not merged_rules:
+        return ValidityResult(
+            transcript_source="multi_turn_transcribed_text",
+            transcript_word_count=transcript_word_count,
+        )
+
+    if not any_scoreable_turn:
+        return ValidityResult(
+            valid_for_scoring=False,
+            action="reject_or_zero",
+            overall_severity="critical",
+            rule_results=merged_rules,
+            score_caps={
+                "pronunciation_max": 0,
+                "fluency_max": 0,
+                "grammar_max": 0,
+                "vocabulary_max": 0,
+                "coherence_max": 0,
+            },
+            transcript_source="multi_turn_transcribed_text",
+            transcript_word_count=transcript_word_count,
+        )
+
+    highest = max(_severity_rank(rule.severity) for rule in merged_rules)
+    severity = "high" if highest >= 3 else "medium" if highest == 2 else "low"
+    return ValidityResult(
+        valid_for_scoring=True,
+        action="score_with_penalty",
+        overall_severity=severity,
+        rule_results=merged_rules,
+        transcript_source="multi_turn_transcribed_text",
+        transcript_word_count=transcript_word_count,
+        notes=["Multi-turn validity was merged; scoreable turns remain eligible for scoring."],
+    )
+
+
 def _average_scores(values: List[float]) -> float:
     return round(sum(values) / len(values), 2)
 
@@ -190,6 +253,7 @@ def _build_initial_state(
         "metadata": {
             "request_payload": raw_payload,
             "turn_order": turn.turn_order,
+            "actual_response_seconds": turn.duration_seconds,
         },
     }
 
@@ -203,19 +267,10 @@ async def _evaluate_turn(
     raw_payload: Dict[str, Any],
 ) -> Dict[str, Any]:
     local_audio_path = await download_from_s3_async(turn.audio_ref)
-    audit_task: Optional[asyncio.Task] = None
     try:
         realtime_transcript, realtime_transcript_confidence = await archive_store.get_realtime_transcript(
             archive_graph, request_event.answer_id, turn.turn_order,
         )
-        if realtime_transcript and realtime_transcript_confidence is None:
-            audit_task = asyncio.create_task(
-                asyncio.to_thread(
-                    transcribe_with_confidence,
-                    local_audio_path,
-                    request_event.payload.language,
-                )
-            )
 
         initial_state = _build_initial_state(
             request_event,
@@ -238,28 +293,8 @@ async def _evaluate_turn(
         if result.get("status") == "error":
             raise RuntimeError(result.get("error") or "evaluation graph returned error")
 
-        if audit_task is not None:
-            try:
-                audit_transcript, _audit_confidence = await audit_task
-                if audit_transcript:
-                    primary_transcript = result["speaking_input"].transcribed_text or ""
-                    result["cross_asr_agreement"] = compute_cross_asr_agreement(
-                        primary_transcript,
-                        audit_transcript,
-                    )
-            except Exception:
-                logger.exception(
-                    "[exam-consumer] audit ASR failed; continuing without agreement signal answer_id=%s turn=%s",
-                    request_event.answer_id,
-                    turn.turn_order,
-                )
         return result
     finally:
-        if audit_task is not None:
-            try:
-                await audit_task
-            except Exception:
-                pass
         if local_audio_path != turn.audio_ref and os.path.exists(local_audio_path):
             os.unlink(local_audio_path)
 
@@ -307,7 +342,7 @@ def _run_aggregate_text_evaluation(
         "status": "processing",
         "error": None,
         "metadata": {},
-        "validity": per_turn_results[0][1].get("validity"),
+        "validity": _merge_turn_validity(per_turn_results),
     }
 
     # These 4 node functions now return ONLY their own delta keys (not the whole state --

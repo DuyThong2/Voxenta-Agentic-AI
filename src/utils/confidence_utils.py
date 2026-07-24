@@ -303,8 +303,9 @@ def run_consensus_judgment(
             lambda: fallback(system_prompt, prompt),
         )
 
-    responses: List[Dict[str, Any]] = []
-    invalid_output = False
+    # Mỗi lượt lưu (response, score, grounded). Lượt PARSE ĐƯỢC + score trong range = "có điểm",
+    # dùng để tính spread; grounding tách riêng làm tín hiệu MỀM (không loại lượt).
+    scored: List[Tuple[Dict[str, Any], float, bool]] = []
     first_error: Optional[Exception] = None
     with ThreadPoolExecutor(max_workers=3) as pool:
         futures = [pool.submit(run_one, index) for index in range(3)]
@@ -312,30 +313,33 @@ def run_consensus_judgment(
             try:
                 response = future.result()
                 score = float(response["score"])
-                if (
-                    not math.isfinite(score)
-                    or score < score_min
-                    or score > score_max
-                    or not _rationale_is_grounded(response.get("note"), transcript)
-                ):
-                    invalid_output = True
+                if not math.isfinite(score) or score < score_min or score > score_max:
+                    # Parse được nhưng điểm vô nghĩa -> bỏ (không có số để đưa vào spread).
                     continue
-                responses.append(response)
+                grounded = _rationale_is_grounded(response.get("note"), transcript)
+                scored.append((response, score, grounded))
             except Exception as exc:
-                invalid_output = True
                 first_error = first_error or exc
 
-    if not responses:
-        if first_error is not None:
-            raise first_error
-        raise ValueError("Không có lượt chấm LLM hợp lệ")
+    # Ép confidence = 0 CHỈ khi thật sự < 2 lượt có điểm hợp lệ (không đủ để đo độ ổn định) --
+    # KHÔNG còn ép 0 chỉ vì 1/3 lượt hỏng/ungrounded như bản cũ, theo research Vietnam-focus
+    # (compass_artifact_wf-52df89c9: tách "không đủ evidence" khỏi "hệ thống bất ổn"; dùng
+    # self-consistency trên các lượt hợp lệ thay vì zero-out cả tiêu chí).
+    if len(scored) < 2:
+        if not scored:
+            if first_error is not None:
+                raise first_error
+            raise ValueError("Không có lượt chấm LLM hợp lệ")
+        return ConsensusJudgment(scored[0][0], 0.0, 0.0)
 
-    ordered = sorted(responses, key=lambda item: float(item["score"]))
-    selected = ordered[len(ordered) // 2]
-    if len(responses) < 3:
-        return ConsensusJudgment(selected, 0.0, 0.0)
-
-    scores = [float(item["score"]) for item in responses]
+    scored.sort(key=lambda item: item[1])
+    selected = scored[len(scored) // 2][0]
+    scores = [item[1] for item in scored]
     delta_on_ten_point_scale = (max(scores) - min(scores)) * 10.0 / score_span
-    confidence = 0.0 if invalid_output else clip_unit(1.0 - delta_on_ten_point_scale / 2.0)
+    confidence = clip_unit(1.0 - delta_on_ten_point_scale / 2.0)
+    # Grounding = PHẠT MỀM (không ép 0): nếu ĐA SỐ lượt hợp lệ có rationale không bám transcript
+    # (nghi judge bịa), giảm 30%. Bản cũ chỉ cần 1 lượt ungrounded là ép cả tiêu chí về 0.
+    ungrounded = sum(1 for item in scored if not item[2])
+    if ungrounded * 2 > len(scored):
+        confidence *= 0.7
     return ConsensusJudgment(selected, confidence, delta_on_ten_point_scale)

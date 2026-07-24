@@ -39,7 +39,6 @@ class TurnDetail(_CamelMessage):
 
 class ConfidenceCaseSignals(_CamelMessage):
     c_asr_log: Optional[float] = None
-    cross_asr_agreement: Optional[float] = None
     q_snr: Optional[float] = None
     q_speech: Optional[float] = None
     clipping_ratio: Optional[float] = None
@@ -56,6 +55,9 @@ class ConfidenceCaseSignals(_CamelMessage):
     c_grammar: Optional[float] = None
     c_vocabulary: Optional[float] = None
     c_discourse: Optional[float] = None
+    grammar_score_delta: Optional[float] = None
+    vocabulary_score_delta: Optional[float] = None
+    discourse_score_delta: Optional[float] = None
 
 
 class EvaluationSignals(_CamelMessage):
@@ -71,4 +73,6 @@ class EvaluationSignals(_CamelMessage):
     speech_rate: Optional[float] = None
     audio_quality: Optional[float] = None
     silence_ratio: Optional[float] = None
+    evidence_status: str = "SUFFICIENT"
+    evidence_reason_codes: List[str] = Field(default_factory=list)
     confidence_case: Optional[ConfidenceCaseSignals] = None

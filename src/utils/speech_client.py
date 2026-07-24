@@ -29,7 +29,6 @@ CODE_SWITCH_CANDIDATE_LANGUAGES = ["en-US", "vi-VN"]
 NON_TARGET_SEGMENT_PATTERN = re.compile(r"\[[A-Z]{2}: [^\]]*\]")
 NON_TARGET_SEGMENT_CAPTURE_PATTERN = re.compile(r"\[[A-Z]{2}: ([^\]]*)\]")
 
-
 def strip_non_target_segments(text: Optional[str]) -> str:
     """Remove "[XX: ...]" code-switch wrapper segments, leaving only the
     target-language text. Used wherever word/sentence counts must reflect
@@ -47,6 +46,21 @@ def extract_non_target_segments(text: Optional[str]) -> List[str]:
     if not text:
         return []
     return [match.group(1) for match in NON_TARGET_SEGMENT_CAPTURE_PATTERN.finditer(text)]
+
+
+def compute_code_switching_ratio(text: Optional[str]) -> float:
+    """Fraction of words that are in "[XX: ...]" non-target-language wrapper segments
+    vs total words (target + non-target). Same formula answer_length_analysis_node uses
+    for the codeSwitchingRatio signal -- factored out here so validity_node can reuse it
+    as a deterministic backstop for language.wrong_language_full instead of relying on a
+    single LLM judgment call alone."""
+    target_word_count = len(re.findall(r"\b\w+\b", strip_non_target_segments(text)))
+    non_target_word_count = sum(
+        len(re.findall(r"\b\w+\b", segment))
+        for segment in extract_non_target_segments(text)
+    )
+    total_words = target_word_count + non_target_word_count
+    return round(non_target_word_count / total_words, 2) if total_words > 0 else 0.0
 
 
 def unwrap_language_tags(text: Optional[str]) -> str:
@@ -305,14 +319,6 @@ def word_error_rate(reference_words: List[str], hypothesis_words: List[str]) -> 
             )
             previous_diagonal = previous_row
     return distances[m] / n
-
-
-def compute_cross_asr_agreement(text_primary: str, text_audit: str) -> Optional[float]:
-    """A = 1 - WER_norm giữa transcript chính và transcript audit."""
-    reference = normalize_for_wer(text_primary).split()
-    hypothesis = normalize_for_wer(text_audit).split()
-    wer = word_error_rate(reference, hypothesis)
-    return None if wer is None else max(0.0, 1.0 - wer)
 
 
 def transcribe(audio_path: str, language: str) -> Optional[str]:

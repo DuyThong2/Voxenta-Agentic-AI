@@ -14,7 +14,7 @@ from utils.confidence_utils import (
     quality_from_speech_ratio,
     run_consensus_judgment,
 )
-from utils.speech_client import compute_cross_asr_agreement, normalize_for_wer
+from utils.speech_client import normalize_for_wer
 
 
 class _Logprob:
@@ -33,10 +33,6 @@ class ConfidenceLayerTests(unittest.TestCase):
 
     def test_vietnamese_normalization_is_diacritic_insensitive(self) -> None:
         self.assertEqual(normalize_for_wer("Tôi ăn [VI: bánh mì]."), "toi an banh mi")
-        self.assertEqual(
-            compute_cross_asr_agreement("Tôi ăn bánh mì", "toi an banh mi"),
-            1.0,
-        )
 
     def test_audio_quality_clips_to_unit_interval(self) -> None:
         self.assertEqual(quality_from_snr(5.0), 0.0)
@@ -101,6 +97,33 @@ class ConfidenceLayerTests(unittest.TestCase):
         self.assertEqual(judgment.score_delta_on_ten_point_scale, 2.0)
         self.assertEqual(judgment.confidence, 0.0)
 
+    def test_llm_consensus_uses_valid_runs_when_one_fails(self) -> None:
+        # 1 lượt hỏng hoàn toàn (primary + fallback đều raise) KHÔNG còn ép cả tiêu chí về 0 --
+        # 2 lượt còn lại đồng thuận -> confidence cao, tính trên các lượt hợp lệ.
+        def raiser(_system: str, _user: str):
+            raise RuntimeError("both providers down for this pass")
+
+        def scorer(score: int, note: str):
+            def _call(_system: str, _user: str):
+                return {"score": score, "note": note}
+            return _call
+
+        providers = (
+            (raiser, raiser),
+            (scorer(80, "the word test is fine"), raiser),
+            (scorer(82, "the word test works"), raiser),
+        )
+        with mock.patch.object(confidence_utils, "_CONSENSUS_PROVIDERS", providers):
+            judgment = run_consensus_judgment(
+                "system",
+                'Transcript: "I am a test"',
+                "I am a test",
+            )
+
+        self.assertIn(judgment.response["score"], (80, 82))
+        self.assertAlmostEqual(judgment.score_delta_on_ten_point_scale, 0.2)
+        self.assertGreater(judgment.confidence, 0.5)  # KHÔNG bị ép 0 vì 1 lượt hỏng
+
     def test_event_builder_uses_nolog_branch_and_pf_is_min_not_gated(self) -> None:
         speaking_input = SpeakingInput(
             audio_path="unused.wav",
@@ -109,7 +132,6 @@ class ConfidenceLayerTests(unittest.TestCase):
         )
         result = {
             "speaking_input": speaking_input,
-            "cross_asr_agreement": 0.95,
             "answer_length_metrics": {
                 "word_count": 4,
                 "sentence_count": 1,
@@ -131,7 +153,6 @@ class ConfidenceLayerTests(unittest.TestCase):
         signals = build_signals(result)
 
         self.assertIsNone(signals.confidence_case.c_asr_log)
-        self.assertEqual(signals.confidence_case.cross_asr_agreement, 0.95)
         self.assertEqual(signals.confidence_case.q_snr, 0.75)
         # c_pf_branch = min(c_ref, c_align) = min(0.9, 0.85) = 0.85 -- KHÔNG còn bị ép về 0 dù
         # asr_common (min 0.95/0.75/1.0 = 0.75) < 0.80. Việc route ASR do ConfidenceReviewCalculator

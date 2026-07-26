@@ -1,4 +1,4 @@
-"""Combined LLM evaluation for grammar, vocabulary, and discourse."""
+"""Combined LLM evaluation for grammar, vocabulary, and coherence."""
 
 import json
 import logging
@@ -155,6 +155,9 @@ def _build_framework_context(
             "Score range for this criterion: 0-100"
         )
 
+    score_range = (
+        f"{framework.rubric_min_score}-{framework.rubric_max_score}"
+    )
     lines = [f"## {title} Scoring Framework"]
     if framework.framework_criterion_name:
         lines.append(
@@ -162,10 +165,22 @@ def _build_framework_context(
         )
     if framework.framework_criterion_description:
         lines.append(f"Definition: {framework.framework_criterion_description}")
-    lines.append(
-        "Score range for this criterion: "
-        f"{framework.rubric_min_score}-{framework.rubric_max_score}"
-    )
+    if framework.target_band_only:
+        target_label = framework.target_band_label or framework.target_band_code
+        lines.extend(
+            [
+                f"Target proficiency level: {target_label}",
+                (
+                    f"Scoring scope: assign a score only within {score_range} "
+                    "for how fully this answer "
+                    "satisfies the target-level descriptor below. This is NOT a "
+                    "placement score across all six framework levels: the minimum "
+                    "does not mean Bậc 1 and the maximum does not mean Bậc 6. Do "
+                    "not evaluate or assign any other proficiency level."
+                ),
+            ]
+        )
+    lines.append(f"Score range for this criterion: {score_range}")
     for band in sorted(framework.bands, key=lambda item: item.score_min):
         line = f"- {band.code} ({band.score_min}-{band.score_max})"
         if band.label:
@@ -194,6 +209,20 @@ def _score_range(
     return framework.rubric_min_score, framework.rubric_max_score
 
 
+def _scale_percentage_cap(
+    speaking_input: SpeakingInput,
+    criterion_key: str,
+    raw_cap: Any,
+) -> float:
+    """Map a 0-100 evidence cap to the criterion's authored score range."""
+    try:
+        percentage = min(100.0, max(0.0, float(raw_cap)))
+    except (TypeError, ValueError):
+        percentage = 100.0
+    score_min, score_max = _score_range(speaking_input, criterion_key)
+    return round(score_min + (percentage / 100.0) * (score_max - score_min), 2)
+
+
 def build_user_prompt(
     speaking_input: SpeakingInput,
     transcript: str,
@@ -208,7 +237,7 @@ def build_user_prompt(
         "",
         _build_framework_context(speaking_input, "vocabulary", "Vocabulary"),
         "",
-        _build_framework_context(speaking_input, "coherence", "Discourse"),
+        _build_framework_context(speaking_input, "coherence", "Coherence"),
         "",
         "## Student Answer",
         f"Mode: {mode}",
@@ -219,7 +248,7 @@ def build_user_prompt(
         parts.extend(
             [
                 "",
-                "## Dialogue Context (for discourse context only)",
+                "## Dialogue Context (for coherence context only)",
                 (
                     "Use this only to understand what was asked. Never grade or quote AI lines "
                     "as student speech."
@@ -229,6 +258,21 @@ def build_user_prompt(
         )
 
     if metrics:
+        grammar_cap = _scale_percentage_cap(
+            speaking_input,
+            "grammar",
+            metrics.get("grammar_range_cap"),
+        )
+        vocabulary_cap = _scale_percentage_cap(
+            speaking_input,
+            "vocabulary",
+            metrics.get("lexical_range_cap"),
+        )
+        coherence_cap = _scale_percentage_cap(
+            speaking_input,
+            "coherence",
+            metrics.get("coherence_cap"),
+        )
         parts.extend(
             [
                 "",
@@ -237,9 +281,9 @@ def build_user_prompt(
                 f"Sentence count: {metrics.get('sentence_count')}",
                 f"Length category: {metrics.get('length_category')}",
                 f"Expected min words: {metrics.get('expected_min_words')}",
-                f"Grammar range cap: {metrics.get('grammar_range_cap')}",
-                f"Lexical range cap: {metrics.get('lexical_range_cap')}",
-                f"Discourse cap: {metrics.get('coherence_cap')}",
+                f"Grammar range cap (criterion scale): {grammar_cap}",
+                f"Lexical range cap (criterion scale): {vocabulary_cap}",
+                f"Coherence cap (criterion scale): {coherence_cap}",
                 (
                     "Code-switching ratio (non-English words / total words): "
                     f"{metrics.get('code_switching_ratio')}"
@@ -307,20 +351,20 @@ def language_quality_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             {
                 "grammar": _score_range(speaking_input, "grammar"),
                 "vocabulary": _score_range(speaking_input, "vocabulary"),
-                "discourse": _score_range(speaking_input, "coherence"),
+                "coherence": _score_range(speaking_input, "coherence"),
             },
         )
         grammar = judgments["grammar"]
         vocabulary = judgments["vocabulary"]
-        discourse = judgments["discourse"]
+        coherence = judgments["coherence"]
         metadata = {
             **_build_scoring_metadata(source, speaking_input.mode),
             "grammar_confidence": grammar.confidence,
             "vocabulary_confidence": vocabulary.confidence,
-            "coherence_confidence": discourse.confidence,
+            "coherence_confidence": coherence.confidence,
             "grammar_score_delta": grammar.score_delta_on_ten_point_scale,
             "lexical_score_delta": vocabulary.score_delta_on_ten_point_scale,
-            "coherence_score_delta": discourse.score_delta_on_ten_point_scale,
+            "coherence_score_delta": coherence.score_delta_on_ten_point_scale,
             "language_quality_diagnostics": {
                 "grammar": {
                     "evidence_spans": grammar.response.get("evidence_spans", []),
@@ -344,16 +388,16 @@ def language_quality_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
                         "",
                     ),
                 },
-                "discourse": {
-                    "evidence_spans": discourse.response.get(
+                "coherence": {
+                    "evidence_spans": coherence.response.get(
                         "evidence_spans",
                         [],
                     ),
-                    "weakness_labels": discourse.response.get(
+                    "weakness_labels": coherence.response.get(
                         "weakness_labels",
                         [],
                     ),
-                    "recommendation_tag": discourse.response.get(
+                    "recommendation_tag": coherence.response.get(
                         "recommendation_tag",
                         "",
                     ),
@@ -363,18 +407,18 @@ def language_quality_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
         logger.info(
             (
                 "[eval:language_quality] done answer_id=%s turn=%s "
-                "grammar=%s vocabulary=%s discourse=%s"
+                "grammar=%s vocabulary=%s coherence=%s"
             ),
             answer_id,
             turn_order,
             grammar.response.get("score"),
             vocabulary.response.get("score"),
-            discourse.response.get("score"),
+            coherence.response.get("score"),
         )
         return {
             "grammar_criterion": _to_criterion(grammar.response),
             "lexical_criterion": _to_criterion(vocabulary.response),
-            "coherence_criterion": _to_criterion(discourse.response),
+            "coherence_criterion": _to_criterion(coherence.response),
             "metadata": metadata,
         }
     except json.JSONDecodeError as exc:

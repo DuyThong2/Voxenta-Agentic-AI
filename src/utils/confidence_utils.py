@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
 
-# Case (5) (Grammar/Vocabulary/Discourse) và case (3) (pronunciation reference) đều gọi LLM 3
+# Case (5) (Grammar/Vocabulary/Coherence) và case (3) (pronunciation reference) đều gọi LLM 3
 # lần độc lập song song qua ThreadPoolExecutor(max_workers=3) -- đúng 3 worker cho đúng 3 lượt,
 # không có việc nào khác chờ dùng chung pool đó, nên retry/backoff bên dưới chỉ chặn ĐÚNG 1
 # thread đang giữ lượt gặp lỗi, 2 lượt song song còn lại không bị ảnh hưởng và KHÔNG cần tạo
@@ -275,9 +275,9 @@ _CONSENSUS_PROVIDERS: Tuple[Tuple[Callable[[str, str], Dict[str, Any]], Callable
 )
 
 _MULTI_CRITERION_ORDERS = (
-    "grammar, vocabulary, then discourse",
-    "vocabulary, discourse, then grammar",
-    "discourse, grammar, then vocabulary",
+    "grammar, vocabulary, then coherence",
+    "vocabulary, coherence, then grammar",
+    "coherence, grammar, then vocabulary",
 )
 
 

@@ -225,10 +225,10 @@ def _aggregate_confidence_cases(
         c_pf_branch=minimum("c_pf_branch"),
         c_grammar=_clamp_unit(metadata.get("grammar_confidence")),
         c_vocabulary=_clamp_unit(metadata.get("vocabulary_confidence")),
-        c_discourse=_clamp_unit(metadata.get("coherence_confidence")),
+        c_coherence=_clamp_unit(metadata.get("coherence_confidence")),
         grammar_score_delta=metadata.get("grammar_score_delta"),
         vocabulary_score_delta=metadata.get("lexical_score_delta"),
-        discourse_score_delta=metadata.get("coherence_score_delta"),
+        coherence_score_delta=metadata.get("coherence_score_delta"),
     )
     return (
         confidence_case

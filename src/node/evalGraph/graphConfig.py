@@ -12,6 +12,9 @@ from node.evalGraph.PronunciationNode.pronunciation_eval_node_config import (
 from node.evalGraph.AnswerLengthNode.answer_length_analysis_node_config import (
     answer_length_analysis_node,
 )
+from node.evalGraph.AzureScoreScaleNode.azure_score_scale_node_config import (
+    azure_score_scale_node,
+)
 from node.evalGraph.MergeScoresNode.merge_scores_node_config import merge_scores_node
 from node.evalGraph.StartNode.start_node_config import start_node
 from node.evalGraph.ValidityNode.validity_node_config import validity_node
@@ -57,6 +60,7 @@ def build_graph(checkpointer=None):
     g.add_node("start", start_node)
     g.add_node("strict_validity_check", validity_node)
     g.add_node("pronunciation_eval", pronunciation_eval_node)
+    g.add_node("azure_score_scale", azure_score_scale_node)
     g.add_node("answer_length_analysis", answer_length_analysis_node)
     g.add_node("language_quality_eval", language_quality_eval_node)
     g.add_node("merge_scores", merge_scores_node)
@@ -101,8 +105,10 @@ def build_graph(checkpointer=None):
         },
     )
 
-    # Fan-in: merge_scores waits for pronunciation plus the combined language result.
-    g.add_edge("pronunciation_eval", "merge_scores")
+    # Azure always returns HundredMark. Scale its criterion scores to each
+    # RubricCriterion range before the final fan-in.
+    g.add_edge("pronunciation_eval", "azure_score_scale")
+    g.add_edge("azure_score_scale", "merge_scores")
     g.add_edge("language_quality_eval", "merge_scores")
     g.add_edge("merge_scores", END)
 

@@ -205,7 +205,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # Transcript source: transcribed_text from start_node (Azure's own transcription,
     # already auto-detect + language-tagged for code-switched Vietnamese -- see
     # speech_client.transcribe()). conversation_transcript is deliberately NOT used here --
-    # it's the AI/User dialogue scaffold meant only as extra context for discourse scoring;
+    # it's the AI/User dialogue scaffold meant only as extra context for coherence scoring;
     # validity must judge the student's own words, same as language-quality/answer-length.
     # Using it here previously caused false rejections, since conversation_transcript only
     # ever contains "AI: <question>" lines at the point an individual turn is validated (the

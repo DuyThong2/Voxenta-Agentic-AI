@@ -54,10 +54,10 @@ class ConfidenceCaseSignals(_CamelMessage):
     c_pf_branch: Optional[float] = None
     c_grammar: Optional[float] = None
     c_vocabulary: Optional[float] = None
-    c_discourse: Optional[float] = None
+    c_coherence: Optional[float] = None
     grammar_score_delta: Optional[float] = None
     vocabulary_score_delta: Optional[float] = None
-    discourse_score_delta: Optional[float] = None
+    coherence_score_delta: Optional[float] = None
 
 
 class EvaluationSignals(_CamelMessage):

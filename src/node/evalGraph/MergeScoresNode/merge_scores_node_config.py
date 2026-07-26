@@ -9,6 +9,7 @@ from typing import Any, Dict
 
 _BRANCH_ERROR_KEYS = (
     "pronunciation_error",
+    "azure_score_scale_error",
     "answer_length_error",
     "language_quality_error",
 )

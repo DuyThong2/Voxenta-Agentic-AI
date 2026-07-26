@@ -101,7 +101,7 @@ def _build_dialogue_transcript(per_turn_results: List[Tuple[Any, Dict[str, Any]]
         [00:00] AI: What is your favorite color?
         [00:05] User: I like blue because the sky is blue.
 
-    Used only as additional context for the discourse judgment (to judge whether
+    Used only as additional context for the coherence judgment (to judge whether
     the answer coherently follows what was actually asked, including
     follow-ups) -- never fed into grammar/lexical/answer-length, which must
     only see the student's own words (see _combine_transcript above).

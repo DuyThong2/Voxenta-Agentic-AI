@@ -42,6 +42,50 @@ async def get_current_answer(request: Request, exam_attempt_id: str):
     return {"answer_id": answer_id}
 
 
+@router.get("/attempts/{exam_attempt_id}/resume-state")
+async def get_attempt_resume_state(
+    request: Request,
+    exam_attempt_id: str,
+    answer_id: str,
+):
+    """Return the next durable turn for a newly-started client process.
+
+    exam_attempt_id remains part of the route so this endpoint is scoped like
+    current-answer. The archive itself is keyed by answer_id, which is the
+    durable question identity returned by current-answer.
+    """
+    resume_state = await archive_store.get_resume_state(
+        request.app.state.archive_graph,
+        answer_id,
+    )
+    turns = (resume_state or {}).get("turns") or []
+    if not turns:
+        return {
+            "answerId": answer_id,
+            "paperItemId": (resume_state or {}).get("paper_item_id"),
+            "turnOrder": 1,
+            "activePromptText": None,
+            "hasFollowUp": False,
+        }
+
+    turn_order = max(int(turn.get("turn_order") or 0) for turn in turns) + 1
+    active_prompt_text = resume_state.get("active_prompt_text")
+    if not isinstance(active_prompt_text, str) or not active_prompt_text.strip():
+        last_prompt_text = turns[-1].get("prompt_text")
+        active_prompt_text = (
+            last_prompt_text.strip()
+            if isinstance(last_prompt_text, str) and last_prompt_text.strip()
+            else None
+        )
+    return {
+        "answerId": answer_id,
+        "paperItemId": resume_state.get("paper_item_id"),
+        "turnOrder": turn_order,
+        "activePromptText": active_prompt_text,
+        "hasFollowUp": True,
+    }
+
+
 @router.websocket("/attempts/{exam_attempt_id}")
 async def realtime_attempt_socket(websocket: WebSocket, exam_attempt_id: str):
     socket = RealtimeSocket(websocket)

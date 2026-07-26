@@ -1,1 +1,1 @@
-"""Combined grammar, vocabulary, and discourse evaluation node."""
+"""Combined grammar, vocabulary, and coherence evaluation node."""

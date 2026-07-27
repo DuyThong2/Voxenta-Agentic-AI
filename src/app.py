@@ -97,7 +97,10 @@ async def lifespan(app: FastAPI):
     pool = ConnectionPool(pg_settings.PG_URI, min_size=1, max_size=10)
     checkpointer = PostgresSaver(pool)
 
-    app.state.graph = build_graph(checkpointer)
+    # Evaluation requests are complete, immutable inputs and retries must start from a clean
+    # state. Persisting this graph reused the same turn thread_id across retries, so merged
+    # metadata retained an old pronunciation_error even after Azure later returned a score.
+    app.state.graph = build_graph()
     app.state.archive_graph = build_archive_graph(checkpointer)
     app.state.text_followup_graph = build_text_followup_graph()
 

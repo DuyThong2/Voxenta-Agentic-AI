@@ -3,7 +3,7 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from config.kafka_config import settings
 from events import ExamAttemptEvaluationRequestedEvent
@@ -55,6 +55,76 @@ from utils.speech_client import (
 )
 
 logger = logging.getLogger(__name__)
+
+_AZURE_NO_SEGMENTS_ERROR = (
+    "pronunciation_error: Azure speech recognition returned no recognized segments"
+)
+
+
+class TurnEvaluationRetriesExhausted(RuntimeError):
+    """A transient turn failure persisted after all targeted retries."""
+
+
+def _is_transient_pronunciation_failure(error: BaseException) -> bool:
+    return _AZURE_NO_SEGMENTS_ERROR in str(error)
+
+
+async def _evaluate_turn_batch(
+    turns: List[Any],
+    evaluate_one: Callable[[Any], Awaitable[Tuple[Any, Dict[str, Any]]]],
+    *,
+    transient_retry_count: int,
+) -> List[Tuple[Any, Dict[str, Any]]]:
+    """Evaluate turns concurrently, then retry only transient Azure failures.
+
+    ``asyncio.gather`` without ``return_exceptions=True`` returns as soon as one
+    turn raises, while the other ``to_thread`` graph invocations keep running.
+    The Kafka retry loop would then start another full batch on top of those
+    still-running calls. Waiting for every outcome here prevents that overlap
+    and lets successful turn results survive a targeted pronunciation retry.
+    """
+    results: List[Optional[Tuple[Any, Dict[str, Any]]]] = [None] * len(turns)
+    pending = list(enumerate(turns))
+    attempt = 0
+
+    while pending:
+        settled = await asyncio.gather(
+            *(evaluate_one(turn) for _index, turn in pending),
+            return_exceptions=True,
+        )
+        retry_pending: List[Tuple[int, Any]] = []
+
+        for (index, turn), outcome in zip(pending, settled):
+            if isinstance(outcome, asyncio.CancelledError):
+                raise outcome
+            if isinstance(outcome, BaseException):
+                if (
+                    _is_transient_pronunciation_failure(outcome)
+                    and attempt < transient_retry_count
+                ):
+                    logger.warning(
+                        "[exam-consumer] transient pronunciation failure turn=%s "
+                        "targeted_retry=%d/%d error=%s",
+                        getattr(turn, "turn_order", index + 1),
+                        attempt + 1,
+                        transient_retry_count,
+                        outcome,
+                    )
+                    retry_pending.append((index, turn))
+                    continue
+                if _is_transient_pronunciation_failure(outcome):
+                    raise TurnEvaluationRetriesExhausted(
+                        f"Turn {getattr(turn, 'turn_order', index + 1)} failed "
+                        f"pronunciation assessment after {attempt + 1} attempts: {outcome}"
+                    ) from outcome
+                raise outcome
+
+            results[index] = outcome
+
+        pending = retry_pending
+        attempt += 1
+
+    return [result for result in results if result is not None]
 
 
 def _real_transcript_for_turn(result: Dict[str, Any]) -> str:
@@ -378,7 +448,8 @@ async def _evaluate_turn(
             },
         )
         if result.get("status") == "error":
-            raise RuntimeError(result.get("error") or "evaluation graph returned error")
+            error = result.get("error") or "evaluation graph returned error"
+            raise RuntimeError(f"turn={turn.turn_order}: {error}")
 
         return result
     finally:
@@ -771,10 +842,10 @@ async def start_exam_attempt_consumer(app, instance_label: str = "0"):
                     )
                     return turn, result
 
-                per_turn_results: List[Tuple[Any, Dict[str, Any]]] = list(
-                    await asyncio.gather(
-                        *[_evaluate_one(turn) for turn in scoreable_turns]
-                    )
+                per_turn_results = await _evaluate_turn_batch(
+                    scoreable_turns,
+                    _evaluate_one,
+                    transient_retry_count=settings.KAFKA_MAX_RETRY,
                 )
 
                 if not scoreable_turns:
@@ -822,7 +893,8 @@ async def start_exam_attempt_consumer(app, instance_label: str = "0"):
                     message.offset,
                     retries,
                 )
-                if retries > settings.KAFKA_MAX_RETRY:
+                terminal_failure = isinstance(exc, TurnEvaluationRetriesExhausted)
+                if terminal_failure or retries > settings.KAFKA_MAX_RETRY:
                     await publish_exam_attempt_evaluation_failed(
                         ExamAttemptEvaluationFailedEvent(
                             exam_attempt_id=payload.get("examAttemptId", "unknown"),
@@ -830,7 +902,11 @@ async def start_exam_attempt_consumer(app, instance_label: str = "0"):
                             question_id=payload.get("questionId", "unknown"),
                             payload=ExamAttemptEvaluationFailedPayload(
                                 error=str(exc),
-                                retry_count=retries,
+                                retry_count=(
+                                    settings.KAFKA_MAX_RETRY + 1
+                                    if terminal_failure
+                                    else retries
+                                ),
                             ),
                         )
                     )

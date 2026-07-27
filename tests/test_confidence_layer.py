@@ -1,6 +1,7 @@
 import math
 import threading
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 import utils.confidence_utils as confidence_utils
@@ -14,7 +15,7 @@ from utils.confidence_utils import (
     quality_from_speech_ratio,
     run_consensus_judgment,
 )
-from utils.speech_client import normalize_for_wer
+from utils.speech_client import describe_no_match, normalize_for_wer
 
 
 class _Logprob:
@@ -23,6 +24,15 @@ class _Logprob:
 
 
 class ConfidenceLayerTests(unittest.TestCase):
+    def test_describe_no_match_returns_azure_reason_name(self) -> None:
+        result = SimpleNamespace(
+            no_match_details=SimpleNamespace(
+                reason=SimpleNamespace(name="InitialSilenceTimeout"),
+            )
+        )
+
+        self.assertEqual(describe_no_match(result), "InitialSilenceTimeout")
+
     def test_asr_log_uses_global_and_bottom_twenty_percent(self) -> None:
         logprobs = [_Logprob(math.log(value)) for value in (0.9, 0.9, 0.9, 0.9, 0.1)]
 
@@ -158,7 +168,7 @@ class ConfidenceLayerTests(unittest.TestCase):
         # asr_common (min 0.95/0.75/1.0 = 0.75) < 0.80. Việc route ASR do ConfidenceReviewCalculator
         # xử lý riêng, c_pf_branch giữ nguyên giá trị thật (khớp giả mã cuối research).
         self.assertEqual(signals.confidence_case.c_pf_branch, 0.85)
-        self.assertEqual(signals.confidence_case.c_discourse, 0.6)
+        self.assertEqual(signals.confidence_case.c_coherence, 0.6)
         # audio_quality: không có asr_confidence_avg/silence_ratio (mai-transcribe-1) -> fallback
         # min(q_snr, q_speech) = min(0.75, 1.0) = 0.75, thay vì null (UI hiện "-").
         self.assertEqual(signals.audio_quality, 0.75)
@@ -204,7 +214,7 @@ class ConfidenceLayerTests(unittest.TestCase):
         self.assertEqual(signals.confidence_case.c_asr_log, 0.7)
         self.assertEqual(signals.confidence_case.clipping_ratio, 0.02)
         self.assertEqual(signals.confidence_case.c_ref, 0.9)
-        self.assertEqual(signals.confidence_case.c_discourse, 0.7)
+        self.assertEqual(signals.confidence_case.c_coherence, 0.7)
 
 
 if __name__ == "__main__":

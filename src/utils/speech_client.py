@@ -5,7 +5,7 @@ import re
 import threading
 import unicodedata
 import wave
-from typing import List, NamedTuple, Optional, Tuple
+from typing import Any, List, NamedTuple, Optional, Tuple
 
 import numpy as np
 
@@ -124,6 +124,17 @@ def build_recognizer(audio_path: str, language: str) -> speechsdk.SpeechRecogniz
         audio_config=audio_config,
         auto_detect_source_language_config=_build_auto_detect_config(language),
     )
+
+
+def describe_no_match(result: Any) -> str:
+    """Return Azure's specific NoMatch reason without allowing diagnostics to fail scoring."""
+    try:
+        details = getattr(result, "no_match_details", None)
+        reason = getattr(details, "reason", None)
+        return getattr(reason, "name", None) or str(reason or "Unknown")
+    except Exception:
+        logger.exception("[speech] failed to read Azure NoMatchDetails")
+        return "Unknown"
 
 
 class _TranscribedSegment(NamedTuple):
@@ -352,12 +363,26 @@ def _transcribe_impl(audio_path: str, language: str) -> Tuple[Optional[str], Opt
     """
     recognizer = build_recognizer(audio_path, language)
     segments: List[_TranscribedSegment] = []
+    no_match_reasons: List[str] = []
     done = threading.Event()
     canceled_error: Optional[str] = None
     target_prefix = language.split("-")[0].lower()
 
     def on_recognized(evt) -> None:
         result = evt.result
+        if result.reason == speechsdk.ResultReason.NoMatch:
+            reason = describe_no_match(result)
+            no_match_reasons.append(reason)
+            logger.warning(
+                "[transcribe] Azure NoMatch audio_path=%s reason=%s result_id=%s "
+                "offset=%s duration=%s",
+                audio_path,
+                reason,
+                getattr(result, "result_id", None),
+                getattr(result, "offset", None),
+                getattr(result, "duration", None),
+            )
+            return
         if result.reason != speechsdk.ResultReason.RecognizedSpeech or not result.text:
             logger.warning(
                 "[transcribe] recognized event with no usable text audio_path=%s reason=%s",
@@ -405,8 +430,11 @@ def _transcribe_impl(audio_path: str, language: str) -> Tuple[Optional[str], Opt
 
     if not segments:
         logger.warning(
-            "[transcribe] no speech segments recognized audio_path=%s audio_duration=%s",
-            audio_path, audio_duration,
+            "[transcribe] no speech segments recognized audio_path=%s audio_duration=%s "
+            "no_match_reasons=%s",
+            audio_path,
+            audio_duration,
+            no_match_reasons or ["Unknown"],
         )
         return None, None
 

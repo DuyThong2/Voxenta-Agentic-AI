@@ -29,7 +29,12 @@ from node.evalGraph.PronunciationNode.pronunciation_reference_helper import (
 )
 from utils import load_root_dotenv
 from utils.confidence_utils import compute_alignment_confidence
-from utils.speech_client import build_speech_config, normalize_text, _probe_audio_duration_seconds
+from utils.speech_client import (
+    _probe_audio_duration_seconds,
+    build_speech_config,
+    describe_no_match,
+    normalize_text,
+)
 
 load_root_dotenv()
 
@@ -258,12 +263,35 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
         # JSON is accumulated here and merged below.
         segments_data: List[Dict[str, Any]] = []
         recognized_text_parts: List[str] = []
+        no_match_reasons: List[str] = []
         done = threading.Event()
         canceled_error: Optional[str] = None
 
         def on_recognized(evt) -> None:
             seg_result = evt.result
+            if seg_result.reason == speechsdk.ResultReason.NoMatch:
+                reason = describe_no_match(seg_result)
+                no_match_reasons.append(reason)
+                logger.warning(
+                    "[eval:pronunciation] Azure NoMatch answer_id=%s turn=%s "
+                    "reason=%s result_id=%s offset=%s duration=%s",
+                    answer_id,
+                    turn_order,
+                    reason,
+                    getattr(seg_result, "result_id", None),
+                    getattr(seg_result, "offset", None),
+                    getattr(seg_result, "duration", None),
+                )
+                return
             if seg_result.reason != speechsdk.ResultReason.RecognizedSpeech or not seg_result.text:
+                logger.warning(
+                    "[eval:pronunciation] recognized event without usable text "
+                    "answer_id=%s turn=%s reason=%s result_id=%s",
+                    answer_id,
+                    turn_order,
+                    seg_result.reason,
+                    getattr(seg_result, "result_id", None),
+                )
                 return
             seg_raw_json = seg_result.properties.get(
                 speechsdk.PropertyId.SpeechServiceResponse_JsonResult
@@ -298,7 +326,23 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             return {"metadata": {"pronunciation_error": f"Azure continuous recognition canceled: {canceled_error}"}}
 
         if not segments_data:
-            return {"metadata": {"pronunciation_error": "Azure speech recognition returned no recognized segments"}}
+            reason_summary = ", ".join(dict.fromkeys(no_match_reasons)) or "Unknown"
+            logger.warning(
+                "[eval:pronunciation] no recognized segments answer_id=%s turn=%s "
+                "audio_duration=%s no_match_reasons=%s",
+                answer_id,
+                turn_order,
+                audio_duration,
+                reason_summary,
+            )
+            return {
+                "metadata": {
+                    "pronunciation_error": (
+                        "Azure speech recognition returned no recognized segments "
+                        f"(NoMatchDetails: {reason_summary})"
+                    )
+                }
+            }
 
         summary = merge_pronunciation_summaries(segments_data)
         merged_word_feedback: List[WordFeedback] = []

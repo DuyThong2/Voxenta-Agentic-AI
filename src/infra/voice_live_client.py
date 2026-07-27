@@ -17,13 +17,16 @@ Voice Live's own model.
 import asyncio
 import base64
 import logging
+import math
 import os
 from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
 from azure.ai.voicelive.aio import connect
 from azure.ai.voicelive.models import (
+    AudioEchoCancellation,
     AudioInputTranscriptionOptions,
+    AudioNoiseReduction,
     InputAudioFormat,
     Modality,
     RequestSession,
@@ -43,6 +46,10 @@ EXPECTED_SAMPLE_RATE = 16_000
 class VoiceLiveServerEvent:
     kind: str  # "vad_speech_start" | "vad_speech_end" | "partial_transcript" | "final_transcript" | "error"
     text: Optional[str] = None
+    # Only ever set for "final_transcript" -- see _confidence_from_logprobs. None for every
+    # other kind, and also None for "final_transcript" if the completed event carried no
+    # logprobs (e.g. a transcription model that doesn't return them).
+    confidence: Optional[float] = None
 
 
 def _load_config() -> dict:
@@ -91,6 +98,8 @@ class VoiceLiveClient:
                 modalities=[Modality.TEXT, Modality.AUDIO],
                 input_audio_format=InputAudioFormat.PCM16,
                 input_audio_sampling_rate=EXPECTED_SAMPLE_RATE,
+                input_audio_noise_reduction=AudioNoiseReduction(type="azure_deep_noise_suppression"),
+                input_audio_echo_cancellation=AudioEchoCancellation(),
                 input_audio_transcription=AudioInputTranscriptionOptions(
                     model=self._config["transcription_model"],
                 ),
@@ -126,6 +135,26 @@ class VoiceLiveClient:
             await self._on_event(VoiceLiveServerEvent(kind="error", text="voice_live_consume_failed"))
 
     @staticmethod
+    def _confidence_from_logprobs(logprobs) -> Optional[float]:
+        """Tính C_ASR-log = sqrt(G * T20) từ logprob của toàn bộ token.
+
+        G là trung bình xác suất token; T20 là trung bình xác suất của 20%
+        token có logprob thấp nhất. Tail statistic giữ các token khó không bị
+        pha loãng bởi phần còn lại của utterance.
+        """
+        if not logprobs:
+            return None
+        token_logprobs = [float(entry.logprob) for entry in logprobs if entry.logprob is not None]
+        if not token_logprobs:
+            return None
+
+        global_confidence = math.exp(sum(token_logprobs) / len(token_logprobs))
+        tail_size = max(1, math.ceil(len(token_logprobs) * 0.20))
+        tail_logprobs = sorted(token_logprobs)[:tail_size]
+        tail_confidence = math.exp(sum(tail_logprobs) / len(tail_logprobs))
+        return math.sqrt(global_confidence * tail_confidence)
+
+    @staticmethod
     def _translate(event) -> Optional[VoiceLiveServerEvent]:
         if event.type == ServerEventType.INPUT_AUDIO_BUFFER_SPEECH_STARTED:
             return VoiceLiveServerEvent(kind="vad_speech_start")
@@ -134,7 +163,11 @@ class VoiceLiveClient:
         if event.type == ServerEventType.CONVERSATION_ITEM_INPUT_AUDIO_TRANSCRIPTION_DELTA:
             return VoiceLiveServerEvent(kind="partial_transcript", text=event.delta)
         if event.type == ServerEventType.CONVERSATION_ITEM_INPUT_AUDIO_TRANSCRIPTION_COMPLETED:
-            return VoiceLiveServerEvent(kind="final_transcript", text=event.transcript)
+            # Only the COMPLETED event's logprobs are used -- DELTA events are progressively
+            # superseded drafts of the same utterance, so accumulating their logprobs too would
+            # double-count tokens already covered by the final, authoritative COMPLETED event.
+            confidence = VoiceLiveClient._confidence_from_logprobs(getattr(event, "logprobs", None))
+            return VoiceLiveServerEvent(kind="final_transcript", text=event.transcript, confidence=confidence)
         if event.type == ServerEventType.ERROR:
             return VoiceLiveServerEvent(kind="error", text=str(event))
         return None

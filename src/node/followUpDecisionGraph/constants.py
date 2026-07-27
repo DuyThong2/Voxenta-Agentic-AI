@@ -1,4 +1,5 @@
-MAX_TURNS = 5
+MAX_TURNS = 10
+MAX_CLARIFICATION_TURNS = 5
 
 # Spoken by the avatar (via TTS, Phase 4) when a question's decision is should_continue=False
 # and next_prompt_text is None -- followup_decision_node intentionally returns no prompt text in

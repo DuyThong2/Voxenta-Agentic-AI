@@ -1,6 +1,7 @@
+import math
 from typing import List, Optional
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from schemas.common import _CamelMessage
 
@@ -13,6 +14,7 @@ class FrameworkBand(_CamelMessage):
     descriptor: Optional[str] = None
     positive_signals: List[str] = Field(default_factory=list)
     negative_signals: List[str] = Field(default_factory=list)
+    order: int = 0
 
 
 class CriterionFramework(_CamelMessage):
@@ -24,7 +26,44 @@ class CriterionFramework(_CamelMessage):
     framework_code: Optional[str] = None
     framework_criterion_name: Optional[str] = None
     framework_criterion_description: Optional[str] = None
+    target_band_id: Optional[str] = None
+    target_band_code: Optional[str] = None
+    target_band_label: Optional[str] = None
+    target_band_only: bool = False
     rubric_weight: Optional[float] = None
     rubric_min_score: float = 0
     rubric_max_score: float = 100
     bands: List[FrameworkBand] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_target_band_scope(self):
+        if (
+            not math.isfinite(self.rubric_min_score)
+            or not math.isfinite(self.rubric_max_score)
+            or self.rubric_max_score <= self.rubric_min_score
+        ):
+            raise ValueError(
+                "rubric_max_score must be greater than rubric_min_score"
+            )
+        if not self.target_band_only:
+            return self
+        if not self.target_band_code:
+            raise ValueError("target_band_code is required when target_band_only is true")
+        if not self.bands:
+            raise ValueError(
+                "target-band-only scoring must include at least the target framework band"
+            )
+        target_band = next(
+            (band for band in self.bands if band.code == self.target_band_code),
+            None,
+        )
+        if target_band is None:
+            raise ValueError("bands must include an entry matching target_band_code")
+        if (
+            target_band.score_min != self.rubric_min_score
+            or target_band.score_max != self.rubric_max_score
+        ):
+            raise ValueError(
+                "the target band must cover the complete rubric score range"
+            )
+        return self

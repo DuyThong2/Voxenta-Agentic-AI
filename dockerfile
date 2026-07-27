@@ -30,7 +30,6 @@ WORKDIR /app/src
 
 CMD ["uv", "run", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 
-#docker build -t duythong2/voxagents:latest .
-#docker build --no-cache -t duythong2/voxagents:latest .
-#docker push duythong2/voxagents:latest
+# CI builds this image and pushes it to ECR repo vox-agents:
+# <account-id>.dkr.ecr.ap-southeast-1.amazonaws.com/vox-agents:<git-sha>
 

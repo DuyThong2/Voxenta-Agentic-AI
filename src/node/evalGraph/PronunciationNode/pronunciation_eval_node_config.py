@@ -24,9 +24,17 @@ from node.state_models.pronunciation import (
     WordFeedback,
 )
 from node.evalGraph.PronunciationNode.pronunciation_node_helper import format_pronunciation_api_response
-from node.evalGraph.PronunciationNode.pronunciation_reference_helper import build_pronunciation_reference
+from node.evalGraph.PronunciationNode.pronunciation_reference_helper import (
+    build_pronunciation_reference_consensus,
+)
 from utils import load_root_dotenv
-from utils.speech_client import build_speech_config, normalize_text, _probe_audio_duration_seconds
+from utils.confidence_utils import compute_alignment_confidence
+from utils.speech_client import (
+    _probe_audio_duration_seconds,
+    build_speech_config,
+    describe_no_match,
+    normalize_text,
+)
 
 load_root_dotenv()
 
@@ -159,6 +167,7 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     audio_path = speaking_input.audio_path
     language = speaking_input.language or "en-US"
+    c_ref: Optional[float] = None
     
     # If reference_text is available, compare audio directly against it.
     # Otherwise, for unscripted mode, use Azure's own transcribed_text.
@@ -170,10 +179,13 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
         raw_transcript = speaking_input.transcribed_text or ""
         if raw_transcript:
             try:
-                reference_text = build_pronunciation_reference(raw_transcript, speaking_input.question)
+                reference_text, c_ref = build_pronunciation_reference_consensus(
+                    raw_transcript,
+                    speaking_input.question,
+                )
                 logger.info(
-                    "[eval:pronunciation] built reference from raw transcript answer_id=%s turn=%s changed=%s",
-                    answer_id, turn_order, reference_text != raw_transcript,
+                    "[eval:pronunciation] built reference from raw transcript answer_id=%s turn=%s changed=%s c_ref=%s",
+                    answer_id, turn_order, reference_text != raw_transcript, c_ref,
                 )
             except Exception:
                 # This reference text only feeds Azure's forced-alignment below -- validity,
@@ -251,12 +263,35 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
         # JSON is accumulated here and merged below.
         segments_data: List[Dict[str, Any]] = []
         recognized_text_parts: List[str] = []
+        no_match_reasons: List[str] = []
         done = threading.Event()
         canceled_error: Optional[str] = None
 
         def on_recognized(evt) -> None:
             seg_result = evt.result
+            if seg_result.reason == speechsdk.ResultReason.NoMatch:
+                reason = describe_no_match(seg_result)
+                no_match_reasons.append(reason)
+                logger.warning(
+                    "[eval:pronunciation] Azure NoMatch answer_id=%s turn=%s "
+                    "reason=%s result_id=%s offset=%s duration=%s",
+                    answer_id,
+                    turn_order,
+                    reason,
+                    getattr(seg_result, "result_id", None),
+                    getattr(seg_result, "offset", None),
+                    getattr(seg_result, "duration", None),
+                )
+                return
             if seg_result.reason != speechsdk.ResultReason.RecognizedSpeech or not seg_result.text:
+                logger.warning(
+                    "[eval:pronunciation] recognized event without usable text "
+                    "answer_id=%s turn=%s reason=%s result_id=%s",
+                    answer_id,
+                    turn_order,
+                    seg_result.reason,
+                    getattr(seg_result, "result_id", None),
+                )
                 return
             seg_raw_json = seg_result.properties.get(
                 speechsdk.PropertyId.SpeechServiceResponse_JsonResult
@@ -291,7 +326,23 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             return {"metadata": {"pronunciation_error": f"Azure continuous recognition canceled: {canceled_error}"}}
 
         if not segments_data:
-            return {"metadata": {"pronunciation_error": "Azure speech recognition returned no recognized segments"}}
+            reason_summary = ", ".join(dict.fromkeys(no_match_reasons)) or "Unknown"
+            logger.warning(
+                "[eval:pronunciation] no recognized segments answer_id=%s turn=%s "
+                "audio_duration=%s no_match_reasons=%s",
+                answer_id,
+                turn_order,
+                audio_duration,
+                reason_summary,
+            )
+            return {
+                "metadata": {
+                    "pronunciation_error": (
+                        "Azure speech recognition returned no recognized segments "
+                        f"(NoMatchDetails: {reason_summary})"
+                    )
+                }
+            }
 
         summary = merge_pronunciation_summaries(segments_data)
         merged_word_feedback: List[WordFeedback] = []
@@ -316,13 +367,23 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             include_raw=False,
             criteria_frameworks=speaking_input.criteria_frameworks,
         )
+        alignment = compute_alignment_confidence(segments_data, reference_text)
 
         logger.info(
             "[eval:pronunciation] done answer_id=%s turn=%s pron_score=%s",
             answer_id, turn_order, pronunciation_result.pron_score,
         )
 
-        return {"pronunciation_result": formatted_result}
+        return {
+            "pronunciation_result": formatted_result,
+            "metadata": {
+                "c_ref": c_ref,
+                "c_align": alignment.composite,
+                "c_align_accuracy": alignment.accuracy,
+                "c_align_coverage": alignment.coverage,
+                "c_align_timing": alignment.timing,
+            },
+        }
 
     except Exception as exc:
         logger.exception("[eval:pronunciation] failed answer_id=%s turn=%s", answer_id, turn_order)

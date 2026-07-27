@@ -24,7 +24,7 @@ def correct_transcript(transcript: str) -> str:
     if not transcript or not transcript.strip():
         return transcript
     
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    llm = ChatOpenAI(model="gpt-5.4", reasoning_effort="medium")
     
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),

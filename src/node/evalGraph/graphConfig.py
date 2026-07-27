@@ -3,14 +3,17 @@
 from langgraph.graph import END, START, StateGraph
 
 from node.evalGraph.GraphState import GraphState
-from node.evalGraph.CoherenceEvalNode.coherence_eval_node_config import coherence_eval_node
-from node.evalGraph.GrammarEvalNode.grammar_eval_node_config import grammar_eval_node
-from node.evalGraph.LexicalEvalNode.lexical_eval_node_config import lexical_eval_node
+from node.evalGraph.LanguageQualityEvalNode.language_quality_eval_node_config import (
+    language_quality_eval_node,
+)
 from node.evalGraph.PronunciationNode.pronunciation_eval_node_config import (
     pronunciation_eval_node,
 )
 from node.evalGraph.AnswerLengthNode.answer_length_analysis_node_config import (
     answer_length_analysis_node,
+)
+from node.evalGraph.AzureScoreScaleNode.azure_score_scale_node_config import (
+    azure_score_scale_node,
 )
 from node.evalGraph.MergeScoresNode.merge_scores_node_config import merge_scores_node
 from node.evalGraph.StartNode.start_node_config import start_node
@@ -19,24 +22,30 @@ from node.evalGraph.ValidityNode.validity_node_config import validity_node
 
 def route_after_validity(state: GraphState) -> list[str] | str:
     """Route to END if validity rejects. Otherwise fan out to pronunciation_eval AND
-    answer_length_analysis -- the two are mutually independent (neither reads the
-    other's output), so LangGraph runs them concurrently in the same superstep."""
+    answer_length_analysis for complete answers.
+
+    Multi-turn fragments only need per-audio pronunciation. Text validity, answer length,
+    and language quality run once later against the merged complete answer.
+    """
     validity = state.get("validity")
     if validity and getattr(validity, "action", None) == "reject_or_zero":
         return "end"
+    metadata = state.get("metadata") or {}
+    if metadata.get("validity_scope") == "turn_fragment":
+        return "pronunciation_eval"
     return ["pronunciation_eval", "answer_length_analysis"]
 
 
 def route_after_answer_length(state: GraphState) -> list[str] | str:
-    """coherence_eval/lexical_eval/grammar_eval all need answer_length_metrics (for their
-    score caps), so they can only fan out AFTER answer_length_analysis completes -- but
-    they're mutually independent of EACH OTHER and of pronunciation_eval, so all three run
-    concurrently here. If answer_length_analysis itself failed, skip straight to
-    merge_scores instead of paying for three LLM calls that would just get discarded."""
+    """Language quality needs answer_length_metrics for its criterion-specific caps.
+
+    If answer_length_analysis failed, skip the LLM calls because their result would be
+    discarded at merge time.
+    """
     metadata = state.get("metadata") or {}
     if metadata.get("answer_length_error"):
         return "merge_scores"
-    return ["coherence_eval", "lexical_eval", "grammar_eval"]
+    return "language_quality_eval"
 
 
 def route_on_error(state: GraphState) -> str:
@@ -51,10 +60,9 @@ def build_graph(checkpointer=None):
     g.add_node("start", start_node)
     g.add_node("strict_validity_check", validity_node)
     g.add_node("pronunciation_eval", pronunciation_eval_node)
+    g.add_node("azure_score_scale", azure_score_scale_node)
     g.add_node("answer_length_analysis", answer_length_analysis_node)
-    g.add_node("coherence_eval", coherence_eval_node)
-    g.add_node("lexical_eval", lexical_eval_node)
-    g.add_node("grammar_eval", grammar_eval_node)
+    g.add_node("language_quality_eval", language_quality_eval_node)
     g.add_node("merge_scores", merge_scores_node)
 
     # No CorrectionNode: it fed an LLM-rewritten transcript into validity/pronunciation
@@ -85,29 +93,23 @@ def build_graph(checkpointer=None):
         },
     )
 
-    # Fan-out #2: once answer_length_analysis has produced the score caps, coherence/
-    # lexical/grammar run concurrently -- each is an independent LLM call that only needs
-    # the transcript + those caps, not each other's output.
+    # Once answer_length_analysis has produced the score caps, one combined node makes three
+    # parallel O-C-O requests. Every request returns all three language criteria, while
+    # consensus/confidence remains criterion-specific.
     g.add_conditional_edges(
         "answer_length_analysis",
         route_after_answer_length,
         {
             "merge_scores": "merge_scores",
-            "coherence_eval": "coherence_eval",
-            "lexical_eval": "lexical_eval",
-            "grammar_eval": "grammar_eval",
+            "language_quality_eval": "language_quality_eval",
         },
     )
 
-    # Fan-in: merge_scores waits for pronunciation_eval + whichever of
-    # coherence_eval/lexical_eval/grammar_eval actually ran, combines their four
-    # independent result keys into one pronunciation_result, and is the only node
-    # allowed to set the shared status/error after this point (see
-    # MergeScoresNode.merge_scores_node_config's docstring).
-    g.add_edge("pronunciation_eval", "merge_scores")
-    g.add_edge("coherence_eval", "merge_scores")
-    g.add_edge("lexical_eval", "merge_scores")
-    g.add_edge("grammar_eval", "merge_scores")
+    # Azure always returns HundredMark. Scale its criterion scores to each
+    # RubricCriterion range before the final fan-in.
+    g.add_edge("pronunciation_eval", "azure_score_scale")
+    g.add_edge("azure_score_scale", "merge_scores")
+    g.add_edge("language_quality_eval", "merge_scores")
     g.add_edge("merge_scores", END)
 
     if checkpointer is not None:

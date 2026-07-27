@@ -3,8 +3,9 @@ import logging
 import os
 import re
 import threading
+import unicodedata
 import wave
-from typing import List, NamedTuple, Optional, Tuple
+from typing import Any, List, NamedTuple, Optional, Tuple
 
 import numpy as np
 
@@ -28,7 +29,6 @@ CODE_SWITCH_CANDIDATE_LANGUAGES = ["en-US", "vi-VN"]
 NON_TARGET_SEGMENT_PATTERN = re.compile(r"\[[A-Z]{2}: [^\]]*\]")
 NON_TARGET_SEGMENT_CAPTURE_PATTERN = re.compile(r"\[[A-Z]{2}: ([^\]]*)\]")
 
-
 def strip_non_target_segments(text: Optional[str]) -> str:
     """Remove "[XX: ...]" code-switch wrapper segments, leaving only the
     target-language text. Used wherever word/sentence counts must reflect
@@ -46,6 +46,21 @@ def extract_non_target_segments(text: Optional[str]) -> List[str]:
     if not text:
         return []
     return [match.group(1) for match in NON_TARGET_SEGMENT_CAPTURE_PATTERN.finditer(text)]
+
+
+def compute_code_switching_ratio(text: Optional[str]) -> float:
+    """Fraction of words that are in "[XX: ...]" non-target-language wrapper segments
+    vs total words (target + non-target). Same formula answer_length_analysis_node uses
+    for the codeSwitchingRatio signal -- factored out here so validity_node can reuse it
+    as a deterministic backstop for language.wrong_language_full instead of relying on a
+    single LLM judgment call alone."""
+    target_word_count = len(re.findall(r"\b\w+\b", strip_non_target_segments(text)))
+    non_target_word_count = sum(
+        len(re.findall(r"\b\w+\b", segment))
+        for segment in extract_non_target_segments(text)
+    )
+    total_words = target_word_count + non_target_word_count
+    return round(non_target_word_count / total_words, 2) if total_words > 0 else 0.0
 
 
 def unwrap_language_tags(text: Optional[str]) -> str:
@@ -109,6 +124,17 @@ def build_recognizer(audio_path: str, language: str) -> speechsdk.SpeechRecogniz
         audio_config=audio_config,
         auto_detect_source_language_config=_build_auto_detect_config(language),
     )
+
+
+def describe_no_match(result: Any) -> str:
+    """Return Azure's specific NoMatch reason without allowing diagnostics to fail scoring."""
+    try:
+        details = getattr(result, "no_match_details", None)
+        reason = getattr(details, "reason", None)
+        return getattr(reason, "name", None) or str(reason or "Unknown")
+    except Exception:
+        logger.exception("[speech] failed to read Azure NoMatchDetails")
+        return "Unknown"
 
 
 class _TranscribedSegment(NamedTuple):
@@ -201,6 +227,111 @@ def compute_silence_ratio(audio_path: str) -> Optional[float]:
     return silence_windows / n_windows
 
 
+def compute_snr_db(audio_path: str) -> Optional[float]:
+    """Ước lượng segmental SNR (dB) bằng cùng window/ngưỡng với silence ratio.
+
+    Đây không phải WADA-SNR. Cách đo minh bạch này xem các window dưới ngưỡng
+    RMS tương đối là nhiễu nền và các window còn lại là tín hiệu lời nói.
+    """
+    try:
+        with wave.open(audio_path, "rb") as wav_file:
+            n_channels = wav_file.getnchannels()
+            sample_width = wav_file.getsampwidth()
+            frame_rate = wav_file.getframerate()
+            raw = wav_file.readframes(wav_file.getnframes())
+    except (wave.Error, OSError, EOFError):
+        return None
+
+    if not raw or sample_width != 2 or frame_rate <= 0:
+        return None
+
+    samples = np.frombuffer(raw, dtype=np.int16).astype(np.float64)
+    if n_channels > 1:
+        samples = samples.reshape(-1, n_channels).mean(axis=1)
+
+    window_size = max(1, int(frame_rate * 0.03))
+    n_windows = samples.size // window_size
+    if n_windows == 0:
+        return None
+
+    windows = samples[: n_windows * window_size].reshape(n_windows, window_size)
+    power = np.mean(windows ** 2, axis=1)
+    rms = np.sqrt(power)
+    peak_rms = float(np.percentile(rms, 95))
+    if peak_rms <= 0:
+        return None
+
+    threshold = peak_rms * 0.05
+    noise_power = power[rms < threshold]
+    speech_power = power[rms >= threshold]
+    if noise_power.size == 0 or speech_power.size == 0:
+        return None
+
+    mean_noise_power = float(np.mean(noise_power))
+    mean_speech_power = float(np.mean(speech_power))
+    if mean_noise_power <= 0:
+        return None
+
+    return float(10.0 * np.log10(mean_speech_power / mean_noise_power))
+
+
+def compute_clipping_ratio(audio_path: str, *, near_full_scale: float = 0.99) -> Optional[float]:
+    """Trả về tỉ lệ sample WAV PCM 16-bit chạm hoặc gần biên độ tối đa."""
+    try:
+        with wave.open(audio_path, "rb") as wav_file:
+            sample_width = wav_file.getsampwidth()
+            raw = wav_file.readframes(wav_file.getnframes())
+    except (wave.Error, OSError, EOFError):
+        return None
+
+    if not raw or sample_width != 2:
+        return None
+
+    samples = np.frombuffer(raw, dtype=np.int16)
+    if samples.size == 0:
+        return None
+
+    clip_level = near_full_scale * 32767
+    clipped = int(np.sum(np.abs(samples.astype(np.int32)) >= clip_level))
+    return clipped / samples.size
+
+
+def _fold_vietnamese_diacritics(text: str) -> str:
+    """Bỏ dấu tiếng Việt chỉ để so khớp, không dùng cho transcript hiển thị."""
+    text = text.replace("đ", "d").replace("Đ", "D")
+    decomposed = unicodedata.normalize("NFD", text)
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
+def normalize_for_wer(text: str) -> str:
+    """Chuẩn hóa hai transcript trước khi tính WER theo từ."""
+    normalized = _fold_vietnamese_diacritics(unwrap_language_tags(text).lower())
+    normalized = re.sub(r"[^\w\s]", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def word_error_rate(reference_words: List[str], hypothesis_words: List[str]) -> Optional[float]:
+    """Tính WER bằng Levenshtein trên danh sách từ."""
+    if not reference_words and not hypothesis_words:
+        return None
+    if not reference_words:
+        return 1.0
+
+    n, m = len(reference_words), len(hypothesis_words)
+    distances = list(range(m + 1))
+    for i in range(1, n + 1):
+        previous_diagonal, distances[0] = distances[0], i
+        for j in range(1, m + 1):
+            previous_row = distances[j]
+            distances[j] = (
+                previous_diagonal
+                if reference_words[i - 1] == hypothesis_words[j - 1]
+                else 1 + min(previous_diagonal, distances[j], distances[j - 1])
+            )
+            previous_diagonal = previous_row
+    return distances[m] / n
+
+
 def transcribe(audio_path: str, language: str) -> Optional[str]:
     """Transcribe the full audio file. See _transcribe_impl for behavior;
     this wrapper discards the per-segment confidence average for callers that
@@ -232,12 +363,26 @@ def _transcribe_impl(audio_path: str, language: str) -> Tuple[Optional[str], Opt
     """
     recognizer = build_recognizer(audio_path, language)
     segments: List[_TranscribedSegment] = []
+    no_match_reasons: List[str] = []
     done = threading.Event()
     canceled_error: Optional[str] = None
     target_prefix = language.split("-")[0].lower()
 
     def on_recognized(evt) -> None:
         result = evt.result
+        if result.reason == speechsdk.ResultReason.NoMatch:
+            reason = describe_no_match(result)
+            no_match_reasons.append(reason)
+            logger.warning(
+                "[transcribe] Azure NoMatch audio_path=%s reason=%s result_id=%s "
+                "offset=%s duration=%s",
+                audio_path,
+                reason,
+                getattr(result, "result_id", None),
+                getattr(result, "offset", None),
+                getattr(result, "duration", None),
+            )
+            return
         if result.reason != speechsdk.ResultReason.RecognizedSpeech or not result.text:
             logger.warning(
                 "[transcribe] recognized event with no usable text audio_path=%s reason=%s",
@@ -285,8 +430,11 @@ def _transcribe_impl(audio_path: str, language: str) -> Tuple[Optional[str], Opt
 
     if not segments:
         logger.warning(
-            "[transcribe] no speech segments recognized audio_path=%s audio_duration=%s",
-            audio_path, audio_duration,
+            "[transcribe] no speech segments recognized audio_path=%s audio_duration=%s "
+            "no_match_reasons=%s",
+            audio_path,
+            audio_duration,
+            no_match_reasons or ["Unknown"],
         )
         return None, None
 

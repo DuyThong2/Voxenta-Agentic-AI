@@ -38,15 +38,18 @@ def start_node(state: GraphState) -> dict:
 
     try:
         if speaking_input.realtime_transcript:
-            # Prefer the live Voice-Live transcript (gpt-4o-mini-transcribe) captured during
-            # the exam itself over re-transcribing audio_path via the Azure Speech SDK --
-            # confirmed live: Voice-Live handles code-switched Vietnamese noticeably better
-            # (the Speech SDK sometimes garbles it into nonsense English, e.g. "banh MI"
-            # instead of "bánh mì"). No comparable per-segment confidence signal exists for
-            # this source, so asr_confidence stays None (downstream already handles that --
-            # see exam_event_builder._compute_audio_quality's fallback).
+            # Prefer the live Voice-Live transcript (Voice Live's configured transcription
+            # model, e.g. mai-transcribe-1 -- see agents/.env AZURE_VOICELIVE_TRANSCRIPTION_MODEL)
+            # captured during the exam itself over re-transcribing audio_path via the Azure
+            # Speech SDK -- confirmed live: Voice-Live handles code-switched Vietnamese
+            # noticeably better (the Speech SDK sometimes garbles it into nonsense English,
+            # e.g. "banh MI" instead of "bánh mì"). Confidence for this source comes from Voice
+            # Live's own per-token logprobs (session.py's current_transcript_confidence, via
+            # realtime_transcript_confidence) -- may still be None if no utterance in this turn
+            # ever reported logprobs, same fallback exam_event_builder._compute_audio_quality
+            # already handles.
             transcript = speaking_input.realtime_transcript
-            asr_confidence = None
+            asr_confidence = speaking_input.realtime_transcript_confidence
             logger.info(
                 "[eval:start] using realtime transcript answer_id=%s turn=%s chars=%d",
                 answer_id, turn_order, len(transcript),

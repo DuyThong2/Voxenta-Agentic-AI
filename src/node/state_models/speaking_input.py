@@ -96,6 +96,10 @@ class SpeakingInput(BaseModel):
     # when start_node's caller was able to fetch one -- preferred over re-transcribing
     # audio_path via the Azure Speech SDK when present (see start_node_config.py).
     realtime_transcript: Optional[str] = None
+    # ASR confidence for realtime_transcript (word-count-weighted average of each utterance's
+    # C_ASR-log = sqrt(G*T20); see voice_live_client._confidence_from_logprobs / session.py).
+    # None if realtime_transcript is missing or its model never reported logprobs.
+    realtime_transcript_confidence: Optional[float] = None
 
 
 QuestionContext.model_rebuild()

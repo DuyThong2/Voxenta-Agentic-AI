@@ -216,18 +216,18 @@ def find_band_for_score(framework: CriterionFramework, score: Optional[float]) -
     return None
 
 
-def build_pronunciation_framework_note(
+def build_framework_note(
     criteria_frameworks: Optional[List[CriterionFramework]],
+    criterion_key: str,
     score: Optional[float],
 ) -> Optional[str]:
-    """Look up the "pronunciation" scoring framework (if the exam has one) and
-    describe which band the Azure score falls into. Pronunciation has no LLM
-    step (unlike grammar/lexical/coherence), so the framework's band
-    descriptor/signals are attached directly to the CriterionScore note here
-    instead of being fed into a prompt.
+    """Attach the selected target-level descriptor to a criterion-scale score.
+
+    AzureScoreScaleNode calls this after converting Azure's HundredMark value
+    to the rubric criterion range.
     """
     framework = next(
-        (cf for cf in (criteria_frameworks or []) if cf.criterion_key == "pronunciation"),
+        (cf for cf in (criteria_frameworks or []) if cf.criterion_key == criterion_key),
         None,
     )
     if framework is None:
@@ -237,7 +237,11 @@ def build_pronunciation_framework_note(
     if band is None:
         return None
 
-    note = f"Matches framework band {band.code}"
+    note = (
+        f"Evaluated against target framework band {band.code}"
+        if framework.target_band_only
+        else f"Matches framework band {band.code}"
+    )
     if band.label:
         note += f" ({band.label})"
     if band.descriptor:
@@ -259,13 +263,21 @@ def build_criteria_scores(
 
     - pronunciation: Azure speech assessment
     - fluency: Azure fluency score
-    - coherence: LLM (added by coherence_eval_node)
-    - vocabulary: LLM (added by lexical_eval_node)
-    - grammar: LLM (added by grammar_eval_node)
+    - coherence/vocabulary/grammar: LLM (added by language_quality_eval_node)
     """
 
     pronunciation_score = round_score(result.pron_score or result.accuracy_score)
-    framework_note = build_pronunciation_framework_note(criteria_frameworks, pronunciation_score)
+    fluency_score = round_score(result.fluency_score)
+    pronunciation_framework_note = build_framework_note(
+        criteria_frameworks,
+        "pronunciation",
+        pronunciation_score,
+    )
+    fluency_framework_note = build_framework_note(
+        criteria_frameworks,
+        "fluency",
+        fluency_score,
+    )
 
     return CriteriaScores(
         pronunciation=CriterionScore(
@@ -274,14 +286,15 @@ def build_criteria_scores(
                 "accuracy": round_score(result.accuracy_score),
                 "prosody": round_score(result.prosody_score),
             },
-            note=framework_note or "Based on pronunciation accuracy and prosody from speech assessment.",
+            note=pronunciation_framework_note
+            or "Based on pronunciation accuracy and prosody from speech assessment.",
         ),
         fluency=CriterionScore(
-            score=round_score(result.fluency_score),
+            score=fluency_score,
             subscores={
-                "fluency": round_score(result.fluency_score),
+                "fluency": fluency_score,
             },
-            note="Azure speech fluency assessment score.",
+            note=fluency_framework_note or "Azure speech fluency assessment score.",
         ),
         coherence=CriterionScore(
             note="Not evaluated yet. This will be evaluated from transcript by the LLM module.",

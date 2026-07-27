@@ -30,7 +30,13 @@ logger = logging.getLogger(__name__)
 FOLLOWUP_KAFKA_LOG_FILE = "followup_kafka_publish.jsonl"
 
 
-def _build_answer_turn_payload(turn: dict, answer_id: str, exam_attempt_id: str | None = None) -> AnswerTurnPayload:
+def _build_answer_turn_payload(
+    turn: dict,
+    answer_id: str,
+    exam_attempt_id: str | None = None,
+    *,
+    decision_reason: str | None = None,
+) -> AnswerTurnPayload:
     return AnswerTurnPayload(
         answer_id=turn.get("answer_id") or answer_id,
         session_id=exam_attempt_id,
@@ -43,6 +49,7 @@ def _build_answer_turn_payload(turn: dict, answer_id: str, exam_attempt_id: str 
         duration_seconds=turn.get("duration_seconds"),
         word_count=turn.get("word_count"),
         answered_at=turn.get("answered_at"),
+        decision_reason=decision_reason,
     )
 
 
@@ -125,7 +132,7 @@ async def publish_turn_if_new(
         event = AnswerTurnsRecordedEvent(
             answer_id=answer_id,
             payload=AnswerTurnsRecordedPayload(
-                turns=[_build_answer_turn_payload(turn, answer_id, exam_attempt_id)],
+                turns=[_build_answer_turn_payload(turn, answer_id, exam_attempt_id, decision_reason=reason)],
                 reason=reason,
             ),
         )

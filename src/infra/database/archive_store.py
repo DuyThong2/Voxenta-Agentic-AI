@@ -135,22 +135,45 @@ async def get_current_answer_id(archive_graph, exam_attempt_id: str) -> str | No
 
 
 async def persist_realtime_transcript(
-    archive_graph, answer_id: str, turn_order: int, text: str, *, is_last_allowed_turn: bool = False,
+    archive_graph,
+    answer_id: str,
+    turn_order: int,
+    text: str,
+    *,
+    is_last_allowed_turn: bool = False,
+    speech_budget_exceeded: bool = False,
+    assessment_turn_count: int | None = None,
+    max_assessment_turns: int | None = None,
+    duration_seconds: float | None = None,
+    confidence: float | None = None,
 ) -> None:
     """Durably saves this turn's live Voice-Live transcript (see attempt_connection.py's
     [realtime_transcript] logging) so eval-time scoring can prefer it over re-transcribing the
     archived audio via the Azure Speech SDK -- see get_realtime_transcript / start_node_config.py.
-    Fire-and-forget from the caller (mirrors publish_turn_if_new's decision_reasons write):
-    never awaited inline with the turn_end decision response.
+    The realtime turn processor awaits this small checkpoint write before starting the slower
+    decision call so reconnect recovery can always see a turn_end that reached the server.
 
     is_last_allowed_turn is persisted here too (not just used in-memory in _handle_turn_end) so
     _recover_pending_decision can re-apply WPF's own MaxTurnsPerQuestion clamp correctly if this
     turn's decision never made it back to the client and has to be recomputed during a later
-    resume -- see attempt_connection.py's _handle_resume."""
+    resume -- see attempt_connection.py's _handle_resume.
+
+    confidence is RealtimeExamSession.current_transcript_confidence (word-count-weighted average
+    of each utterance's C_ASR-log = sqrt(G*T20)) -- None if never computed (manual override or
+    a transcription model/event that carried no logprobs)."""
     try:
         await aupdate_state(archive_graph, archive_config(answer_id), {
             "realtime_transcripts": [
-                {"turn_order": turn_order, "text": text, "is_last_allowed_turn": is_last_allowed_turn},
+                {
+                    "turn_order": turn_order,
+                    "text": text,
+                    "is_last_allowed_turn": is_last_allowed_turn,
+                    "speech_budget_exceeded": speech_budget_exceeded,
+                    "assessment_turn_count": assessment_turn_count,
+                    "max_assessment_turns": max_assessment_turns,
+                    "duration_seconds": duration_seconds,
+                    "confidence": confidence,
+                },
             ],
         })
     except Exception:
@@ -160,14 +183,17 @@ async def persist_realtime_transcript(
         )
 
 
-async def get_realtime_transcript(archive_graph, answer_id: str, turn_order: int) -> str | None:
-    """The live Voice-Live transcript persisted for this turn (persist_realtime_transcript),
-    or None if never captured (e.g. archived data predates this feature, or the WebSocket
-    dropped before turn_end for this turn)."""
+async def get_realtime_transcript(archive_graph, answer_id: str, turn_order: int) -> tuple[str | None, float | None]:
+    """The live Voice-Live transcript + its ASR confidence persisted for this turn
+    (persist_realtime_transcript), or (None, None) if never captured (e.g. archived data
+    predates this feature, or the WebSocket dropped before turn_end for this turn). Confidence
+    alone can be None even when text isn't -- see persist_realtime_transcript's docstring."""
     state = await aget_state(archive_graph, archive_config(answer_id))
     entries = (state.values or {}).get("realtime_transcripts") or []
     match = next((e for e in entries if e.get("turn_order") == turn_order), None)
-    return match.get("text") if match else None
+    if match is None:
+        return None, None
+    return match.get("text"), match.get("confidence")
 
 
 async def get_resume_state(archive_graph, answer_id: str) -> dict | None:

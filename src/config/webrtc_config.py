@@ -3,6 +3,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from aiortc import RTCConfiguration, RTCIceServer
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
@@ -18,6 +19,10 @@ class WebRtcSettings(BaseSettings):
     )
 
     WEBRTC_MAX_CONNECTIONS: int = 100
+    STUN_URLS: str = "stun:stun.l.google.com:19302"
+    TURN_URL: str = ""
+    TURN_USERNAME: str = ""
+    TURN_CREDENTIAL: str = ""
     YOLO_MODEL: str = "yolov8n.pt"
     YOLO_FRAME_SKIP: int = 10
     YOLO_CONFIDENCE: float = 0.5
@@ -41,3 +46,26 @@ def get_webrtc_settings() -> WebRtcSettings:
 
 
 settings = get_webrtc_settings()
+
+
+def build_ice_servers() -> RTCConfiguration:
+    """Build aiortc ICE configuration from environment-backed settings."""
+    stun_urls = [url.strip() for url in settings.STUN_URLS.split(",") if url.strip()]
+    if not stun_urls:
+        stun_urls = ["stun:stun.l.google.com:19302"]
+
+    servers = [
+        RTCIceServer(urls=stun_urls)
+    ]
+
+    turn_url = settings.TURN_URL.strip()
+    if turn_url:
+        servers.append(
+            RTCIceServer(
+                urls=[turn_url],
+                username=settings.TURN_USERNAME,
+                credential=settings.TURN_CREDENTIAL,
+            )
+        )
+
+    return RTCConfiguration(iceServers=servers)

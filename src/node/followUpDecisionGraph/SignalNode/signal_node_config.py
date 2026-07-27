@@ -71,11 +71,21 @@ def prepare_turn_signals_node(state: Dict[str, Any]) -> Dict[str, Any]:
     length_sufficient = cumulative_word_count >= expected_min_words
     current_turn_word_count = int((current_turn or {}).get("word_count") or 0)
     estimated_response_seconds = _estimate_speaking_seconds(cumulative_word_count)
+    actual_response_seconds = sum(float((turn or {}).get("duration_seconds") or 0) for turn in all_turns) or None
     target_response_seconds = _resolve_target_response_seconds(question)
-    response_coverage_ratio = (
+    word_coverage_ratio = (
         round(estimated_response_seconds / target_response_seconds, 2)
         if target_response_seconds
         else None
+    )
+    time_coverage_ratio = (
+        round(actual_response_seconds / target_response_seconds, 2)
+        if target_response_seconds and actual_response_seconds is not None
+        else None
+    )
+    response_coverage_ratio = min(
+        (ratio for ratio in (word_coverage_ratio, time_coverage_ratio) if ratio is not None),
+        default=None,
     )
 
     assessment_turn_count = count_assessment_turns(previous_turns) + 1
@@ -94,7 +104,10 @@ def prepare_turn_signals_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "length_sufficient": length_sufficient,
             "assessment_turn_count": assessment_turn_count,
             "estimated_response_seconds": estimated_response_seconds,
+            "actual_response_seconds": actual_response_seconds,
             "target_response_seconds": target_response_seconds,
+            "word_coverage_ratio": word_coverage_ratio,
+            "time_coverage_ratio": time_coverage_ratio,
             "response_coverage_ratio": response_coverage_ratio,
             "followup_pressure": _followup_pressure(
                 length_sufficient=length_sufficient,

@@ -1,5 +1,6 @@
+import asyncio
 import logging
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
@@ -9,6 +10,46 @@ logger = logging.getLogger(__name__)
 
 _producer: Optional[AIOKafkaProducer] = None
 _consumers: Dict[str, AIOKafkaConsumer] = {}
+_consumer_instances: list[AIOKafkaConsumer] = []
+
+# consumer.start() only tries the broker once and raises on failure -- with no
+# retry, a Kafka pod that's mid-restart exactly when this pod boots (a real,
+# recurring race: Karpenter node churn, Kafka rollouts, etc.) permanently
+# kills that consumer's asyncio.create_task() with no trace anywhere (nothing
+# ever awaits it), confirmed for real: exam-attempt-evaluation-requested built
+# up 4 unconsumed messages for ~45 minutes after one such race, invisible
+# until someone manually checked `kafka-consumer-groups.sh` and found the
+# group didn't even exist on the broker.
+#
+# Takes a FACTORY, not a consumer instance -- AIOKafkaConsumer.start() has
+# `assert self._fetcher is None, "Did you call start twice?"`. A failure
+# during the initial broker bootstrap never sets _fetcher (safe to retry the
+# same instance), but a failure after bootstrap succeeds (e.g. group-join
+# fails because the broker restarts mid-handshake) DOES leave _fetcher set --
+# retrying .start() on that same object would hit the assert and crash
+# uncaught, reintroducing the exact silent-death bug this is fixing. Building
+# a fresh consumer per attempt sidesteps that entirely; the failed instance's
+# .stop() is best-effort cleanup for whatever partial connection it opened.
+async def _start_with_retry(
+    factory: Callable[[], AIOKafkaConsumer], *, label: str,
+) -> AIOKafkaConsumer:
+    delay = 2
+    while True:
+        consumer = factory()
+        try:
+            await consumer.start()
+            return consumer
+        except Exception as exc:
+            logger.error(
+                "Kafka consumer failed to start (%s), retrying in %ss: %s",
+                label, delay, exc,
+            )
+            try:
+                await consumer.stop()
+            except Exception:
+                pass
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 30)
 
 
 async def get_producer() -> AIOKafkaProducer:
@@ -31,15 +72,17 @@ async def get_consumer(topic: str) -> AIOKafkaConsumer:
     consumer = _consumers.get(topic)
     if consumer is None:
         logger.info("Connecting Kafka consumer topic=%s", topic)
-        consumer = AIOKafkaConsumer(
-            topic,
-            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
-            client_id=settings.KAFKA_CLIENT_ID,
-            group_id=settings.KAFKA_CONSUMER_GROUP,
-            enable_auto_commit=False,
-            auto_offset_reset=settings.KAFKA_AUTO_OFFSET_RESET,
+        consumer = await _start_with_retry(
+            lambda: AIOKafkaConsumer(
+                topic,
+                bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+                client_id=settings.KAFKA_CLIENT_ID,
+                group_id=settings.KAFKA_CONSUMER_GROUP,
+                enable_auto_commit=False,
+                auto_offset_reset=settings.KAFKA_AUTO_OFFSET_RESET,
+            ),
+            label=f"topic={topic}",
         )
-        await consumer.start()
         _consumers[topic] = consumer
         logger.info("Kafka consumer established.")
     return consumer
@@ -50,16 +93,46 @@ async def get_topic_consumer(topic: str, *, group_id: str) -> AIOKafkaConsumer:
     consumer = _consumers.get(cache_key)
     if consumer is None:
         logger.info("Connecting Kafka consumer topic=%s group=%s", topic, group_id)
-        consumer = AIOKafkaConsumer(
+        consumer = await _start_with_retry(
+            lambda: AIOKafkaConsumer(
+                topic,
+                bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+                client_id=settings.KAFKA_CLIENT_ID,
+                group_id=group_id,
+                enable_auto_commit=False,
+                auto_offset_reset=settings.KAFKA_AUTO_OFFSET_RESET,
+            ),
+            label=f"topic={topic} group={group_id}",
+        )
+        _consumers[cache_key] = consumer
+    return consumer
+
+
+async def get_topic_consumer_instance(
+    topic: str,
+    *,
+    group_id: str,
+    instance_label: str,
+) -> AIOKafkaConsumer:
+    """Create a new consumer so Kafka can assign separate partitions per task."""
+    logger.info(
+        "Connecting Kafka consumer topic=%s group=%s instance=%s",
+        topic,
+        group_id,
+        instance_label,
+    )
+    consumer = await _start_with_retry(
+        lambda: AIOKafkaConsumer(
             topic,
             bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
-            client_id=settings.KAFKA_CLIENT_ID,
+            client_id=f"{settings.KAFKA_CLIENT_ID}-{instance_label}",
             group_id=group_id,
             enable_auto_commit=False,
             auto_offset_reset=settings.KAFKA_AUTO_OFFSET_RESET,
-        )
-        await consumer.start()
-        _consumers[cache_key] = consumer
+        ),
+        label=f"topic={topic} group={group_id} instance={instance_label}",
+    )
+    _consumer_instances.append(consumer)
     return consumer
 
 
@@ -69,6 +142,9 @@ async def close() -> None:
     for consumer in _consumers.values():
         await consumer.stop()
     _consumers.clear()
+    for consumer in _consumer_instances:
+        await consumer.stop()
+    _consumer_instances.clear()
     if _producer is not None:
         await _producer.stop()
         _producer = None

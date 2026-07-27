@@ -13,9 +13,10 @@ class AnswerTurnPayload(_CamelMessage):
     prompt_text: Optional[str] = None
     audio_url: Optional[str] = None
     transcript: str = ""
-    duration_seconds: Optional[int] = None
+    duration_seconds: Optional[float] = None
     word_count: Optional[int] = None
     answered_at: Optional[str] = None
+    decision_reason: Optional[str] = None
 
 
 class AnswerTurnsRecordedPayload(_CamelMessage):

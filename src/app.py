@@ -65,6 +65,7 @@ from realtime._legacy_avatar.avatar_webrtc import close_all_connections as close
 from realtime.attempt_connection import close_all_attempt_connections
 from node.followUpDecisionGraph.graphConfig import build_archive_graph, build_text_followup_graph
 from node.evalGraph.graphConfig import build_graph
+from config.kafka_config import settings
 from config.postgresDB_config import settings as pg_settings
 from infra.message_broker.external_events_handlers.kafka_consumer import start_outbox_consumer
 from infra.message_broker.external_events_handlers.question_asset_analysis_consumer import (
@@ -114,8 +115,11 @@ async def lifespan(app: FastAPI):
     # 4) Start exam-attempt-evaluation-requested consumer (grading pipeline) -- defined in
     # exam_consumer.py but was never actually started anywhere, so no grading requests from vox
     # were ever consumed despite the handler being fully implemented.
-    exam_consumer_task = asyncio.create_task(start_exam_attempt_consumer(app))
-    app.state.exam_consumer_task = exam_consumer_task
+    exam_consumer_tasks = [
+        asyncio.create_task(start_exam_attempt_consumer(app, instance_label=str(index)))
+        for index in range(settings.KAFKA_EXAM_CONSUMER_CONCURRENCY)
+    ]
+    app.state.exam_consumer_tasks = exam_consumer_tasks
     force_end_consumer_task = asyncio.create_task(start_exam_attempt_force_end_consumer(app))
     app.state.force_end_consumer_task = force_end_consumer_task
     asset_analysis_consumer_task = asyncio.create_task(start_question_asset_analysis_consumer(app))
@@ -128,7 +132,8 @@ async def lifespan(app: FastAPI):
         await close_all_connections()
         await close_all_avatar_connections()
         consumer_task.cancel()
-        exam_consumer_task.cancel()
+        for task in exam_consumer_tasks:
+            task.cancel()
         force_end_consumer_task.cancel()
         asset_analysis_consumer_task.cancel()
         await mq_connection.close()

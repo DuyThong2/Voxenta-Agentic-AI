@@ -34,6 +34,7 @@ class KafkaSettings(BaseSettings):
     KAFKA_QUESTION_ASSET_ANALYSIS_COMPLETED_TOPIC: str = "question-asset-analysis-completed"
     KAFKA_EXAM_FORCE_END_TOPIC: str = "exam-attempt-force-end-requested"
     KAFKA_EXAM_CONSUMER_GROUP: str = "exam-attempt-evaluation"
+    KAFKA_EXAM_CONSUMER_CONCURRENCY: int = 4
     KAFKA_EXAM_FORCE_END_CONSUMER_GROUP: str = "exam-attempt-force-end"
     KAFKA_QUESTION_ASSET_ANALYSIS_CONSUMER_GROUP: str = "question-asset-analysis"
     KAFKA_MAX_RETRY: int = 3

@@ -17,7 +17,10 @@ from events.exam_attempt_evaluation_failed import (
 )
 from events.exam_attempt_evaluation_shared import EvaluationSignals
 from events.exam_attempt_force_end_requested import ExamAttemptForceEndRequestedEvent
-from infra.message_broker.connection import get_topic_consumer
+from infra.message_broker.connection import (
+    get_topic_consumer,
+    get_topic_consumer_instance,
+)
 from infra.message_broker.publishers.exam_publisher import (
     publish_exam_attempt_evaluation_completed,
     publish_exam_attempt_evaluation_failed,
@@ -575,7 +578,7 @@ def _build_multi_turn_completed_event(
             validity=aggregate_result.get("validity"),
             feedback_summary=feedback_summary,
             suggestions=suggestions,
-            model_version="gpt-4o+claude-sonnet-4-6",
+            model_version="gpt-5.4+claude-sonnet-4-6",
             prompt_version="language-quality-v2",
             evaluated_at=build_completed_event(
                 aggregate_result,
@@ -699,10 +702,11 @@ def _build_clarification_only_completed_event(
     )
 
 
-async def start_exam_attempt_consumer(app):
-    consumer = await get_topic_consumer(
+async def start_exam_attempt_consumer(app, instance_label: str = "0"):
+    consumer = await get_topic_consumer_instance(
         settings.KAFKA_EXAM_REQUEST_TOPIC,
         group_id=settings.KAFKA_EXAM_CONSUMER_GROUP,
+        instance_label=instance_label,
     )
     graph = app.state.graph
     archive_graph = app.state.archive_graph
@@ -736,17 +740,17 @@ async def start_exam_attempt_consumer(app):
                     request_event.answer_id, request_event.exam_attempt_id, len(turns),
                 )
 
-                per_turn_results: List[Tuple[Any, Dict[str, Any]]] = []
                 aggregate_audio_path = turns[0].audio_ref
                 scoreable_turns = [
                     turn for turn in turns
                     if not is_clarification_reason(getattr(turn, "decision_reason", None))
                 ]
 
-                for turn in scoreable_turns:
+                async def _evaluate_one(turn):
                     logger.info(
-                        "[exam-consumer] evaluating turn %d/%d answer_id=%s",
-                        turn.turn_order, len(scoreable_turns), request_event.answer_id,
+                        "[exam-consumer] evaluating turn %d answer_id=%s",
+                        turn.turn_order,
+                        request_event.answer_id,
                     )
                     # Multi-turn fragments only run transcription, deterministic local
                     # validity gates, and pronunciation. Complete-answer semantic validity,
@@ -760,11 +764,18 @@ async def start_exam_attempt_consumer(app):
                         "",
                         payload,
                     )
-                    per_turn_results.append((turn, result))
                     logger.info(
-                        "[exam-consumer] turn %d/%d done answer_id=%s",
-                        turn.turn_order, len(scoreable_turns), request_event.answer_id,
+                        "[exam-consumer] turn %d done answer_id=%s",
+                        turn.turn_order,
+                        request_event.answer_id,
                     )
+                    return turn, result
+
+                per_turn_results: List[Tuple[Any, Dict[str, Any]]] = list(
+                    await asyncio.gather(
+                        *[_evaluate_one(turn) for turn in scoreable_turns]
+                    )
+                )
 
                 if not scoreable_turns:
                     logger.info(

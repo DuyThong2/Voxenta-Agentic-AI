@@ -14,6 +14,7 @@ class FrameworkBand(_CamelMessage):
     descriptor: Optional[str] = None
     positive_signals: List[str] = Field(default_factory=list)
     negative_signals: List[str] = Field(default_factory=list)
+    order: int = 0
 
 
 class CriterionFramework(_CamelMessage):
@@ -48,12 +49,16 @@ class CriterionFramework(_CamelMessage):
             return self
         if not self.target_band_code:
             raise ValueError("target_band_code is required when target_band_only is true")
-        if len(self.bands) != 1:
-            raise ValueError("target-band-only scoring must receive exactly one framework band")
-
-        target_band = self.bands[0]
-        if target_band.code != self.target_band_code:
-            raise ValueError("the only framework band must match target_band_code")
+        if not self.bands:
+            raise ValueError(
+                "target-band-only scoring must include at least the target framework band"
+            )
+        target_band = next(
+            (band for band in self.bands if band.code == self.target_band_code),
+            None,
+        )
+        if target_band is None:
+            raise ValueError("bands must include an entry matching target_band_code")
         if (
             target_band.score_min != self.rubric_min_score
             or target_band.score_max != self.rubric_max_score

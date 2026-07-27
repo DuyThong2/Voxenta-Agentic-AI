@@ -1,8 +1,11 @@
 import json
 import logging
 import math
+import os
 import re
+import threading
 import time
+from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from statistics import median
@@ -17,6 +20,7 @@ from openai import RateLimitError as OpenAIRateLimitError
 _RateLimitErrors = (OpenAIRateLimitError, AnthropicRateLimitError)
 
 from utils.speech_client import normalize_for_wer, word_error_rate
+from utils.jsonl_logger import append_jsonl
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +33,29 @@ _T = TypeVar("_T")
 # thêm thread nào cho việc retry/fallback -- toàn bộ vẫn nằm trong "async ở tầng ngoài"
 # (exam_consumer.py bọc graph.invoke bằng asyncio.to_thread) đã có sẵn từ trước.
 _RETRY_BACKOFF_SECONDS = 1.0
-_OPENAI_MODEL = "gpt-4o"
+_OPENAI_MODEL = "gpt-5.4"
 CLAUDE_MODEL = "claude-sonnet-4-6"
+_LLM_CONCURRENCY_LIMIT = max(
+    1,
+    int(os.getenv("EVAL_LLM_CONCURRENCY_LIMIT", "16")),
+)
+_llm_call_semaphore = threading.BoundedSemaphore(_LLM_CONCURRENCY_LIMIT)
+
+
+@contextmanager
+def llm_call_slot():
+    """Giới hạn tổng số lệnh LLM của evalGraph chạy đồng thời."""
+    _llm_call_semaphore.acquire()
+    try:
+        yield
+    finally:
+        _llm_call_semaphore.release()
 
 
 def _invoke_llm_json(llm: Any, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
     messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
-    response = llm.invoke(messages)
+    with llm_call_slot():
+        response = llm.invoke(messages)
     content = response.content.strip()
     if content.startswith("```"):
         lines = [line for line in content.split("\n") if not line.strip().startswith("```")]
@@ -44,8 +64,12 @@ def _invoke_llm_json(llm: Any, system_prompt: str, user_prompt: str) -> Dict[str
 
 
 def call_llm_openai(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
-    """Gọi GPT-4o, parse JSON response."""
-    return _invoke_llm_json(ChatOpenAI(model=_OPENAI_MODEL, temperature=0), system_prompt, user_prompt)
+    """Gọi GPT-5.4, parse JSON response."""
+    return _invoke_llm_json(
+        ChatOpenAI(model=_OPENAI_MODEL, reasoning_effort="medium"),
+        system_prompt,
+        user_prompt,
+    )
 
 
 def call_llm_claude(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
@@ -264,7 +288,7 @@ def _rationale_is_grounded(note: Any, transcript: str) -> bool:
 
 
 # (primary, fallback) cho mỗi lượt trong 3 lượt case (5) -- xen O/C/O thay vì 3 lần cùng 1
-# model/weights: nếu GPT-4o có 1 điểm mù/bias hệ thống nào đó, cả 3 lượt cùng model sẽ dính
+# model/weights: nếu GPT-5.4 có 1 điểm mù/bias hệ thống nào đó, cả 3 lượt cùng model sẽ dính
 # GIỐNG NHAU (Δc thấp giả tạo, trông "tự tin" dù sai đều) -- đổi 1 lượt sang model khác hẳn
 # kiến trúc/dữ liệu train tăng tính độc lập thật của 3 "judge", đúng tinh thần ROVER/cross-
 # system agreement đã dùng cho case (2). Đồng thời giảm tải OpenAI mỗi turn (đỡ 429).
@@ -356,6 +380,8 @@ def run_multi_criterion_consensus_judgment(
     user_prompt: str,
     transcript: str,
     score_ranges: Dict[str, Tuple[float, float]],
+    *,
+    debug_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, ConsensusJudgment]:
     """Chạy đúng ba request O-C-O song song, mỗi request chấm toàn bộ tiêu chí.
 
@@ -368,8 +394,9 @@ def run_multi_criterion_consensus_judgment(
         key: [] for key in criterion_keys
     }
     first_error: Optional[Exception] = None
+    raw_rounds: List[Dict[str, Any]] = []
 
-    def run_one(index: int) -> Dict[str, Any]:
+    def run_one(index: int) -> Tuple[int, str, Dict[str, Any]]:
         variation = (
             "\n\n## Independent calibration pass\n"
             f"Evaluate in this order: {_MULTI_CRITERION_ORDERS[index]}. "
@@ -379,18 +406,35 @@ def run_multi_criterion_consensus_judgment(
         )
         primary, fallback = _CONSENSUS_PROVIDERS[index]
         prompt = user_prompt + variation
-        return call_with_retry_and_fallback(
-            lambda: primary(system_prompt, prompt),
-            lambda: fallback(system_prompt, prompt),
+        provider, response = call_with_retry_and_fallback(
+            lambda: (primary.__name__, primary(system_prompt, prompt)),
+            lambda: (fallback.__name__, fallback(system_prompt, prompt)),
         )
+        return index, provider.removeprefix("call_llm_"), response
 
     with ThreadPoolExecutor(max_workers=3) as pool:
-        futures = [pool.submit(run_one, index) for index in range(3)]
+        futures = {
+            pool.submit(run_one, index): index
+            for index in range(3)
+        }
         for future in as_completed(futures):
             try:
-                response = future.result()
+                index, provider, response = future.result()
+                raw_rounds.append(
+                    {
+                        "pass_index": index,
+                        "provider": provider,
+                        "response": response,
+                    }
+                )
             except Exception as exc:
                 first_error = first_error or exc
+                raw_rounds.append(
+                    {
+                        "pass_index": futures[future],
+                        "error": f"{type(exc).__name__}: {exc}",
+                    }
+                )
                 continue
 
             for key in criterion_keys:
@@ -427,6 +471,17 @@ def run_multi_criterion_consensus_judgment(
                 scored_by_criterion[key].append(
                     (criterion_response, score, grounded)
                 )
+
+    append_jsonl(
+        "language_quality_consensus.jsonl",
+        {
+            **(debug_context or {}),
+            "rounds": sorted(
+                raw_rounds,
+                key=lambda item: item["pass_index"],
+            ),
+        },
+    )
 
     judgments: Dict[str, ConsensusJudgment] = {}
     for key, scored in scored_by_criterion.items():

@@ -375,7 +375,7 @@ def build_completed_event(
             validity=result.get("validity") or ValidityResult(),
             feedback_summary=feedback_summary,
             suggestions=suggestions,
-            model_version="gpt-4o+claude-sonnet-4-6",
+            model_version="gpt-5.4+claude-sonnet-4-6",
             prompt_version="language-quality-v2",
             evaluated_at=datetime.now(timezone.utc).isoformat(),
         ),

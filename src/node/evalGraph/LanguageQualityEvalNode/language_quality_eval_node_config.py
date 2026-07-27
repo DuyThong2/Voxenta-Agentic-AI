@@ -166,36 +166,88 @@ def _build_framework_context(
     if framework.framework_criterion_description:
         lines.append(f"Definition: {framework.framework_criterion_description}")
     if framework.target_band_only:
-        target_label = framework.target_band_label or framework.target_band_code
+        ordered_bands = sorted(
+            framework.bands,
+            key=lambda item: (item.order, item.code),
+        )
+        target_band = next(
+            (
+                band
+                for band in ordered_bands
+                if band.code == framework.target_band_code
+            ),
+            None,
+        )
+        target_label = (
+            framework.target_band_label
+            or (target_band.label if target_band else None)
+            or framework.target_band_code
+        )
+        target_order = target_band.order if target_band else 0
         lines.extend(
             [
-                f"Target proficiency level: {target_label}",
                 (
-                    f"Scoring scope: assign a score only within {score_range} "
-                    "for how fully this answer "
-                    "satisfies the target-level descriptor below. This is NOT a "
-                    "placement score across all six framework levels: the minimum "
-                    "does not mean Bậc 1 and the maximum does not mean Bậc 6. Do "
-                    "not evaluate or assign any other proficiency level."
+                    f"Target proficiency level: {target_label} "
+                    f"(band {target_order} of {len(ordered_bands)})"
+                ),
+                (
+                    f"Scoring scope: assign a score within {score_range} for how "
+                    "fully this answer satisfies the TARGET band's descriptor. "
+                    "Use weaker and stronger bands only as comparison anchors. "
+                    "A response matching weaker-band limitations and none of the "
+                    "target band's positive signals should score low in this "
+                    "range; a response fully matching the target and showing "
+                    "stronger-band traits should score high. Do not transfer "
+                    "evidence between criteria."
+                ),
+                "",
+                (
+                    "Band ladder for this criterion "
+                    "(weakest to strongest, target marked):"
                 ),
             ]
         )
+        for band in ordered_bands:
+            line = f"- {band.order} {band.code}"
+            if band.label:
+                line += f" [{band.label}]"
+            if band.descriptor:
+                line += f": {band.descriptor}"
+            if band.code == framework.target_band_code:
+                line += " <- TARGET"
+            elif band.order < target_order:
+                line += " (weaker reference)"
+            else:
+                line += " (stronger reference)"
+            lines.append(line)
+            if band.code == framework.target_band_code:
+                if band.positive_signals:
+                    lines.append(
+                        "  Target positive signals: "
+                        f"{', '.join(band.positive_signals)}"
+                    )
+                if band.negative_signals:
+                    lines.append(
+                        "  Target negative signals: "
+                        f"{', '.join(band.negative_signals)}"
+                    )
+    else:
+        for band in sorted(framework.bands, key=lambda item: item.score_min):
+            line = f"- {band.code} ({band.score_min}-{band.score_max})"
+            if band.label:
+                line += f" [{band.label}]"
+            if band.descriptor:
+                line += f": {band.descriptor}"
+            lines.append(line)
+            if band.positive_signals:
+                lines.append(
+                    f"  Positive signals: {', '.join(band.positive_signals)}"
+                )
+            if band.negative_signals:
+                lines.append(
+                    f"  Negative signals: {', '.join(band.negative_signals)}"
+                )
     lines.append(f"Score range for this criterion: {score_range}")
-    for band in sorted(framework.bands, key=lambda item: item.score_min):
-        line = f"- {band.code} ({band.score_min}-{band.score_max})"
-        if band.label:
-            line += f" [{band.label}]"
-        if band.descriptor:
-            line += f": {band.descriptor}"
-        lines.append(line)
-        if band.positive_signals:
-            lines.append(
-                f"  Positive signals: {', '.join(band.positive_signals)}"
-            )
-        if band.negative_signals:
-            lines.append(
-                f"  Negative signals: {', '.join(band.negative_signals)}"
-            )
     return "\n".join(lines)
 
 
@@ -352,6 +404,12 @@ def language_quality_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 "grammar": _score_range(speaking_input, "grammar"),
                 "vocabulary": _score_range(speaking_input, "vocabulary"),
                 "coherence": _score_range(speaking_input, "coherence"),
+            },
+            debug_context={
+                "exam_attempt_id": speaking_input.exam_attempt_id,
+                "answer_id": answer_id,
+                "question_id": speaking_input.question_id,
+                "turn_order": turn_order,
             },
         )
         grammar = judgments["grammar"]

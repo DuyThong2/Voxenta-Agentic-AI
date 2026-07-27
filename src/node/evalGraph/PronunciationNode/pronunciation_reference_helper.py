@@ -15,7 +15,12 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from node.evalGraph.PronunciationNode.pronunciation_reference_prompt import SYSTEM_PROMPT
 from node.state_models.speaking_input import QuestionContext
-from utils.confidence_utils import CLAUDE_MODEL, call_with_retry_and_fallback, compute_reference_confidence
+from utils.confidence_utils import (
+    CLAUDE_MODEL,
+    call_with_retry_and_fallback,
+    compute_reference_confidence,
+    llm_call_slot,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +68,7 @@ def build_pronunciation_reference(
     llm = (
         ChatAnthropic(model=CLAUDE_MODEL, temperature=0.7)
         if provider == "claude"
-        else ChatOpenAI(model="gpt-5.4", temperature=0.7)
+        else ChatOpenAI(model="gpt-5.4", reasoning_effort="medium")
     )
 
     context_block = _build_context_block(question)
@@ -78,7 +83,8 @@ def build_pronunciation_reference(
         HumanMessage(content=human_content),
     ]
 
-    response = llm.invoke(messages)
+    with llm_call_slot():
+        response = llm.invoke(messages)
     return response.content.strip()
 
 

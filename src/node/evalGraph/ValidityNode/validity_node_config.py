@@ -32,6 +32,7 @@ from node.evalGraph.ValidityNode.validity_eval_prompt import SYSTEM_PROMPT
 from schemas.enums import DifficultyLevel, SpeakingMode
 from mappers.schema_mapper import build_validity_result_from_rules, normalize_rule_result
 from utils.length_utils import get_expected_min_words
+from utils.confidence_utils import llm_call_slot
 from utils.speech_client import compute_code_switching_ratio
 from utils.text_utils import word_count
 
@@ -144,7 +145,7 @@ def _call_llm(text: str, question_text: Optional[str], question_type: Optional[s
               actual_response_seconds: Optional[float] = None,
               expected_min_response_seconds: Optional[float] = None,
               off_topic_examples: Optional[str] = None) -> Dict[str, Any]:
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    llm = ChatOpenAI(model="gpt-5.4", reasoning_effort="medium")
 
     user_prompt = _build_llm_prompt(
         text, question_text, asset_context, question_type, mode, difficulty_level, word_count,
@@ -158,7 +159,8 @@ def _call_llm(text: str, question_text: Optional[str], question_type: Optional[s
         HumanMessage(content=user_prompt),
     ]
 
-    response = llm.invoke(messages)
+    with llm_call_slot():
+        response = llm.invoke(messages)
     content = response.content.strip()
 
     if content.startswith("```"):

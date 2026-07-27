@@ -14,7 +14,11 @@ from node.evalGraph.AnswerLengthNode.answer_length_node_helper import (
 )
 from node.state_models import SpeakingInput
 from utils.length_utils import get_expected_min_words
-from utils.confidence_utils import quality_from_snr, quality_from_speech_ratio
+from utils.confidence_utils import (
+    llm_call_slot,
+    quality_from_snr,
+    quality_from_speech_ratio,
+)
 from utils.speech_client import (
     compute_clipping_ratio,
     compute_code_switching_ratio,
@@ -77,7 +81,7 @@ def call_llm_length_judgment(
     length_ratio: Optional[float],
     actual_response_seconds: Optional[float] = None,
 ) -> Dict[str, Any]:
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    llm = ChatOpenAI(model="gpt-5.4", reasoning_effort="medium")
 
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
@@ -88,7 +92,8 @@ def call_llm_length_judgment(
         )),
     ]
 
-    response = llm.invoke(messages)
+    with llm_call_slot():
+        response = llm.invoke(messages)
     content = response.content.strip()
 
     if content.startswith("```"):

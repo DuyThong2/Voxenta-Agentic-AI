@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 
 _producer: Optional[AIOKafkaProducer] = None
 _consumers: Dict[str, AIOKafkaConsumer] = {}
+_consumer_instances: list[AIOKafkaConsumer] = []
 
 # consumer.start() only tries the broker once and raises on failure -- with no
 # retry, a Kafka pod that's mid-restart exactly when this pod boots (a real,
@@ -107,12 +108,43 @@ async def get_topic_consumer(topic: str, *, group_id: str) -> AIOKafkaConsumer:
     return consumer
 
 
+async def get_topic_consumer_instance(
+    topic: str,
+    *,
+    group_id: str,
+    instance_label: str,
+) -> AIOKafkaConsumer:
+    """Create a new consumer so Kafka can assign separate partitions per task."""
+    logger.info(
+        "Connecting Kafka consumer topic=%s group=%s instance=%s",
+        topic,
+        group_id,
+        instance_label,
+    )
+    consumer = await _start_with_retry(
+        lambda: AIOKafkaConsumer(
+            topic,
+            bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+            client_id=f"{settings.KAFKA_CLIENT_ID}-{instance_label}",
+            group_id=group_id,
+            enable_auto_commit=False,
+            auto_offset_reset=settings.KAFKA_AUTO_OFFSET_RESET,
+        ),
+        label=f"topic={topic} group={group_id} instance={instance_label}",
+    )
+    _consumer_instances.append(consumer)
+    return consumer
+
+
 async def close() -> None:
     """Gracefully close Kafka clients."""
     global _producer
     for consumer in _consumers.values():
         await consumer.stop()
     _consumers.clear()
+    for consumer in _consumer_instances:
+        await consumer.stop()
+    _consumer_instances.clear()
     if _producer is not None:
         await _producer.stop()
         _producer = None

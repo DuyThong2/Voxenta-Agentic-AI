@@ -1,25 +1,19 @@
 name: CD
 
-# TEMPORARY (testing): triggers directly on push to `testDeploy` (dedicated
-# throwaway branch for testing this pipeline), bypassing the CI-gate entirely
-# -- no workflow_run, no dependency on ci.yml. This is necessary for testing
-# on a non-default branch: workflow_run only fires if the *triggering*
-# workflow file (this one) already exists on the repo's default branch, which
-# it doesn't yet on a feature branch -- so the CI-gated design silently never
-# fires here (CI ran, CD never did). Before merging any of this to main,
-# revert to the CI-gated design: `on: workflow_run: workflows: ["CI"]` +
-# `types: [completed]` + an `if:` checking
-# `github.event.workflow_run.conclusion == 'success' && ...event == 'push' &&
-# ...head_branch == 'main'` (see git history for the exact shape) -- that gate
-# exists so a broken build never reaches ECR/deploy.
 on:
-  push:
-    branches:
-      - testDeploy
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
 
 jobs:
   docker-build-push:
     name: Build Docker image and push to ECR
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
     runs-on: ubuntu-latest
     outputs:
       ecr_image: ${{ steps.build_outputs.outputs.ecr_image }}
@@ -30,6 +24,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v5
@@ -44,7 +40,7 @@ jobs:
 
       - name: Compute image tag
         id: tag
-        run: echo "tag=$(echo "${{ github.sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+        run: echo "tag=$(echo "${{ github.event.workflow_run.head_sha }}" | cut -c1-7)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

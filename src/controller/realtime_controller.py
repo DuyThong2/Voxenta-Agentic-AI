@@ -19,8 +19,8 @@ from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 
 from infra.database import archive_store
 from infra.realtime_socket import RealtimeSocket
-from realtime.attempt_connection import (
-    AttemptConnection,
+from realtime.attempt.connection import AttemptConnection
+from realtime.attempt.registry import (
     register_attempt_connection,
     unregister_attempt_connection,
 )

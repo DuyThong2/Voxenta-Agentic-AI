@@ -48,7 +48,7 @@ from node.followUpDecisionGraph.followup_graph_helper import is_clarification_re
 from node.state_models import QuestionAssetContext, QuestionContext, SpeakingInput, TopicContext
 from node.state_models.pronunciation import FormattedPronunciationResult
 from infra.database import archive_store
-from realtime.attempt_connection import get_attempt_connection
+from realtime.attempt.registry import get_attempt_connection
 from schemas.enums import SpeakingMode
 from utils.speech_client import (
     unwrap_language_tags,

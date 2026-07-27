@@ -141,14 +141,17 @@ async def persist_realtime_transcript(
     text: str,
     *,
     is_last_allowed_turn: bool = False,
+    speech_budget_exceeded: bool = False,
+    assessment_turn_count: int | None = None,
+    max_assessment_turns: int | None = None,
     duration_seconds: float | None = None,
     confidence: float | None = None,
 ) -> None:
     """Durably saves this turn's live Voice-Live transcript (see attempt_connection.py's
     [realtime_transcript] logging) so eval-time scoring can prefer it over re-transcribing the
     archived audio via the Azure Speech SDK -- see get_realtime_transcript / start_node_config.py.
-    Fire-and-forget from the caller (mirrors publish_turn_if_new's decision_reasons write):
-    never awaited inline with the turn_end decision response.
+    The realtime turn processor awaits this small checkpoint write before starting the slower
+    decision call so reconnect recovery can always see a turn_end that reached the server.
 
     is_last_allowed_turn is persisted here too (not just used in-memory in _handle_turn_end) so
     _recover_pending_decision can re-apply WPF's own MaxTurnsPerQuestion clamp correctly if this
@@ -165,6 +168,9 @@ async def persist_realtime_transcript(
                     "turn_order": turn_order,
                     "text": text,
                     "is_last_allowed_turn": is_last_allowed_turn,
+                    "speech_budget_exceeded": speech_budget_exceeded,
+                    "assessment_turn_count": assessment_turn_count,
+                    "max_assessment_turns": max_assessment_turns,
                     "duration_seconds": duration_seconds,
                     "confidence": confidence,
                 },

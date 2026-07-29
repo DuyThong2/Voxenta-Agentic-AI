@@ -1,0 +1,72 @@
+[
+  {
+    "id": "755adc52-2e66-4a03-b238-5165a5352de2",
+    "candidate_id": "places_town_fluency_01",
+    "topic_id": "a0af86dd-8512-59ec-865d-4034939b13be",
+    "topic_name": "Places in my town",
+    "interest_dimension": "TRAVEL_PLACES",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Talk about a place in your town that you often see or visit. Where is it, and what is it like?",
+    "target_criterion_code": "FLUENCY",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 2,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "A simple description of one familiar place in the student’s town, including its location and a few basic details about how it looks or feels.",
+      "key_points": "Names or identifies one place; says where it is; gives 1–3 simple descriptive details; speaks continuously with basic fluency.",
+      "acceptable_responses": "Any common local place is acceptable, such as a park, street, market, school area, lake, bus stop, or library. The student may describe a place they often pass by, even if they do not spend much time there.",
+      "off_topic_examples": "Talking only about a person; discussing a city in another country; explaining a historical event instead of describing the place; giving only one-word answers.",
+      "scoring_hints": "Stronger performance shows smoother delivery, fewer long pauses, and the ability to keep speaking with simple connected ideas. Minor grammar or vocabulary errors are acceptable if the speech remains easy to follow.",
+      "common_mistakes": "Very short answers; repeating the same idea many times; long pauses after every sentence; listing words instead of using full sentences; forgetting to describe the place itself."
+    },
+    "suggested_ideas": [
+      "where the place is",
+      "what people can see there",
+      "what you usually notice or do there"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 15,
+    "vstep_part": 1
+  },
+  {
+    "id": "91f91935-6324-4f63-8d80-802b739ef65a",
+    "candidate_id": "places_town_fluency_03",
+    "topic_id": "a0af86dd-8512-59ec-865d-4034939b13be",
+    "topic_name": "Places in my town",
+    "interest_dimension": "TRAVEL_PLACES",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Talk about a quiet place in your town that you know. Where is it, and why does it feel quiet?",
+    "target_criterion_code": "FLUENCY",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 2,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "A basic description of a quiet place in town, with simple details about its location and the features that make it feel calm.",
+      "key_points": "Chooses one quiet place; says where it is; gives simple sensory or visual details; explains in a basic way why it feels quiet; speaks with steady fluency.",
+      "acceptable_responses": "Any familiar quiet place is acceptable, such as a small street, a corner of a park, a reading room, a temple yard described from an observational viewpoint without religious discussion, a lake area, or a school garden. The answer can be personal and simple.",
+      "off_topic_examples": "Giving a speech about religion or politics; comparing different countries; describing a family member; talking only about online activities or devices.",
+      "scoring_hints": "Good responses are easy to follow, with short connected sentences and limited hesitation. The student does not need advanced vocabulary if they can keep speaking clearly.",
+      "common_mistakes": "Not answering both parts of the prompt; saying only 'it is quiet' without support; long silent pauses; overusing one simple word like 'nice' or 'quiet' without adding detail."
+    },
+    "suggested_ideas": [
+      "the place and where it is",
+      "what it looks or sounds like",
+      "what makes it feel calm or quiet"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 15,
+    "vstep_part": 1
+  }
+]

@@ -1,0 +1,111 @@
+{
+  "separate": [],
+  "grouped": null,
+  "rejected_before_evaluator": [
+    {
+      "candidate": {
+        "candidate_id": "gt_pron_ws_01",
+        "difficulty_features": {
+          "here_and_now": true,
+          "num_elements": 2,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": "word_stress",
+        "vstep_part": 1,
+        "prompt_text": "Look around your school or study space. Name two game or technology words you know, and say one short sentence about each word.",
+        "suggested_ideas": [
+          "Words such as 'computer', 'internet', 'video game', 'keyboard', or 'player'",
+          "A simple sentence for each word, for example what it is or where people use it",
+          "Clear word stress when saying each key word"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The student should say two words related to games or technology and produce one short sentence about each. The response should be simple and personal or based on the immediate environment.",
+          "key_points": "Two relevant words are given; each word is pronounced clearly; main stress in multi-syllable words is placed reasonably; each word is used in a short sentence; speech is understandable overall.",
+          "acceptable_responses": "Any basic games or technology vocabulary is acceptable, such as 'computer', 'mobile', 'internet', 'player', 'robot', 'keyboard', 'screen', or 'video game'. Sentences may be very short, for example 'A computer is in our classroom.' or 'I play a video game sometimes.'",
+          "off_topic_examples": "Talking only about food, sports, or weather with no game or technology word; giving a long opinion about social issues; naming brands only without any sentence; answering in a way that does not include two words.",
+          "scoring_hints": "Focus mainly on word stress in the chosen vocabulary. Full content is less important than whether the student can place stress understandably in common words. Minor grammar mistakes should not reduce the score much if pronunciation is clear.",
+          "common_mistakes": "Flat stress on every syllable; stressing the wrong syllable in words like 'computer' or 'internet'; saying isolated words without sentences; speaking too softly or too fast to hear the stress pattern."
+        }
+      },
+      "stage": "rule",
+      "violations": [
+        "prompt_not_question"
+      ]
+    },
+    {
+      "candidate": {
+        "candidate_id": "gt_pron_ws_02",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 2,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": "word_stress",
+        "vstep_part": 1,
+        "prompt_text": "What is one game and one piece of technology you often hear about at school? Say their names clearly and give one simple detail about each.",
+        "suggested_ideas": [
+          "A game such as chess, football game, puzzle game, or video game",
+          "A piece of technology such as computer, projector, internet, or tablet",
+          "A simple detail such as where people use it, what it does, or why students know it"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The student should mention one game and one technology item that are familiar in a school context, then add one simple detail about each.",
+          "key_points": "One game is named; one technology item is named; both are relevant to the topic; the student attempts clear stress on multi-syllable words; each item includes one short supporting detail.",
+          "acceptable_responses": "Examples include 'chess', 'puzzle game', 'video game', 'computer', 'projector', 'internet', or 'tablet'. Details can be basic, such as 'Chess is a thinking game.' or 'A projector shows pictures in class.'",
+          "off_topic_examples": "Describing a holiday trip; discussing expensive equipment the student may not have; using only yes/no answers; talking about unrelated school subjects without naming a game and a technology item.",
+          "scoring_hints": "Judge whether the student can make stressed syllables noticeable in common nouns and short phrases. Content can remain very simple. Reward clear, repeated stress patterns even if the response is brief.",
+          "common_mistakes": "Incorrect stress in words like 'projector' or 'technology'; unclear separation between the two items; giving only a list with no detail; replacing the prompt with memorized unrelated speech."
+        }
+      },
+      "stage": "rule",
+      "violations": [
+        "prompt_not_question"
+      ]
+    },
+    {
+      "candidate": {
+        "candidate_id": "gt_pron_ws_03",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 3,
+          "reasoning_type": "description",
+          "abstractness": "mixed"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": "word_stress",
+        "vstep_part": 1,
+        "prompt_text": "Choose one technology word that can connect to games, for example 'computer' or 'internet'. Say the word clearly, then make two short sentences using it.",
+        "suggested_ideas": [
+          "A word such as 'computer', 'internet', 'keyboard', 'player', or 'monitor'",
+          "Two very short sentences, for example what it is, where it is, or how people use it for games",
+          "Careful stress on the chosen word each time it is spoken"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The student should select one suitable technology word linked to games and use it in two short sentences, repeating the word with clear pronunciation.",
+          "key_points": "One relevant technology word is chosen; the word is pronounced clearly more than once; stress placement is reasonably accurate; two short sentences are produced; the response stays on the topic of games and technology.",
+          "acceptable_responses": "Any familiar technology word is acceptable if it can connect naturally to games, such as 'computer', 'internet', 'screen', 'keyboard', or 'player'. Sentences may be simple, such as 'A computer can play games.' and 'The computer is in our room.'",
+          "off_topic_examples": "Choosing a word unrelated to games or technology; giving only one sentence; talking about complex technical knowledge; discussing personal money, religion, or politics; answering with isolated sounds only.",
+          "scoring_hints": "Because the same word is repeated, listen for consistent stress each time. This task is especially useful for checking whether the student can control stress in a familiar multi-syllable word within short sentences.",
+          "common_mistakes": "Changing the stress each time the word is repeated; over-stressing every content word; choosing a very difficult word the student cannot say; long pauses that make the response hard to follow."
+        }
+      },
+      "stage": "rule",
+      "violations": [
+        "prompt_not_question"
+      ]
+    }
+  ]
+}

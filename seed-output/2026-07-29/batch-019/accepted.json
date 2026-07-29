@@ -1,0 +1,107 @@
+[
+  {
+    "id": "60631516-c656-47ce-9f5a-3cbe3df1ae26",
+    "candidate_id": "fi_pron_01",
+    "topic_id": "527a416d-64c7-5d46-bdf2-40f9e2ae8bc2",
+    "topic_name": "Future inventions",
+    "interest_dimension": "FUTURE_SCIENCE",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Think about your life now. If you could have one future invention to help you today, what would it be, and what would it do?",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The speaker names one future invention they would like to have now and gives one or two simple details about what it does or how it helps.",
+      "key_points": "A clear invention is mentioned; the answer stays on the topic of a future invention; the speaker says what the invention does.",
+      "acceptable_responses": "Any simple future invention is acceptable, real or imagined, such as a helper robot, a clean-air machine, or a study tool. Short answers are acceptable if they are understandable.",
+      "off_topic_examples": "Talking only about a current object with no future invention idea; talking about a person instead of an invention; giving unrelated opinions about school or hobbies.",
+      "scoring_hints": "For pronunciation, focus on whether individual words are pronounced clearly enough to understand, including common sounds in simple vocabulary and basic sentence stress. Minor grammar mistakes should not lower the score unless they block understanding.",
+      "common_mistakes": "Unclear final sounds, missing word stress in longer words like invention, speaking too softly, or using isolated words with no complete idea."
+    },
+    "suggested_ideas": [
+      "a machine that cleans the air in your room",
+      "a smart desk that helps you study",
+      "a robot that helps with daily tasks"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "6ae2ff0e-e3f0-4925-8446-8f77725e8c9b",
+    "candidate_id": "fi_pron_02",
+    "topic_id": "527a416d-64c7-5d46-bdf2-40f9e2ae8bc2",
+    "topic_name": "Future inventions",
+    "interest_dimension": "FUTURE_SCIENCE",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Talk about one invention you would like students to have in the future. What is it?",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 2,
+    "difficulty_features": {
+      "here_and_now": false,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The speaker names one future invention for students and gives a very simple description of it.",
+      "key_points": "One invention is clearly named; at least one simple detail is given about the invention.",
+      "acceptable_responses": "Any simple invention for students is acceptable, such as a smart pen, a study robot, a talking book, or a classroom helper.",
+      "off_topic_examples": "Talking only about a school subject; describing a real object with no future invention; discussing travel, shopping, or family plans.",
+      "scoring_hints": "Listen for clear pronunciation of familiar words, understandable pacing, and simple stress patterns. Judge pronunciation by intelligibility rather than accent.",
+      "common_mistakes": "Dropping final sounds, speaking too fast, using flat intonation, or pausing so often that words are hard to understand."
+    },
+    "suggested_ideas": [
+      "a smart pen",
+      "a study robot",
+      "a talking book"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "0e29ab43-4aa5-48df-909a-d6545e086436",
+    "candidate_id": "fi_pron_03",
+    "topic_id": "527a416d-64c7-5d46-bdf2-40f9e2ae8bc2",
+    "topic_name": "Future inventions",
+    "interest_dimension": "FUTURE_SCIENCE",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Which future invention do you like best: a lighter bag, an energy-saving lamp, or a rubbish-sorting machine? Say its name and give one simple use.",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The speaker chooses one future invention from the list and says one simple use for it.",
+      "key_points": "One invention is clearly named; the answer gives one basic use, such as making school life easier, saving energy, or helping sort rubbish.",
+      "acceptable_responses": "Any of the three listed inventions is acceptable. The speaker may use a very simple sentence or two short sentences if the meaning is clear.",
+      "off_topic_examples": "Talking about a famous inventor; listing all three inventions without choosing one; discussing money, travel, or unrelated social issues.",
+      "scoring_hints": "Focus on clear pronunciation of the invention name and key words, understandable word stress, and whether the short message is easy to follow. Small grammar mistakes are acceptable if pronunciation is clear.",
+      "common_mistakes": "Unclear pronunciation of compound nouns, misplaced stress in energy-saving or rubbish-sorting, giving only one word with no use, or making long pauses that reduce intelligibility."
+    },
+    "suggested_ideas": [
+      "a lighter bag",
+      "an energy-saving lamp",
+      "a rubbish-sorting machine"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  }
+]

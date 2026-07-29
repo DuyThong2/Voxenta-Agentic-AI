@@ -1,0 +1,105 @@
+{
+  "response_id": "resp_02513940d49320e7006a69db62fd5c819a92995af7cbed76f8",
+  "elapsed_seconds": 13.083,
+  "parsed": {
+    "candidates": [
+      {
+        "candidate_id": "films_stories_pron_01",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 1,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Do you like watching films? Why or why not?",
+        "suggested_ideas": [
+          "what kinds of films you enjoy",
+          "when you usually watch films",
+          "one simple reason you like or do not like them"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "A short personal answer about whether the student likes watching films, with one or two simple supporting reasons.",
+          "key_points": "Clear statement of like/dislike; at least one simple reason; relevant film-related vocabulary; understandable pronunciation of common words.",
+          "acceptable_responses": "Direct yes/no answers with brief explanation, or a balanced answer such as liking some films but not others, are all acceptable if they stay on topic.",
+          "off_topic_examples": "Talking mainly about school subjects, travel plans, family members' preferences, or the cost of cinema tickets without answering the main question.",
+          "scoring_hints": "For PRONUNCIATION, focus on intelligibility, clear production of familiar words, word stress in common vocabulary, and whether pauses or sound errors make understanding difficult.",
+          "common_mistakes": "Giving only one-word answers; mispronouncing very common film words so meaning is unclear; speaking too softly; long pauses before simple ideas; drifting away from films."
+        }
+      },
+      {
+        "candidate_id": "films_stories_pron_02",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 1,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "What kind of story do you enjoy reading or listening to?",
+        "suggested_ideas": [
+          "funny stories, adventure stories, or school stories",
+          "why that kind of story is interesting to you",
+          "where you often hear or read stories"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "A simple description of a type of story the student enjoys, with a brief reason.",
+          "key_points": "Names a story type; gives one or two reasons; uses simple descriptive words; stays focused on stories.",
+          "acceptable_responses": "Any genre or type is acceptable, including realistic stories, fairy tales, mystery stories, comic stories, or mixed answers, as long as the student explains the choice briefly.",
+          "off_topic_examples": "Describing a film actor, discussing politics in books, or explaining a detailed plot of a specific novel without stating what kind of story they enjoy.",
+          "scoring_hints": "Judge whether the student can pronounce familiar vocabulary clearly enough to be understood, including basic final sounds and stress in common two-syllable words.",
+          "common_mistakes": "Not naming a story type; repeating the same simple word many times; unclear ending sounds; monotone delivery that makes words blend together; changing to an unrelated topic."
+        }
+      },
+      {
+        "candidate_id": "films_stories_pron_03",
+        "difficulty_features": {
+          "here_and_now": true,
+          "num_elements": 1,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Are you reading or watching any interesting story these days?",
+        "suggested_ideas": [
+          "say yes or no",
+          "name it in a simple way",
+          "say what is interesting about it"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "A short answer about a story or film the student is currently reading or watching, or a clear statement that they are not, with a brief explanation.",
+          "key_points": "Answers the present-time question; identifies a current story/film or says they are not following one now; gives one simple detail or reason.",
+          "acceptable_responses": "Students may mention a current film, a book, an online story, a school story, or say they are not reading or watching anything now and explain why.",
+          "off_topic_examples": "Talking only about future weekend plans, describing a favorite food, or giving a long unrelated summary of a story from many years ago without connecting it to the present question.",
+          "scoring_hints": "For PRONUNCIATION, listen for clear sounds in everyday present-time language, understandable rhythm, and whether the answer can be followed easily without frequent repetition.",
+          "common_mistakes": "Ignoring the time phrase these days; giving no supporting detail; mispronouncing common present-tense phrases; speaking in isolated words only; losing clarity because of very fast speech."
+        }
+      }
+    ]
+  },
+  "tokens": {
+    "role": "drafter",
+    "mode": "batch",
+    "model": "gpt-5.4",
+    "input": 726,
+    "output": 1056,
+    "reasoning": 56,
+    "cached_input": 0,
+    "response_id": "resp_02513940d49320e7006a69db62fd5c819a92995af7cbed76f8"
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "response_id": "resp_020b9267b9d910fe006a69e2345c5081998bb697fb05e8c58e",
+  "elapsed_seconds": 13.014,
+  "parsed": {
+    "candidates": [
+      {
+        "candidate_id": "films_stories_fluency_01",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 2,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "FLUENCY",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Do you enjoy films or stories more? Please say which one you prefer and give simple reasons.",
+        "suggested_ideas": [
+          "which one you usually choose",
+          "what makes it enjoyable",
+          "a type you like"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The student states a preference between films and stories and gives at least one or two simple reasons.",
+          "key_points": "Clear choice; relevant reasons; basic examples such as interesting characters, easy to follow, relaxing, or exciting.",
+          "acceptable_responses": "Personal opinions with simple supporting ideas are acceptable. The student may mention books, short stories, comics, or movies in general.",
+          "off_topic_examples": "Talking mainly about school subjects, sports, travel plans, or unrelated daily routines without linking them to films or stories.",
+          "scoring_hints": "For fluency, focus on smooth delivery, ability to keep speaking, and manageable pauses. Minor grammar or vocabulary errors are acceptable if the message continues clearly.",
+          "common_mistakes": "Very short answers with no reason; long silent pauses; repeating the same phrase many times; changing topic without answering the preference question."
+        }
+      },
+      {
+        "candidate_id": "films_stories_fluency_02",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 2,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "FLUENCY",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Tell me about a film or story that you remember well. What happens in it, and why do you remember it?",
+        "suggested_ideas": [
+          "main character or setting",
+          "a simple event in the plot",
+          "why it was interesting, funny, or moving"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The student briefly describes a film or story and explains why it is memorable.",
+          "key_points": "Names or describes the film/story; mentions a basic plot point; gives a personal reason for remembering it.",
+          "acceptable_responses": "Any familiar film or story is acceptable, including folktales, school stories, cartoons, or popular movies. Exact titles are not necessary.",
+          "off_topic_examples": "Describing only an actor, singer, or game; talking only about going to a cinema; giving a general opinion on media with no specific film or story.",
+          "scoring_hints": "Assess whether the student can maintain speech with a simple narrative flow. Some hesitation is fine, but the response should not break down after one sentence.",
+          "common_mistakes": "Giving only the title with no description; listing many details without a clear main idea; stopping before explaining why it is memorable; excessive repetition."
+        }
+      },
+      {
+        "candidate_id": "films_stories_fluency_03",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 3,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "FLUENCY",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "What kind of film or story do you usually like? Describe the kind you enjoy and say what makes it good for you.",
+        "suggested_ideas": [
+          "funny, action, mystery, or another type",
+          "characters or plot",
+          "how it makes you feel"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The student names a preferred type of film or story and describes simple features that make it enjoyable.",
+          "key_points": "Type or genre; one or two features such as pace, characters, ending, or message; personal reaction.",
+          "acceptable_responses": "Any broad type is acceptable, and the student may talk about either films, stories, or both. Simple language and everyday examples are acceptable.",
+          "off_topic_examples": "Talking about buying tickets, famous countries, family habits, or unrelated celebrities without describing the kind of film or story.",
+          "scoring_hints": "Focus on continuity, ease of expression, and ability to expand with a few linked ideas. The answer should sound reasonably smooth even with basic vocabulary.",
+          "common_mistakes": "Naming a type only; using memorized sentences that do not fit the prompt; frequent restarts; answering with unrelated likes and dislikes."
+        }
+      }
+    ]
+  },
+  "tokens": {
+    "role": "drafter",
+    "mode": "batch",
+    "model": "gpt-5.4",
+    "input": 724,
+    "output": 989,
+    "reasoning": 45,
+    "cached_input": 0,
+    "response_id": "resp_020b9267b9d910fe006a69e2345c5081998bb697fb05e8c58e"
+  }
+}

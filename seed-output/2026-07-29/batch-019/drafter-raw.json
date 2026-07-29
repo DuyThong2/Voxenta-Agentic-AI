@@ -1,0 +1,105 @@
+{
+  "response_id": "resp_0a34054d9d30168c006a69dfe8156481989c13d112967812c0",
+  "elapsed_seconds": 14.095,
+  "parsed": {
+    "candidates": [
+      {
+        "candidate_id": "fi_pron_01",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 1,
+          "reasoning_type": "description",
+          "abstractness": "mixed"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Talk about one invention you hope people will have in the future. What is it, and what can it do?",
+        "suggested_ideas": [
+          "a machine that cleans the air",
+          "a smart desk for studying",
+          "a robot that helps in daily life"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The speaker names one future invention and gives one or two simple details about its function or benefit.",
+          "key_points": "A clear invention is mentioned; the answer stays on the topic of the future; the speaker says what the invention does.",
+          "acceptable_responses": "Any simple future invention is acceptable, real or imagined, such as a helper robot, clean-water machine, or study tool. Short answers are acceptable if they are understandable.",
+          "off_topic_examples": "Talking only about a current object with no future idea; discussing a person instead of an invention; giving unrelated opinions about school or hobbies.",
+          "scoring_hints": "For pronunciation focus on whether individual words are produced clearly enough to understand, including common sounds in simple vocabulary and basic sentence stress. Minor grammar mistakes should not lower the score unless they block understanding.",
+          "common_mistakes": "Unclear final sounds, missing word stress in longer words like invention, speaking too softly, or using isolated words with no complete idea."
+        }
+      },
+      {
+        "candidate_id": "fi_pron_02",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 2,
+          "reasoning_type": "description",
+          "abstractness": "mixed"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Describe a future invention that could help students learn better. Say what it is and how it helps.",
+        "suggested_ideas": [
+          "a pen that explains new words",
+          "a board that shows lessons clearly",
+          "a quiet study helper robot"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The speaker describes one invention for learning and gives a simple explanation of how it helps students.",
+          "key_points": "One invention is identified; the invention is connected to learning; at least one helping function is explained.",
+          "acceptable_responses": "Any invention related to learning is acceptable, such as a book reader, homework helper, memory tool, or classroom machine. The response may be brief and personal or general.",
+          "off_topic_examples": "Describing a favorite school subject with no invention; talking only about present classroom rules; discussing travel or expensive shopping.",
+          "scoring_hints": "Listen for clear consonants and vowels in familiar words, understandable pacing, and simple sentence-level stress. Pronunciation should be judged by intelligibility rather than accent.",
+          "common_mistakes": "Dropping sounds in words like help or learn, reading too fast, flat intonation, or pausing so often that words become hard to follow."
+        }
+      },
+      {
+        "candidate_id": "fi_pron_03",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 2,
+          "reasoning_type": "description",
+          "abstractness": "mixed"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Imagine a future invention for everyday life. What is this invention, and why is it useful?",
+        "suggested_ideas": [
+          "a bag that becomes lighter",
+          "a lamp that saves energy",
+          "a machine that sorts rubbish"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The speaker presents one everyday future invention and gives a simple reason why it is useful.",
+          "key_points": "A specific invention is named; the use is explained; the answer includes a basic reason such as saving time, making work easier, or helping the environment.",
+          "acceptable_responses": "Any neutral everyday invention is acceptable, including home, school, or public-life ideas. Creative answers are welcome if they remain simple and understandable.",
+          "off_topic_examples": "Talking about a famous inventor instead of an invention; giving only a list of objects; discussing unrelated social issues or personal finances.",
+          "scoring_hints": "Focus on clear production of key content words, understandable rhythm, and whether listeners can follow the short message without much effort. Small lexical or grammar errors are acceptable if pronunciation remains clear.",
+          "common_mistakes": "Misplaced stress in useful or everyday, unclear linking between words, very short one-word answers, or hesitation that breaks intelligibility."
+        }
+      }
+    ]
+  },
+  "tokens": {
+    "role": "drafter",
+    "mode": "batch",
+    "model": "gpt-5.4",
+    "input": 725,
+    "output": 1029,
+    "reasoning": 60,
+    "cached_input": 0,
+    "response_id": "resp_0a34054d9d30168c006a69dfe8156481989c13d112967812c0"
+  }
+}

@@ -101,6 +101,29 @@ def build_chroma_collection():
     return collection
 
 
+def build_raw_collection(name: str, *, embedding_model: str):
+    """Build a collection for caller-supplied embeddings and guard model changes."""
+    client = chromadb.HttpClient(
+        host=settings.CHROMA_HOST,
+        port=settings.CHROMA_PORT,
+        settings=Settings(anonymized_telemetry=False),
+    )
+    collection = client.get_or_create_collection(
+        name=name,
+        metadata={
+            "hnsw:space": "cosine",
+            "embedding_model": embedding_model,
+        },
+    )
+    configured_model = (collection.metadata or {}).get("embedding_model")
+    if configured_model != embedding_model:
+        raise RuntimeError(
+            f"Collection {name} uses {configured_model}; "
+            f"changing to {embedding_model} requires a vector migration"
+        )
+    return collection
+
+
 # ── chroma operations ────────────────────────────────────────────────────
 
 

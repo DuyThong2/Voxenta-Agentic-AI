@@ -1,0 +1,124 @@
+{
+  "separate": [
+    {
+      "response_id": "resp_0e58c0d8cf886177006a69de59d94c819b8212367a8d4040f7",
+      "elapsed_seconds": 31.191,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "sports_choices_p1",
+            "accepted": false,
+            "violations": [
+              "DIFFICULTY_ABOVE_BAC_1_REASON_REQUIRED",
+              "INTERNAL_CONSISTENCY_REASONING_TYPE_MISMATCH"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 879,
+        "output": 3135,
+        "reasoning": 3076,
+        "cached_input": 0,
+        "response_id": "resp_0e58c0d8cf886177006a69de59d94c819b8212367a8d4040f7"
+      }
+    },
+    {
+      "response_id": "resp_0a746860db0b0188006a69de799d90819b9fbf2b9a5c7afdc8",
+      "elapsed_seconds": 28.959,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "sports_choices_p2",
+            "accepted": false,
+            "violations": [
+              "DIFFICULTY_FEATURES_NOT_NEAR_1_BAC3_COMPARE_AND_EXPLAIN"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 861,
+        "output": 2569,
+        "reasoning": 2516,
+        "cached_input": 0,
+        "response_id": "resp_0a746860db0b0188006a69de799d90819b9fbf2b9a5c7afdc8"
+      }
+    },
+    {
+      "response_id": "resp_00f37862c8c0b528006a69de960fec8198b3e7c5c7a4ab86bf",
+      "elapsed_seconds": 28.306,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "sports_choices_p3",
+            "accepted": false,
+            "violations": [
+              "INTERNAL_NUM_ELEMENTS_MISMATCH",
+              "GUIDE_ACCEPTABLE_RESPONSE_NOT_CLEARLY_SPORT"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 892,
+        "output": 2640,
+        "reasoning": 2588,
+        "cached_input": 0,
+        "response_id": "resp_00f37862c8c0b528006a69de960fec8198b3e7c5c7a4ab86bf"
+      }
+    }
+  ],
+  "grouped": {
+    "response_id": "resp_078a44480587cc23006a69deb25080819a9bf97aa6765bdbb5",
+    "elapsed_seconds": 43.081,
+    "parsed": {
+      "verdicts": [
+        {
+          "candidate_id": "sports_choices_p1",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "sports_choices_p2",
+          "accepted": false,
+          "violations": [
+            "DIFFICULTY_NOT_NEAR_BAC1_COMPARISON_IMPLIES_BAC3"
+          ]
+        },
+        {
+          "candidate_id": "sports_choices_p3",
+          "accepted": false,
+          "violations": [
+            "EVAL_GUIDE_ACCEPTABLE_RESPONSES_INCLUDE_NONSPORT_ACTIVITY"
+          ]
+        }
+      ]
+    },
+    "tokens": {
+      "role": "evaluator",
+      "mode": "grouped",
+      "model": "gpt-5.4",
+      "input": 1648,
+      "output": 4359,
+      "reasoning": 4261,
+      "cached_input": 0,
+      "response_id": "resp_078a44480587cc23006a69deb25080819a9bf97aa6765bdbb5"
+    }
+  },
+  "rejected_before_evaluator": [],
+  "vector_similarity": {
+    "sports_choices_p1": 0.6784889700000001,
+    "sports_choices_p2": 0.48665709999999995,
+    "sports_choices_p3": 0.5542970300000001
+  }
+}

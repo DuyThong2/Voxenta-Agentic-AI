@@ -1,0 +1,118 @@
+{
+  "calls": [
+    {
+      "refiner": {
+        "response_id": "resp_0e5bde474b5d20ce006a69e4101e28819bbe555d059d4e1490",
+        "elapsed_seconds": 5.724,
+        "parsed": {
+          "candidates": [
+            {
+              "candidate_id": "places_town_fluency_01",
+              "difficulty_features": {
+                "here_and_now": true,
+                "num_elements": 2,
+                "reasoning_type": "description",
+                "abstractness": "concrete_personal"
+              },
+              "target_construct": "FLUENCY",
+              "target_sub_attribute": null,
+              "vstep_part": 1,
+              "prompt_text": "Talk about a place in your town that you often see or visit. Where is it, and what is it like?",
+              "suggested_ideas": [
+                "where the place is",
+                "what people can see there",
+                "what you usually notice or do there"
+              ],
+              "planning_time_seconds": 15,
+              "max_response_seconds": 45,
+              "max_followup_seconds": 15,
+              "evaluation_guide": {
+                "expected_content": "A simple description of one familiar place in the student’s town, including its location and a few basic details about how it looks or feels.",
+                "key_points": "Names or identifies one place; says where it is; gives 1–3 simple descriptive details; speaks continuously with basic fluency.",
+                "acceptable_responses": "Any common local place is acceptable, such as a park, street, market, school area, lake, bus stop, or library. The student may describe a place they often pass by, even if they do not spend much time there.",
+                "off_topic_examples": "Talking only about a person; discussing a city in another country; explaining a historical event instead of describing the place; giving only one-word answers.",
+                "scoring_hints": "Stronger performance shows smoother delivery, fewer long pauses, and the ability to keep speaking with simple connected ideas. Minor grammar or vocabulary errors are acceptable if the speech remains easy to follow.",
+                "common_mistakes": "Very short answers; repeating the same idea many times; long pauses after every sentence; listing words instead of using full sentences; forgetting to describe the place itself."
+              }
+            },
+            {
+              "candidate_id": "places_town_fluency_03",
+              "difficulty_features": {
+                "here_and_now": true,
+                "num_elements": 2,
+                "reasoning_type": "description",
+                "abstractness": "concrete_personal"
+              },
+              "target_construct": "FLUENCY",
+              "target_sub_attribute": null,
+              "vstep_part": 1,
+              "prompt_text": "Talk about a quiet place in your town that you know. Where is it, and why does it feel quiet?",
+              "suggested_ideas": [
+                "the place and where it is",
+                "what it looks or sounds like",
+                "what makes it feel calm or quiet"
+              ],
+              "planning_time_seconds": 15,
+              "max_response_seconds": 45,
+              "max_followup_seconds": 15,
+              "evaluation_guide": {
+                "expected_content": "A basic description of a quiet place in town, with simple details about its location and the features that make it feel calm.",
+                "key_points": "Chooses one quiet place; says where it is; gives simple sensory or visual details; explains in a basic way why it feels quiet; speaks with steady fluency.",
+                "acceptable_responses": "Any familiar quiet place is acceptable, such as a small street, a corner of a park, a reading room, a temple yard described from an observational viewpoint without religious discussion, a lake area, or a school garden. The answer can be personal and simple.",
+                "off_topic_examples": "Giving a speech about religion or politics; comparing different countries; describing a family member; talking only about online activities or devices.",
+                "scoring_hints": "Good responses are easy to follow, with short connected sentences and limited hesitation. The student does not need advanced vocabulary if they can keep speaking clearly.",
+                "common_mistakes": "Not answering both parts of the prompt; saying only 'it is quiet' without support; long silent pauses; overusing one simple word like 'nice' or 'quiet' without adding detail."
+              }
+            }
+          ]
+        },
+        "tokens": {
+          "role": "refiner",
+          "mode": "batch-2",
+          "model": "gpt-5.4",
+          "input": 1355,
+          "output": 758,
+          "reasoning": 11,
+          "cached_input": 0,
+          "response_id": "resp_0e5bde474b5d20ce006a69e4101e28819bbe555d059d4e1490"
+        }
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "candidate_id": "places_town_fluency_02",
+      "reason": "DUPLICATE_COSINE",
+      "detail": "cosine 0.969372 >= 0.92",
+      "candidate": {
+        "candidate_id": "places_town_fluency_02",
+        "difficulty_features": {
+          "here_and_now": true,
+          "num_elements": 2,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "FLUENCY",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Describe a busy place in your town. What place is it, and what usually happens there?",
+        "suggested_ideas": [
+          "what the place is called or where it is",
+          "who you often see there",
+          "what people are doing there"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 15,
+        "evaluation_guide": {
+          "expected_content": "A short spoken description of one busy place in town, focusing on the place and the common activities there.",
+          "key_points": "Identifies one busy place; mentions its location or type; describes typical actions, sounds, or movement; maintains basic flow while speaking.",
+          "acceptable_responses": "Students may choose any neutral public place such as a market, road, school gate, park, sports ground, station area, or town center. They do not need to know special facts about it.",
+          "off_topic_examples": "Talking about future travel plans; giving opinions about national issues; describing only their favorite food; discussing a person instead of a place.",
+          "scoring_hints": "Listen for natural pace, simple linking of ideas, and ability to continue speaking without frequent breakdowns. Content can be basic as long as it is clear and relevant.",
+          "common_mistakes": "Stopping too often to search for words; giving no details about what happens there; answering with memorized unrelated content; switching to a different topic."
+        }
+      }
+    }
+  ]
+}

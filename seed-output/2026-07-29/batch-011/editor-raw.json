@@ -1,0 +1,112 @@
+{
+  "calls": [
+    {
+      "refiner": {
+        "response_id": "resp_084fe123ebc9a6e9006a69db597978819ab65bd56aca94d0c9",
+        "elapsed_seconds": 9.3,
+        "parsed": {
+          "candidates": [
+            {
+              "candidate_id": "HR_PRON_01",
+              "difficulty_features": {
+                "here_and_now": true,
+                "num_elements": 3,
+                "reasoning_type": "description",
+                "abstractness": "concrete_personal"
+              },
+              "target_construct": "PRONUNCIATION",
+              "target_sub_attribute": null,
+              "vstep_part": 1,
+              "prompt_text": "What is one healthy thing you do every morning? Please describe it and say when you do it.",
+              "suggested_ideas": [
+                "drink water after waking up",
+                "do light exercise or stretching",
+                "eat breakfast at a regular time"
+              ],
+              "planning_time_seconds": 15,
+              "max_response_seconds": 45,
+              "max_followup_seconds": 0,
+              "evaluation_guide": {
+                "expected_content": "A short personal description of one healthy morning routine, with a simple time reference and one or two details about the action.",
+                "key_points": "Names one healthy action; says when it happens in the morning; adds a small detail such as the place, duration, or how they feel.",
+                "acceptable_responses": "Any clear, simple answer about a safe daily morning habit is acceptable, such as drinking water, stretching, washing your face, walking, or eating breakfast.",
+                "off_topic_examples": "Talking only about weekend entertainment; describing another person’s routine without mentioning the speaker; discussing only unhealthy habits.",
+                "scoring_hints": "For pronunciation, focus on clear individual sounds, word stress in common routine words, and the intelligibility of short phrases. Minor grammar mistakes are acceptable if the speech is understandable.",
+                "common_mistakes": "Very short one-word answers; unclear final sounds; missing time information; speaking too fast so key words are hard to understand."
+              }
+            },
+            {
+              "candidate_id": "HR_PRON_02",
+              "difficulty_features": {
+                "here_and_now": true,
+                "num_elements": 3,
+                "reasoning_type": "description",
+                "abstractness": "concrete_personal"
+              },
+              "target_construct": "PRONUNCIATION",
+              "target_sub_attribute": null,
+              "vstep_part": 1,
+              "prompt_text": "Tell me about a healthy food or drink you often have during a normal day.",
+              "suggested_ideas": [
+                "fruit",
+                "vegetables",
+                "water or milk"
+              ],
+              "planning_time_seconds": 15,
+              "max_response_seconds": 45,
+              "max_followup_seconds": 0,
+              "evaluation_guide": {
+                "expected_content": "A brief description of one healthy food or drink the student often has, with simple details about the time, taste, or reason.",
+                "key_points": "Names the food or drink; says when or how often they have it; gives one simple detail such as the taste, benefit, or meal.",
+                "acceptable_responses": "Any common healthy item is acceptable, including fruit, vegetables, water, milk, soup, or a simple balanced meal.",
+                "off_topic_examples": "Listing only favorite junk food; discussing prices or shopping problems instead of the routine; giving a memorized speech about global nutrition.",
+                "scoring_hints": "Listen for clear vowel and consonant production in familiar food words, understandable stress patterns, and overall intelligibility. The content can remain simple.",
+                "common_mistakes": "Naming an item without any detail; repeating the same word many times; dropping important sounds so the food or drink is difficult to identify."
+              }
+            },
+            {
+              "candidate_id": "HR_PRON_03",
+              "difficulty_features": {
+                "here_and_now": true,
+                "num_elements": 3,
+                "reasoning_type": "description",
+                "abstractness": "concrete_personal"
+              },
+              "target_construct": "PRONUNCIATION",
+              "target_sub_attribute": null,
+              "vstep_part": 1,
+              "prompt_text": "How do you keep your body active during the week? Describe one simple activity you do.",
+              "suggested_ideas": [
+                "walking",
+                "stretching",
+                "playing a simple sport or doing exercise"
+              ],
+              "planning_time_seconds": 15,
+              "max_response_seconds": 45,
+              "max_followup_seconds": 0,
+              "evaluation_guide": {
+                "expected_content": "A simple spoken description of one regular physical activity, including what the student does and when or how often they do it.",
+                "key_points": "Mentions one activity; explains when, where, or how often they do it; adds one simple detail such as the duration or how they feel afterward.",
+                "acceptable_responses": "Any accessible activity is acceptable, such as walking, stretching, running, cycling, dancing, or exercising at school or at home.",
+                "off_topic_examples": "Talking only about watching sports; describing a holiday trip; giving medical advice or technical fitness information.",
+                "scoring_hints": "Assess whether the student can pronounce common action words clearly and maintain an understandable rhythm across short sentences. A basic answer can still score well if it is intelligible.",
+                "common_mistakes": "Speaking only in isolated words; unclear stress in activity words; no time or frequency detail; long pauses that break the answer."
+              }
+            }
+          ]
+        },
+        "tokens": {
+          "role": "refiner",
+          "mode": "batch-3",
+          "model": "gpt-5.4",
+          "input": 1583,
+          "output": 955,
+          "reasoning": 12,
+          "cached_input": 0,
+          "response_id": "resp_084fe123ebc9a6e9006a69db597978819ab65bd56aca94d0c9"
+        }
+      }
+    }
+  ],
+  "rejected": []
+}

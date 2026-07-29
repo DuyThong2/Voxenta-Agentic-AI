@@ -1,0 +1,112 @@
+{
+  "separate": [
+    {
+      "response_id": "resp_098b9dfe6f2b5260006a69db202f108198b0385a7fff6d89c7",
+      "elapsed_seconds": 5.706,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "HR_PRON_01",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 844,
+        "output": 399,
+        "reasoning": 365,
+        "cached_input": 0,
+        "response_id": "resp_098b9dfe6f2b5260006a69db202f108198b0385a7fff6d89c7"
+      }
+    },
+    {
+      "response_id": "resp_0dd27541f657759d006a69db24d86881998a2914f0c274e8af",
+      "elapsed_seconds": 9.614,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "HR_PRON_02",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 827,
+        "output": 380,
+        "reasoning": 346,
+        "cached_input": 0,
+        "response_id": "resp_0dd27541f657759d006a69db24d86881998a2914f0c274e8af"
+      }
+    },
+    {
+      "response_id": "resp_0dd22d74f2fc2279006a69db2e21508199976b922586ffbf0b",
+      "elapsed_seconds": 18.743,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "HR_PRON_03",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 827,
+        "output": 1825,
+        "reasoning": 1791,
+        "cached_input": 0,
+        "response_id": "resp_0dd22d74f2fc2279006a69db2e21508199976b922586ffbf0b"
+      }
+    }
+  ],
+  "grouped": {
+    "response_id": "resp_0abe3a14014371d9006a69db40d62c819894e7fe11cdb18f6d",
+    "elapsed_seconds": 24.538,
+    "parsed": {
+      "verdicts": [
+        {
+          "candidate_id": "HR_PRON_01",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "HR_PRON_02",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "HR_PRON_03",
+          "accepted": true,
+          "violations": []
+        }
+      ]
+    },
+    "tokens": {
+      "role": "evaluator",
+      "mode": "grouped",
+      "model": "gpt-5.4",
+      "input": 1514,
+      "output": 2520,
+      "reasoning": 2452,
+      "cached_input": 0,
+      "response_id": "resp_0abe3a14014371d9006a69db40d62c819894e7fe11cdb18f6d"
+    }
+  },
+  "rejected_before_evaluator": [],
+  "vector_similarity": {
+    "HR_PRON_01": 0.39028483999999997,
+    "HR_PRON_02": 0.39411379999999996,
+    "HR_PRON_03": 0.4491735
+  }
+}

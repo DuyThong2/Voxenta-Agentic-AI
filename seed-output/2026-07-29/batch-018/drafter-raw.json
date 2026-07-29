@@ -1,0 +1,105 @@
+{
+  "response_id": "resp_0169b907523926bd006a69df6dc904819bb7cad22cba0762f3",
+  "elapsed_seconds": 13.043,
+  "parsed": {
+    "candidates": [
+      {
+        "candidate_id": "music_perf_pron_01",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 1,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Do you like listening to music? Please say what kind of music you enjoy.",
+        "suggested_ideas": [
+          "name one kind of music",
+          "say when you listen to it",
+          "say how it makes you feel"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The student gives a simple personal answer about liking or not liking music and names a kind of music they enjoy.",
+          "key_points": "Clear pronunciation of common words about music; understandable stress and individual sounds; simple complete sentences; direct answer to the question.",
+          "acceptable_responses": "Any brief personal response is acceptable, including liking music, not liking it very much, or liking different kinds such as pop, ballads, instrumental music, or songs with slow or fast rhythm.",
+          "off_topic_examples": "Talking mainly about school subjects, sports, food, or a person unrelated to music without answering what music they enjoy.",
+          "scoring_hints": "Focus on intelligibility, word stress, and clarity of sounds rather than idea complexity. A short answer can still score well if it is easy to understand.",
+          "common_mistakes": "Mispronouncing common music words so they are hard to understand, dropping final sounds, speaking too softly, or giving no clear answer about music preference."
+        }
+      },
+      {
+        "candidate_id": "music_perf_pron_02",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 1,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Tell me about a song you know well. What do you like about it?",
+        "suggested_ideas": [
+          "say the song is fast or slow",
+          "say you like the words, rhythm, or melody",
+          "say how the song makes you feel"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The student briefly describes one song they know and says one or two simple reasons they like it.",
+          "key_points": "Understandable pronunciation of familiar descriptive words; clear sentence stress; smooth production of short phrases; direct mention of what they like about the song.",
+          "acceptable_responses": "Any common song is acceptable, including a school song, a children's song, a popular song, or a traditional song. The student may also say they know the tune but not many words.",
+          "off_topic_examples": "Describing a movie, a singer's life story, or a music competition without talking about one song and what they like about it.",
+          "scoring_hints": "Reward clear and natural pronunciation even if vocabulary is simple. Do not require the song title in English if the student can still describe it clearly.",
+          "common_mistakes": "Unclear vowel sounds in key words, speaking word by word with long pauses, not naming or describing any song, or repeating the same idea without answering what they like."
+        }
+      },
+      {
+        "candidate_id": "music_perf_pron_03",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 1,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Some students enjoy singing or dancing in front of others. How do you feel about performing?",
+        "suggested_ideas": [
+          "say if you feel happy, nervous, or excited",
+          "say if you prefer singing, dancing, or not performing",
+          "give one simple reason"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The student states a simple feeling about performing in front of others and gives a brief reason.",
+          "key_points": "Clear pronunciation of feeling words; intelligible rhythm and stress; a direct personal response; simple reason such as fun, confidence, shyness, or enjoyment of music.",
+          "acceptable_responses": "Any personal view is acceptable, including liking performance, disliking it, feeling shy, or preferring to watch others perform.",
+          "off_topic_examples": "Giving a long discussion about famous performers, equipment, money, or unrelated school events without saying how the student feels about performing.",
+          "scoring_hints": "Focus on whether the listener can easily understand the student's words and message. Short, simple answers are acceptable for this level.",
+          "common_mistakes": "Confusing key feeling words, unclear ending sounds, very flat or broken delivery that reduces intelligibility, or failing to state a personal feeling about performing."
+        }
+      }
+    ]
+  },
+  "tokens": {
+    "role": "drafter",
+    "mode": "batch",
+    "model": "gpt-5.4",
+    "input": 726,
+    "output": 1060,
+    "reasoning": 65,
+    "cached_input": 0,
+    "response_id": "resp_0169b907523926bd006a69df6dc904819bb7cad22cba0762f3"
+  }
+}

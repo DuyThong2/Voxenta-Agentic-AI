@@ -1,0 +1,120 @@
+{
+  "separate": [
+    {
+      "response_id": "resp_0da5d68356796d1a006a69e3deabc0819a9662d8c77a714f0c",
+      "elapsed_seconds": 8.008,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "places_town_fluency_01",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 887,
+        "output": 660,
+        "reasoning": 623,
+        "cached_input": 0,
+        "response_id": "resp_0da5d68356796d1a006a69e3deabc0819a9662d8c77a714f0c"
+      }
+    },
+    {
+      "response_id": "resp_0565f22e7b25876d006a69e3e6b02081998614eb90c86e587b",
+      "elapsed_seconds": 6.602,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "places_town_fluency_03",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 893,
+        "output": 603,
+        "reasoning": 566,
+        "cached_input": 0,
+        "response_id": "resp_0565f22e7b25876d006a69e3e6b02081998614eb90c86e587b"
+      }
+    }
+  ],
+  "grouped": {
+    "response_id": "resp_05f628d9a5016d2f006a69e3ed46e8819ba033cd5b1689a91f",
+    "elapsed_seconds": 34.817,
+    "parsed": {
+      "verdicts": [
+        {
+          "candidate_id": "places_town_fluency_01",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "places_town_fluency_03",
+          "accepted": false,
+          "violations": [
+            "INTERNAL_CONSISTENCY_REASONING_TYPE_MISMATCH"
+          ]
+        }
+      ]
+    },
+    "tokens": {
+      "role": "evaluator",
+      "mode": "grouped",
+      "model": "gpt-5.4",
+      "input": 1286,
+      "output": 3529,
+      "reasoning": 3459,
+      "cached_input": 0,
+      "response_id": "resp_05f628d9a5016d2f006a69e3ed46e8819ba033cd5b1689a91f"
+    }
+  },
+  "rejected_before_evaluator": [
+    {
+      "candidate_id": "places_town_fluency_02",
+      "reason": "DUPLICATE_COSINE",
+      "detail": "cosine 0.969372 >= 0.92",
+      "candidate": {
+        "candidate_id": "places_town_fluency_02",
+        "difficulty_features": {
+          "here_and_now": true,
+          "num_elements": 2,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "FLUENCY",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Describe a busy place in your town. What place is it, and what usually happens there?",
+        "suggested_ideas": [
+          "what the place is called or where it is",
+          "who you often see there",
+          "what people are doing there"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 15,
+        "evaluation_guide": {
+          "expected_content": "A short spoken description of one busy place in town, focusing on the place and the common activities there.",
+          "key_points": "Identifies one busy place; mentions its location or type; describes typical actions, sounds, or movement; maintains basic flow while speaking.",
+          "acceptable_responses": "Students may choose any neutral public place such as a market, road, school gate, park, sports ground, station area, or town center. They do not need to know special facts about it.",
+          "off_topic_examples": "Talking about future travel plans; giving opinions about national issues; describing only their favorite food; discussing a person instead of a place.",
+          "scoring_hints": "Listen for natural pace, simple linking of ideas, and ability to continue speaking without frequent breakdowns. Content can be basic as long as it is clear and relevant.",
+          "common_mistakes": "Stopping too often to search for words; giving no details about what happens there; answering with memorized unrelated content; switching to a different topic."
+        }
+      }
+    }
+  ],
+  "vector_similarity": {
+    "places_town_fluency_01": 0.89849162,
+    "places_town_fluency_03": 0.8866483000000001
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "response_id": "resp_0accadcf928bcc13006a69de4aa190819a8a76fc6f1003ed9c",
+  "elapsed_seconds": 13.276,
+  "parsed": {
+    "candidates": [
+      {
+        "candidate_id": "sports_choices_p1",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 1,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Which sport do you like to play or watch most? Please describe it and say why you like it.",
+        "suggested_ideas": [
+          "name of the sport",
+          "where you usually play or watch it",
+          "what you do in the sport",
+          "one simple reason you like it"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The speaker names one sport and gives a short personal description with a simple reason for liking it.",
+          "key_points": "A clear sport choice; at least one detail about playing or watching; one basic reason such as fun, healthy, exciting, or easy to join.",
+          "acceptable_responses": "Any common or less common sport is acceptable. The student may talk about playing, watching, or both. Short simple answers are acceptable if they stay on the topic.",
+          "off_topic_examples": "Talking mainly about school subjects, food, a famous person without mentioning the sport choice, or a general talk about exercise with no sport named.",
+          "scoring_hints": "For pronunciation, listen for clear individual words, especially the sport name and common simple sentences. Minor grammar errors are fine if words are understandable. A very short but clear response can still be acceptable.",
+          "common_mistakes": "Not naming a sport clearly; giving only one word with no support; mispronouncing key words so the sport is hard to identify; going off topic to talk about unrelated hobbies."
+        }
+      },
+      {
+        "candidate_id": "sports_choices_p2",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 2,
+          "reasoning_type": "comparison",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Do you prefer team sports or individual sports? Give an example and explain your choice.",
+        "suggested_ideas": [
+          "say team sports or individual sports",
+          "give one example such as football, badminton, running, or swimming",
+          "say one or two reasons for your choice"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The speaker chooses between team sports and individual sports, gives one example, and explains the choice in simple language.",
+          "key_points": "A clear preference; one example sport; one or two easy reasons such as working with others, being independent, being active, or feeling relaxed.",
+          "acceptable_responses": "Either option is acceptable. The student may use a familiar sport from school or daily life. Simple comparison language is enough.",
+          "off_topic_examples": "Talking only about a favorite athlete, discussing rules of many sports without making a choice, or speaking about video games or music instead of sports.",
+          "scoring_hints": "Focus on intelligibility of short connected speech. Check whether key contrast words like team, individual, prefer, because, and the sport example are pronounced clearly enough to understand.",
+          "common_mistakes": "Not making a clear choice; giving an example that does not match the chosen type; repeating the same idea without explanation; unclear pronunciation of the main preference words."
+        }
+      },
+      {
+        "candidate_id": "sports_choices_p3",
+        "difficulty_features": {
+          "here_and_now": true,
+          "num_elements": 2,
+          "reasoning_type": "intentional",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "If you can choose one sport for your free time this week, what will you choose? Say what you need and why it is a good choice for you.",
+        "suggested_ideas": [
+          "name the sport",
+          "say simple things you need, for example a ball, a racket, or open space",
+          "say why it is good for your free time this week"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The speaker chooses one sport for the near future, mentions simple things needed for it, and gives a personal reason.",
+          "key_points": "A clear sport choice; one or two basic items or conditions needed; a simple reason such as fun, healthy, relaxing, or suitable for free time.",
+          "acceptable_responses": "Any accessible sport is acceptable, including walking, running, football, badminton, basketball, or skipping rope. Students may answer with simple future meaning even if grammar is not perfect.",
+          "off_topic_examples": "Talking about a full weekly schedule without choosing a sport, discussing shopping plans in detail, or describing a holiday activity unrelated to sports.",
+          "scoring_hints": "Judge pronunciation by how clearly the student says the chosen sport, needed items, and short reason. Simple words said clearly should score better than longer unclear sentences.",
+          "common_mistakes": "Forgetting to mention what is needed; choosing an activity that is not clearly a sport; listing many objects without a reason; pronunciation that makes key nouns hard to understand."
+        }
+      }
+    ]
+  },
+  "tokens": {
+    "role": "drafter",
+    "mode": "batch",
+    "model": "gpt-5.4",
+    "input": 725,
+    "output": 1103,
+    "reasoning": 44,
+    "cached_input": 0,
+    "response_id": "resp_0accadcf928bcc13006a69de4aa190819a8a76fc6f1003ed9c"
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "separate": [
+    {
+      "response_id": "resp_0220866dd3af98ca006a69db723840819884cf97f14d830d12",
+      "elapsed_seconds": 55.561,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "films_stories_pron_01",
+            "accepted": false,
+            "violations": [
+              "INTERNAL_CONSISTENCY_REASONING_TYPE_MISMATCH",
+              "EVAL_GUIDE_INCLUDES_FLUENCY_OR_CONTENT_CRITERIA_FOR_PRONUNCIATION"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 851,
+        "output": 5508,
+        "reasoning": 5438,
+        "cached_input": 0,
+        "response_id": "resp_0220866dd3af98ca006a69db723840819884cf97f14d830d12"
+      }
+    },
+    {
+      "response_id": "resp_06cd210879f80af5006a69dba9ca10819bab4b3a79a30f0c88",
+      "elapsed_seconds": 26.424,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "films_stories_pron_02",
+            "accepted": false,
+            "violations": [
+              "difficulty_features_not_near_bac_1",
+              "task_demands_limited_reasons_bac_2"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 852,
+        "output": 2566,
+        "reasoning": 2508,
+        "cached_input": 0,
+        "response_id": "resp_06cd210879f80af5006a69dba9ca10819bab4b3a79a30f0c88"
+      }
+    },
+    {
+      "response_id": "resp_03c7b4bba53072a6006a69dbc4580c819a9fc2b17699960fe9",
+      "elapsed_seconds": 16.836,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "films_stories_pron_03",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 869,
+        "output": 1299,
+        "reasoning": 1263,
+        "cached_input": 0,
+        "response_id": "resp_03c7b4bba53072a6006a69dbc4580c819a9fc2b17699960fe9"
+      }
+    }
+  ],
+  "grouped": {
+    "response_id": "resp_0871dea48321a26b006a69dbd50e3c819a82c15f58d2f31ba4",
+    "elapsed_seconds": 52.464,
+    "parsed": {
+      "verdicts": [
+        {
+          "candidate_id": "films_stories_pron_01",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "films_stories_pron_02",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "films_stories_pron_03",
+          "accepted": false,
+          "violations": [
+            "INTERNAL_CONSISTENCY_PROMPT_GUIDE_MEDIA_MISMATCH",
+            "PROMPT_WORDING_UNNATURAL_WATCHING_STORY"
+          ]
+        }
+      ]
+    },
+    "tokens": {
+      "role": "evaluator",
+      "mode": "grouped",
+      "model": "gpt-5.4",
+      "input": 1586,
+      "output": 5126,
+      "reasoning": 5023,
+      "cached_input": 0,
+      "response_id": "resp_0871dea48321a26b006a69dbd50e3c819a82c15f58d2f31ba4"
+    }
+  },
+  "rejected_before_evaluator": [],
+  "vector_similarity": {
+    "films_stories_pron_01": 0.6464369999999999,
+    "films_stories_pron_02": 0.7317151399999999,
+    "films_stories_pron_03": 0.6646196200000001
+  }
+}

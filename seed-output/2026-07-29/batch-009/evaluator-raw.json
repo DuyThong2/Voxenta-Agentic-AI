@@ -1,0 +1,129 @@
+{
+  "separate": [
+    {
+      "response_id": "resp_0e496fe9194e80b6006a69d9637cd4819a8fa7a460fba1b585",
+      "elapsed_seconds": 25.522,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "school_clubs_pron_01",
+            "accepted": false,
+            "violations": [
+              "TARGET_SUBATTRIBUTE_MISSING",
+              "NEUTRAL_ACCESS_ASSUMES_SCHOOL_HAS_CLUBS",
+              "INTERNAL_CONSISTENCY_NO_ALLOWED_BUT_CLUB_NAME_REQUIRED"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 767,
+        "output": 2659,
+        "reasoning": 2588,
+        "cached_input": 0,
+        "response_id": "resp_0e496fe9194e80b6006a69d9637cd4819a8fa7a460fba1b585"
+      }
+    },
+    {
+      "response_id": "resp_08da59e4e856aab6006a69d97d05f881989022e42ea0dcdcfd",
+      "elapsed_seconds": 18.968,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "school_clubs_pron_02",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 765,
+        "output": 1863,
+        "reasoning": 1827,
+        "cached_input": 0,
+        "response_id": "resp_08da59e4e856aab6006a69d97d05f881989022e42ea0dcdcfd"
+      }
+    },
+    {
+      "response_id": "resp_0dc8945f9fb6171a006a69d98ffa84819a9bdc40338bc675b8",
+      "elapsed_seconds": 15.684,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "school_clubs_pron_03",
+            "accepted": false,
+            "violations": [
+              "TARGET_SUBATTRIBUTE_MISSING"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 754,
+        "output": 1496,
+        "reasoning": 1454,
+        "cached_input": 0,
+        "response_id": "resp_0dc8945f9fb6171a006a69d98ffa84819a9bdc40338bc675b8"
+      }
+    }
+  ],
+  "grouped": {
+    "response_id": "resp_021a826ad305a1aa006a69d99faa3081999796bb11c07e995b",
+    "elapsed_seconds": 55.316,
+    "parsed": {
+      "verdicts": [
+        {
+          "candidate_id": "school_clubs_pron_01",
+          "accepted": false,
+          "violations": [
+            "TARGET_SUBATTRIBUTE_NULL",
+            "NEUTRAL_ACCESS_ASSUMES_SCHOOL_HAS_CLUBS",
+            "INTERNAL_INCONSISTENCY_NO_VALID_PATH_FOR_NO",
+            "DIFFICULTY_FEATURE_NUM_ELEMENTS_MISMATCH"
+          ]
+        },
+        {
+          "candidate_id": "school_clubs_pron_02",
+          "accepted": false,
+          "violations": [
+            "TARGET_SUBATTRIBUTE_NULL",
+            "DIFFICULTY_NOT_NEAR_BAC1_REASON_REQUIRED",
+            "DIFFICULTY_FEATURE_HYPOTHETICAL_NOT_HERE_AND_NOW"
+          ]
+        },
+        {
+          "candidate_id": "school_clubs_pron_03",
+          "accepted": false,
+          "violations": [
+            "TARGET_SUBATTRIBUTE_NULL"
+          ]
+        }
+      ]
+    },
+    "tokens": {
+      "role": "evaluator",
+      "mode": "grouped",
+      "model": "gpt-5.4",
+      "input": 1498,
+      "output": 5925,
+      "reasoning": 5770,
+      "cached_input": 0,
+      "response_id": "resp_021a826ad305a1aa006a69d99faa3081999796bb11c07e995b"
+    }
+  },
+  "rejected_before_evaluator": [],
+  "vector_similarity": {
+    "school_clubs_pron_01": 0.8507637100000001,
+    "school_clubs_pron_02": 0.8111660199999999,
+    "school_clubs_pron_03": 0.82196313
+  }
+}

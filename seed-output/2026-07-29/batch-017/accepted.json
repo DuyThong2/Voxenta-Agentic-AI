@@ -1,0 +1,107 @@
+[
+  {
+    "id": "e4c11a3b-167e-440a-94c5-652dd7a5c869",
+    "candidate_id": "sports_choices_p1",
+    "topic_id": "6b064206-0c52-52e1-86f7-52cccff6ed9f",
+    "topic_name": "Sports choices",
+    "interest_dimension": "SPORTS_HEALTH",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Which sport do you like to play or watch the most? Please describe it.",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 2,
+    "difficulty_features": {
+      "here_and_now": false,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The speaker names one sport and gives a short personal description of it.",
+      "key_points": "A clear sport choice; at least one detail about playing or watching the sport.",
+      "acceptable_responses": "Any common or less common sport is acceptable. The student may talk about playing, watching, or both. Short, simple answers are acceptable if they stay on topic.",
+      "off_topic_examples": "Talking mainly about school subjects, food, a famous person without mentioning the sport choice, or exercise in general without naming a sport.",
+      "scoring_hints": "For pronunciation, listen for clear individual words, especially the sport name and common simple sentences. Minor grammar errors are fine if the words are understandable. A very short but clear response can still be acceptable.",
+      "common_mistakes": "Not naming a sport clearly; giving only one word with no support; mispronouncing key words so the sport is hard to identify; going off topic to talk about unrelated hobbies."
+    },
+    "suggested_ideas": [
+      "the name of the sport",
+      "where you usually play or watch it",
+      "what you do in the sport"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "3bceb269-df97-467f-9aec-9cffabc9d5ca",
+    "candidate_id": "sports_choices_p2",
+    "topic_id": "6b064206-0c52-52e1-86f7-52cccff6ed9f",
+    "topic_name": "Sports choices",
+    "interest_dimension": "SPORTS_HEALTH",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "What sport do you like best? Give one example and say one reason why you like it.",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 2,
+    "difficulty_features": {
+      "here_and_now": false,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The speaker names one sport, gives one example, and says one simple reason for liking it.",
+      "key_points": "A clear choice of one sport; one example sport; one simple reason.",
+      "acceptable_responses": "Any common sport is acceptable. The student may answer with a familiar sport from school or daily life. Very simple language is acceptable.",
+      "off_topic_examples": "Talking only about a famous athlete, listing many sports without choosing one, or speaking about games or music instead of sports.",
+      "scoring_hints": "Focus on the intelligibility of short connected speech. Check whether key words such as the sport name, like, and because are pronounced clearly enough to understand.",
+      "common_mistakes": "Not naming a sport clearly; giving no reason; listing too many ideas; unclear pronunciation of the sport name or key reason words."
+    },
+    "suggested_ideas": [
+      "name one sport you like, such as football, badminton, running, or swimming",
+      "give a simple reason, such as fun, healthy, relaxing, or playing with friends",
+      "use short, simple sentences"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "41d6a6a9-3ad1-4b59-8512-7f7bad351817",
+    "candidate_id": "sports_choices_p3",
+    "topic_id": "6b064206-0c52-52e1-86f7-52cccff6ed9f",
+    "topic_name": "Sports choices",
+    "interest_dimension": "SPORTS_HEALTH",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Some students like team sports, and some like individual sports. Which do you prefer in your free time, and why? Give one example sport and say what you need to play it.",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 3,
+    "difficulty_features": {
+      "here_and_now": false,
+      "num_elements": 3,
+      "reasoning_type": "comparison",
+      "abstractness": "mixed"
+    },
+    "evaluation_guide": {
+      "expected_content": "The speaker states a preference between team sports and individual sports, gives one example sport, mentions simple things needed for it, and gives a personal reason.",
+      "key_points": "A clear preference; one example sport; one or two basic items or conditions needed; a simple reason such as fun, healthy, relaxing, or easy to do in free time.",
+      "acceptable_responses": "Any simple sport is acceptable, including football, badminton, basketball, volleyball, table tennis, swimming, running, or skipping rope. Students may use simple language and do not need to make a long comparison.",
+      "off_topic_examples": "Talking only about school subjects, giving a shopping list without naming a sport, or discussing an activity that is not clearly a sport.",
+      "scoring_hints": "Judge pronunciation by how clearly the student says the preference, the sport name, the needed items, and the reason. Clear key words are more important than complex sentences.",
+      "common_mistakes": "Not stating a preference between the two types of sport; forgetting to give an example sport; forgetting to mention what is needed; pronunciation that makes the sport name or reason hard to understand."
+    },
+    "suggested_ideas": [
+      "say whether you prefer team sports or individual sports",
+      "give one example, such as football, badminton, or swimming",
+      "say one or two things you need, and explain why this choice is good for your free time"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 3
+  }
+]

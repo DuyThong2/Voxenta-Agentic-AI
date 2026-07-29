@@ -1,0 +1,106 @@
+[
+  {
+    "id": "3cb6ccca-6e3f-4f22-bc50-ba726479d6d5",
+    "candidate_id": "films_stories_fluency_01",
+    "topic_id": "7b105475-702d-5f0c-be5b-6a1620a121e8",
+    "topic_name": "Films and stories",
+    "interest_dimension": "ENTERTAINMENT_MEDIA",
+    "curriculum_group": "OUT_OF_CURRICULUM",
+    "question_text": "Tell me about a film or story that you like.",
+    "target_criterion_code": "FLUENCY",
+    "target_sub_attribute": null,
+    "difficulty_rank": 2,
+    "difficulty_features": {
+      "here_and_now": false,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The student talks about one film or one story they like and gives a few simple details.",
+      "key_points": "Names or describes the film or story; says something about the people or events in it; gives a simple reason for liking it.",
+      "acceptable_responses": "Personal descriptions of a movie, a book story, a comic story, or another familiar story are acceptable. Simple ideas and basic examples are acceptable.",
+      "off_topic_examples": "Talking mainly about school subjects, sports, travel plans, or daily routines without linking them to a film or story.",
+      "scoring_hints": "For fluency, focus on the ability to keep speaking smoothly about a familiar topic with manageable pauses. Minor grammar or vocabulary errors are acceptable if the message is clear.",
+      "common_mistakes": "Very short answers with almost no detail; long silent pauses; repeating the same words many times; changing to an unrelated topic."
+    },
+    "suggested_ideas": [
+      "what it is",
+      "who is in it",
+      "why you like it"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "52adde20-40bf-48b3-a993-1e1818232e39",
+    "candidate_id": "films_stories_fluency_02",
+    "topic_id": "7b105475-702d-5f0c-be5b-6a1620a121e8",
+    "topic_name": "Films and stories",
+    "interest_dimension": "ENTERTAINMENT_MEDIA",
+    "curriculum_group": "OUT_OF_CURRICULUM",
+    "question_text": "Tell me about a film or story that you remember well. What happens in it, and why do you remember it?",
+    "target_criterion_code": "FLUENCY",
+    "target_sub_attribute": null,
+    "difficulty_rank": 2,
+    "difficulty_features": {
+      "here_and_now": false,
+      "num_elements": 2,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The student briefly describes a film or story and explains why it is memorable.",
+      "key_points": "Names or describes the film or story; mentions a basic plot point; gives a personal reason for remembering it.",
+      "acceptable_responses": "Any familiar film or story is acceptable, including folktales, school stories, cartoons, or popular movies. Exact titles are not necessary.",
+      "off_topic_examples": "Describing only an actor, singer, or game; talking only about going to the cinema; giving a general opinion about media with no specific film or story.",
+      "scoring_hints": "Assess whether the student can maintain speech with a simple narrative flow. Some hesitation is fine, but the response should not break down after one sentence.",
+      "common_mistakes": "Giving only the title with no description; listing many details without a clear main idea; stopping before explaining why it is memorable; excessive repetition."
+    },
+    "suggested_ideas": [
+      "the main character or setting",
+      "a simple event in the plot",
+      "why it was interesting, funny, or moving"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "1bc9f3a8-46fd-4311-9b33-6ac1db4b6f6c",
+    "candidate_id": "films_stories_fluency_03",
+    "topic_id": "7b105475-702d-5f0c-be5b-6a1620a121e8",
+    "topic_name": "Films and stories",
+    "interest_dimension": "ENTERTAINMENT_MEDIA",
+    "curriculum_group": "OUT_OF_CURRICULUM",
+    "question_text": "What kind of film or story do you like? Say one or two things you like about it.",
+    "target_criterion_code": "FLUENCY",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 2,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The student says what kind of film or story they like and gives one or two simple reasons.",
+      "key_points": "The type of film or story; one or two simple features they like.",
+      "acceptable_responses": "Any type is acceptable. The student may talk about films, stories, or both, using simple everyday language.",
+      "off_topic_examples": "Talking only about actors, ticket prices, or unrelated hobbies without saying what kind of film or story they like.",
+      "scoring_hints": "Focus on continuity, ease of expression, and the ability to state a simple preference with a little support.",
+      "common_mistakes": "Naming a type only; giving no reason; long memorized answers that do not match the question; frequent restarts."
+    },
+    "suggested_ideas": [
+      "funny, action, mystery, or another type",
+      "the characters, the story, or the ending"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  }
+]

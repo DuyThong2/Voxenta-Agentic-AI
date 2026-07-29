@@ -1,0 +1,107 @@
+[
+  {
+    "id": "676c391c-9699-4f8f-976f-116f8b211a53",
+    "candidate_id": "ES_PRON_001",
+    "topic_id": "07f23cc6-485e-56f5-8bce-b720bc2ce9cc",
+    "topic_name": "Everyday science",
+    "interest_dimension": "FUTURE_SCIENCE",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "What happens to ice when you leave it in a warm place? Please describe it in simple English.",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "A short spoken description of ice melting in a warm place, using simple everyday words.",
+      "key_points": "Mentions ice, warmth, melting, and the change from solid ice to water.",
+      "acceptable_responses": "Any clear answer that says ice melts, turns into water, becomes liquid, or gets smaller in a warm place.",
+      "off_topic_examples": "Talking about favorite drinks, winter holidays, or giving a chemistry definition with unrelated details.",
+      "scoring_hints": "For pronunciation, listen for clear production of common words such as ice, warm, melt, water, and place. Minor grammar mistakes are acceptable if the speech is understandable.",
+      "common_mistakes": "Saying unrelated facts, naming the object without describing the change, or speaking too little to judge pronunciation clearly."
+    },
+    "suggested_ideas": [
+      "It becomes smaller over time.",
+      "It melts and turns into water.",
+      "Warm air makes the change happen."
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "423d34b5-3146-417e-890c-cc1bbd50e549",
+    "candidate_id": "ES_PRON_002",
+    "topic_id": "07f23cc6-485e-56f5-8bce-b720bc2ce9cc",
+    "topic_name": "Everyday science",
+    "interest_dimension": "FUTURE_SCIENCE",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "When you wash your hands, what do you use? Give a simple answer.",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "A brief, simple description of what the speaker uses to wash their hands, such as soap and water.",
+      "key_points": "Mentions washing hands and names soap, water, or both.",
+      "acceptable_responses": "Any short answer such as 'I use soap and water,' 'I use soap,' or 'I use water and soap to clean my hands.'",
+      "off_topic_examples": "Talking only about school rules, daily schedules, or unrelated health advice.",
+      "scoring_hints": "Focus on the intelligibility of common words such as soap, water, wash, hands, and clean. A short one-sentence answer is enough if it is clearly spoken.",
+      "common_mistakes": "Giving no clear item used, going off topic, or mispronouncing key words so the meaning is hard to understand."
+    },
+    "suggested_ideas": [
+      "I use soap and water.",
+      "I wash my hands with soap.",
+      "Soap and water help clean my hands."
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "6395356d-bf2e-4d8e-9d65-4ec5d076e3f8",
+    "candidate_id": "ES_PRON_003",
+    "topic_id": "07f23cc6-485e-56f5-8bce-b720bc2ce9cc",
+    "topic_name": "Everyday science",
+    "interest_dimension": "FUTURE_SCIENCE",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Think about a small plant you can see at home or at school. What does it need each day to grow well? Name a few things and say a little about them.",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 3,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "A short description in simple English of what a small plant needs each day to grow well.",
+      "key_points": "Mentions at least two basic needs, such as water, sunlight, soil, or air, with a simple comment about each one.",
+      "acceptable_responses": "Any understandable answer about a plant the student knows or has seen, listing common needs for growth.",
+      "off_topic_examples": "Talking about farming costs, rare plant species, long personal stories, or unrelated science facts without answering what the plant needs.",
+      "scoring_hints": "Assess whether the speaker pronounces common words clearly enough to understand, especially plant, water, sunlight, air, soil, and grow. Do not require scientific detail.",
+      "common_mistakes": "Giving only isolated words with no sentence, naming unrelated items, or speaking too unclearly to distinguish the basic words."
+    },
+    "suggested_ideas": [
+      "It needs water every day or often.",
+      "It needs sunlight to grow.",
+      "It needs soil and air to stay healthy."
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  }
+]

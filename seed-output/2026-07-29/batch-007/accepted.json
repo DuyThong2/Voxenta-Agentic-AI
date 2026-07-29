@@ -1,0 +1,38 @@
+[
+  {
+    "id": "a6fcc817-e6b1-46ca-9786-683feaf103c9",
+    "candidate_id": "LF_PRON_WS_01",
+    "topic_id": "b31a1c05-5f03-5cf9-9417-f3ebdf2cd26d",
+    "topic_name": "Learning with friends",
+    "interest_dimension": "PEOPLE_SOCIETY",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Talk about learning English with a friend at school. What do you usually do together, and which activity do you like best?",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 2,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The student gives a simple description of learning English with a friend and mentions one activity they prefer.",
+      "key_points": "What they do together; one activity they like most; clear, understandable examples from school life.",
+      "acceptable_responses": "Brief personal answers are acceptable, such as practising vocabulary, reading dialogues, or checking pronunciation together. The response may use the simple present tense and short sentences.",
+      "off_topic_examples": "Talking only about studying alone; discussing travel or online devices; giving a long opinion about education in general without mentioning a friend.",
+      "scoring_hints": "For word stress, listen for stress in common multi-syllable words such as 'English,' 'together,' 'activity,' 'usually,' and 'pronunciation' if attempted. Credit clear effort even if grammar is simple.",
+      "common_mistakes": "Flat stress across all syllables; stressing the wrong syllable in familiar words; speaking too fast so stress becomes unclear; listing activities without connecting them to learning with a friend."
+    },
+    "suggested_ideas": [
+      "practising new words together",
+      "reading a short text aloud",
+      "asking each other simple questions",
+      "saying which activity you like best"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  }
+]

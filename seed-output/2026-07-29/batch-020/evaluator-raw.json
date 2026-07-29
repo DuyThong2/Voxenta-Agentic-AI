@@ -1,0 +1,125 @@
+{
+  "separate": [
+    {
+      "response_id": "resp_01263c006f3c2814006a69e1052134819bbceb05fa532a8142",
+      "elapsed_seconds": 19.012,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "school_clubs_fluency_01",
+            "accepted": false,
+            "violations": [
+              "DIFFICULTY_NOT_NEAR_BAC_1",
+              "INTERNAL_CONSISTENCY_NUM_ELEMENTS_MISMATCH",
+              "INTERNAL_CONSISTENCY_REASONING_TYPE_MISMATCH"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 894,
+        "output": 1894,
+        "reasoning": 1820,
+        "cached_input": 0,
+        "response_id": "resp_01263c006f3c2814006a69e1052134819bbceb05fa532a8142"
+      }
+    },
+    {
+      "response_id": "resp_0f7debe17f8d8d50006a69e1182490819bba2ede4785407f83",
+      "elapsed_seconds": 20.359,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "school_clubs_fluency_02",
+            "accepted": false,
+            "violations": [
+              "DIFFICULTY_NOT_NEAR_BAC_1",
+              "INTERNAL_CONSISTENCY_REASONING_TYPE_MISMATCH"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 855,
+        "output": 2103,
+        "reasoning": 2041,
+        "cached_input": 0,
+        "response_id": "resp_0f7debe17f8d8d50006a69e1182490819bba2ede4785407f83"
+      }
+    },
+    {
+      "response_id": "resp_0b1e8234e458d2a0006a69e12c81a4819ba16d6da6e54a47d0",
+      "elapsed_seconds": 21.308,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "school_clubs_fluency_03",
+            "accepted": false,
+            "violations": [
+              "DIFFICULTY_NOT_NEAR_BAC1_COMPARISON_REASONING",
+              "DIFFICULTY_NOT_NEAR_BAC1_NOT_HERE_AND_NOW"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 847,
+        "output": 2117,
+        "reasoning": 2048,
+        "cached_input": 0,
+        "response_id": "resp_0b1e8234e458d2a0006a69e12c81a4819ba16d6da6e54a47d0"
+      }
+    }
+  ],
+  "grouped": {
+    "response_id": "resp_08d568a33bf39a9c006a69e141cfd881988e55186cc4f144fa",
+    "elapsed_seconds": 49.846,
+    "parsed": {
+      "verdicts": [
+        {
+          "candidate_id": "school_clubs_fluency_01",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "school_clubs_fluency_02",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "school_clubs_fluency_03",
+          "accepted": false,
+          "violations": [
+            "DIFFICULTY_NOT_NEAR_BAC1",
+            "REASONING_COMPARISON_MATCHES_BAC3_NOT_BAC1"
+          ]
+        }
+      ]
+    },
+    "tokens": {
+      "role": "evaluator",
+      "mode": "grouped",
+      "model": "gpt-5.4",
+      "input": 1612,
+      "output": 4861,
+      "reasoning": 4757,
+      "cached_input": 0,
+      "response_id": "resp_08d568a33bf39a9c006a69e141cfd881988e55186cc4f144fa"
+    }
+  },
+  "rejected_before_evaluator": [],
+  "vector_similarity": {
+    "school_clubs_fluency_01": 0.908685535,
+    "school_clubs_fluency_02": 0.83460504,
+    "school_clubs_fluency_03": 0.76936328
+  }
+}

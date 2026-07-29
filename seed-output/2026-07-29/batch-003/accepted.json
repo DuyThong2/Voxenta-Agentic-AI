@@ -1,0 +1,38 @@
+[
+  {
+    "id": "235f0c06-189f-414f-9f9c-21bf52f47d03",
+    "candidate_id": "films_stories_ws_02",
+    "topic_id": "7b105475-702d-5f0c-be5b-6a1620a121e8",
+    "topic_name": "Films and stories",
+    "interest_dimension": "ENTERTAINMENT_MEDIA",
+    "curriculum_group": "OUT_OF_CURRICULUM",
+    "question_text": "Tell me about a film or story that you like.",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "A short personal description of a film or story that the student likes.",
+      "key_points": "Names a film or story; gives one or two simple details about it; may say why they like it; uses some multi-syllable words so word stress can be heard.",
+      "acceptable_responses": "Any short answer about a film, cartoon, tale, comic, book story, or school story that the student likes is acceptable. The student does not need special knowledge or technical vocabulary.",
+      "off_topic_examples": "Naming only a title with no detail; talking only about watching films in general without mentioning a specific film or story; talking about an unrelated hobby.",
+      "scoring_hints": "Listen for stress in words such as 'popular,' 'cartoon,' 'adventure,' 'interesting,' 'character,' and other multi-syllable words the student uses. Focus on whether the main stressed syllable is usually clear and correctly placed.",
+      "common_mistakes": "Mis-stressing common content words; using only one-syllable words; pausing too much so stress is unclear; giving a long retelling that becomes hard to follow; going off topic."
+    },
+    "suggested_ideas": [
+      "its title",
+      "what kind of film or story it is",
+      "one simple thing about it",
+      "why you like it"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  }
+]

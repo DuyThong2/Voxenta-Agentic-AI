@@ -1,0 +1,127 @@
+{
+  "separate": [
+    {
+      "response_id": "resp_0e33273605a4a894006a69d56f39f48199b3702831fbd90a10",
+      "elapsed_seconds": 23.169,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "music_perf_ws_01",
+            "accepted": false,
+            "violations": [
+              "EVAL_GUIDE_COMMON_MISTAKES_WRONG_STRESS_MODEL_PERFORMANCE",
+              "INTERNAL_CONSISTENCY_STRESS_GUIDANCE_CONFLICT"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 833,
+        "output": 2178,
+        "reasoning": 2114,
+        "cached_input": 0,
+        "response_id": "resp_0e33273605a4a894006a69d56f39f48199b3702831fbd90a10"
+      }
+    },
+    {
+      "response_id": "resp_093b87c46f12fea3006a69d5865b8081989196e2e432e1ce18",
+      "elapsed_seconds": 23.359,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "music_perf_ws_02",
+            "accepted": false,
+            "violations": [
+              "BAC1_MISMATCH_NOT_IMMEDIATE_PERSONAL",
+              "DIFFICULTY_FEATURES_MISMATCH_HERE_AND_NOW_CONCRETE_PERSONAL",
+              "WORD_STRESS_ELICITATION_WEAK",
+              "EVAL_GUIDE_COMMON_MISTAKES_INCORRECT_STRESS_EXAMPLE"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 795,
+        "output": 2311,
+        "reasoning": 2220,
+        "cached_input": 0,
+        "response_id": "resp_093b87c46f12fea3006a69d5865b8081989196e2e432e1ce18"
+      }
+    },
+    {
+      "response_id": "resp_017d1c4e9bbdc85c006a69d59dc1e08199866eafa485f69906",
+      "elapsed_seconds": 32.831,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "music_perf_ws_03",
+            "accepted": false,
+            "violations": [
+              "BAC_NEAR1_MISMATCH_COMPARE_AND_JUSTIFY",
+              "INTERNAL_CONSISTENCY_REASONING_TYPE_MISMATCH",
+              "NEUTRAL_ACCESS_SCHOOL_CONTEXT_ASSUMED"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 779,
+        "output": 3440,
+        "reasoning": 3369,
+        "cached_input": 0,
+        "response_id": "resp_017d1c4e9bbdc85c006a69d59dc1e08199866eafa485f69906"
+      }
+    }
+  ],
+  "grouped": {
+    "response_id": "resp_0ae00a6710352a00006a69d5be8fd8819997bd4b7af276909e",
+    "elapsed_seconds": 54.525,
+    "parsed": {
+      "verdicts": [
+        {
+          "candidate_id": "music_perf_ws_01",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "music_perf_ws_02",
+          "accepted": false,
+          "violations": [
+            "BAC_LEVEL_TOO_HIGH_FOR_RANK_1",
+            "DIFFICULTY_FEATURES_CONCRETE_PERSONAL_MISMATCH",
+            "EVAL_GUIDE_COMMON_MISTAKES_INCORRECT_STRESS_EXAMPLE"
+          ]
+        },
+        {
+          "candidate_id": "music_perf_ws_03",
+          "accepted": false,
+          "violations": [
+            "BAC_LEVEL_TOO_HIGH_FOR_RANK_1",
+            "DIFFICULTY_FEATURES_REASONING_TYPE_MISMATCH",
+            "EVAL_GUIDE_COMMON_MISTAKES_INCORRECT_STRESS_EXAMPLE"
+          ]
+        }
+      ]
+    },
+    "tokens": {
+      "role": "evaluator",
+      "mode": "grouped",
+      "model": "gpt-5.4",
+      "input": 1617,
+      "output": 5538,
+      "reasoning": 5388,
+      "cached_input": 0,
+      "response_id": "resp_0ae00a6710352a00006a69d5be8fd8819997bd4b7af276909e"
+    }
+  },
+  "rejected_before_evaluator": []
+}

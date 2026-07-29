@@ -1,0 +1,108 @@
+{
+  "response_id": "resp_0f6a2e94bf49485b006a69d9f6f6d88198ab4414cd93ea6c94",
+  "elapsed_seconds": 13.422,
+  "parsed": {
+    "candidates": [
+      {
+        "candidate_id": "healthy_routines_p1_01",
+        "difficulty_features": {
+          "here_and_now": true,
+          "num_elements": 2,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "What healthy routine do you do every day? Please describe it and say when you usually do it.",
+        "suggested_ideas": [
+          "drinking water",
+          "doing light exercise",
+          "going to bed on time",
+          "eating breakfast"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The speaker names one healthy daily routine and states the usual time or part of the day when they do it.",
+          "key_points": "A clear routine; simple description of the action; a time reference such as morning, after school, or before bed; understandable pronunciation of common everyday words.",
+          "acceptable_responses": "Any simple personal example is acceptable, such as drinking water in the morning, walking after school, stretching before class, or sleeping early.",
+          "off_topic_examples": "Talking only about another person’s routine, discussing unhealthy habits only, giving general facts about health without a personal routine, or describing a special event instead of a daily habit.",
+          "scoring_hints": "For pronunciation, listen for clear vowel and consonant sounds in common words, understandable word stress, and whether the response can be followed easily without frequent repetition.",
+          "common_mistakes": "Listing several activities without describing one, forgetting to mention when the routine happens, speaking too softly or too fast, or pronouncing key words unclearly."
+        }
+      },
+      {
+        "candidate_id": "healthy_routines_p1_02",
+        "difficulty_features": {
+          "here_and_now": true,
+          "num_elements": 2,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Tell me about a healthy food or drink you often have. When do you usually have it?",
+        "suggested_ideas": [
+          "water",
+          "fruit",
+          "milk",
+          "vegetables in a meal"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The speaker mentions one healthy food or drink they often have and says when they usually have it.",
+          "key_points": "Name of one food or drink; a simple description such as taste, temperature, or why they choose it; a time reference like breakfast, lunch, after exercise, or evening; clear pronunciation of familiar food words.",
+          "acceptable_responses": "Any common healthy choice is acceptable, for example water, fruit, soup, vegetables, or yogurt, as long as the speaker connects it to their own routine.",
+          "off_topic_examples": "Describing cooking steps in detail, talking about expensive diets, comparing many foods without answering the time question, or discussing nutrition science.",
+          "scoring_hints": "Focus on intelligibility: can a listener understand the main words the first time? Notice word endings, stress in two-syllable words, and smooth production of short phrases.",
+          "common_mistakes": "Naming many foods but not choosing one, not saying when they have it, using memorized lists, or unclear pronunciation of simple food and time words."
+        }
+      },
+      {
+        "candidate_id": "healthy_routines_p1_03",
+        "difficulty_features": {
+          "here_and_now": true,
+          "num_elements": 2,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": null,
+        "vstep_part": 1,
+        "prompt_text": "Do you do any simple exercise to stay healthy? Describe it and say where you usually do it.",
+        "suggested_ideas": [
+          "walking",
+          "stretching",
+          "jogging",
+          "cycling slowly"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The speaker says whether they do a simple exercise, describes the activity, and gives the usual place where they do it.",
+          "key_points": "One clear exercise activity; a brief description of what they do; a place such as at home, in the yard, at school, or in a park; understandable pronunciation of action words.",
+          "acceptable_responses": "Any accessible activity is acceptable, including walking, stretching, running, skipping, or simple exercises in a room or open space.",
+          "off_topic_examples": "Talking only about watching sports, discussing professional training, describing a team match instead of a personal routine, or giving medical advice.",
+          "scoring_hints": "Assess whether the student pronounces common exercise words clearly enough to be understood, with reasonable rhythm and pausing in short sentences.",
+          "common_mistakes": "Answering only yes or no, forgetting to mention the place, giving an unrelated story, or unclear pronunciation of the main activity word."
+        }
+      }
+    ]
+  },
+  "tokens": {
+    "role": "drafter",
+    "mode": "batch",
+    "model": "gpt-5.4",
+    "input": 725,
+    "output": 1065,
+    "reasoning": 67,
+    "cached_input": 0,
+    "response_id": "resp_0f6a2e94bf49485b006a69d9f6f6d88198ab4414cd93ea6c94"
+  }
+}

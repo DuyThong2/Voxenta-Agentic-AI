@@ -1,0 +1,400 @@
+{
+  "calls": [
+    {
+      "round": 1,
+      "editor": {
+        "response_id": "resp_069c5fc3c8ed0c12006a69d3d3aec0819a9145488b348cfc4e",
+        "elapsed_seconds": 8.579,
+        "parsed": {
+          "candidate_id": "school_clubs_pron_wordstress_02",
+          "difficulty_features": {
+            "here_and_now": true,
+            "num_elements": 2,
+            "reasoning_type": "description",
+            "abstractness": "concrete_personal"
+          },
+          "target_construct": "PRONUNCIATION",
+          "target_sub_attribute": "word_stress",
+          "vstep_part": 1,
+          "prompt_text": "At your school, tell me about one club activity. Say the club name and the activity students do, for example computer club, painting club, or competition practice.",
+          "suggested_ideas": [
+            "the name of the club",
+            "one activity students do there"
+          ],
+          "planning_time_seconds": 15,
+          "max_response_seconds": 45,
+          "max_followup_seconds": 0,
+          "evaluation_guide": {
+            "expected_content": "The student gives a short personal description of one club activity at their school, including the club name and one activity students do there.",
+            "key_points": "A clear club name; one clear activity; relevant school-club vocabulary; noticeable word stress in multisyllabic words such as 'activity', 'computer', 'painting', 'competition', or 'practice'.",
+            "acceptable_responses": "Any short, relevant answer is acceptable, for example: 'At my school, I like the computer club. Students practice typing and make simple projects.' Another acceptable answer is: 'We have a painting club. Students paint pictures after class.'",
+            "off_topic_examples": "Talking only about a normal class lesson; describing a hobby with no school club; talking about travel or family activities; listing unrelated words without describing one club activity.",
+            "scoring_hints": "Reward clear stress on key multisyllabic words and generally understandable rhythm. Minor grammar errors are acceptable if the club and activity are clear.",
+            "common_mistakes": "No club name is given; the response does not describe an activity; the answer becomes only a word list; stress on key multisyllabic words is unclear or incorrect; pronunciation is too unclear to identify the activity."
+          }
+        },
+        "tokens": {
+          "role": "editor",
+          "mode": "round-1",
+          "model": "gpt-5.4",
+          "input": 927,
+          "output": 669,
+          "reasoning": 268,
+          "cached_input": 0,
+          "response_id": "resp_069c5fc3c8ed0c12006a69d3d3aec0819a9145488b348cfc4e"
+        }
+      },
+      "evaluator": {
+        "response_id": "resp_009e06ccf7820317006a69d3dc417c819a8b0d5b1ef48575c2",
+        "elapsed_seconds": 28.077,
+        "parsed": {
+          "verdicts": [
+            {
+              "candidate_id": "school_clubs_pron_wordstress_02",
+              "accepted": false,
+              "violations": [
+                "NEUTRAL_ACCESS_ASSUMES_SCHOOL_HAS_CLUBS",
+                "INTERNAL_CONSISTENCY_EXAMPLE_MIXES_CLUB_NAME_WITH_ACTIVITY"
+              ]
+            }
+          ]
+        },
+        "tokens": {
+          "role": "evaluator",
+          "mode": "post-editor-1",
+          "model": "gpt-5.4",
+          "input": 821,
+          "output": 2748,
+          "reasoning": 2679,
+          "cached_input": 0,
+          "response_id": "resp_009e06ccf7820317006a69d3dc417c819a8b0d5b1ef48575c2"
+        }
+      }
+    },
+    {
+      "round": 2,
+      "editor": {
+        "response_id": "resp_0a0cfac0589eddff006a69d3f85bc8819b89b13698908fcbb9",
+        "elapsed_seconds": 4.443,
+        "parsed": {
+          "candidate_id": "school_clubs_pron_wordstress_02",
+          "difficulty_features": {
+            "here_and_now": true,
+            "num_elements": 2,
+            "reasoning_type": "description",
+            "abstractness": "concrete_personal"
+          },
+          "target_construct": "PRONUNCIATION",
+          "target_sub_attribute": "word_stress",
+          "vstep_part": 1,
+          "prompt_text": "Tell me about a school club you know. Say the club name and one activity students do in that club, for example a computer club, a painting club, or a sports club.",
+          "suggested_ideas": [
+            "the name of the club",
+            "one activity students do there"
+          ],
+          "planning_time_seconds": 15,
+          "max_response_seconds": 45,
+          "max_followup_seconds": 0,
+          "evaluation_guide": {
+            "expected_content": "The student gives a short description of one school club they know, including the club name and one activity students do there.",
+            "key_points": "A clear club name; one clear activity; relevant school-club vocabulary; noticeable word stress in multisyllabic words such as 'activity', 'computer', 'painting', or 'popular'.",
+            "acceptable_responses": "Any short, relevant answer is acceptable, for example: 'I know a computer club. Students practice typing and make simple projects.' Another acceptable answer is: 'There is a painting club. Students paint pictures after class.'",
+            "off_topic_examples": "Talking only about a normal class lesson; describing a hobby with no school club context; talking about travel or family activities; listing unrelated words without describing one club activity.",
+            "scoring_hints": "Reward clear stress on key multisyllabic words and generally understandable rhythm. Minor grammar errors are acceptable if the club and activity are clear.",
+            "common_mistakes": "No club name is given; the response does not describe an activity; the answer becomes only a word list; stress on key multisyllabic words is unclear or incorrect; pronunciation is too unclear to identify the activity."
+          }
+        },
+        "tokens": {
+          "role": "editor",
+          "mode": "round-2",
+          "model": "gpt-5.4",
+          "input": 956,
+          "output": 448,
+          "reasoning": 51,
+          "cached_input": 0,
+          "response_id": "resp_0a0cfac0589eddff006a69d3f85bc8819b89b13698908fcbb9"
+        }
+      },
+      "evaluator": {
+        "response_id": "resp_0fc4a72f8e1a4368006a69d3fcc1748198a6943b36078eb735",
+        "elapsed_seconds": 21.294,
+        "parsed": {
+          "verdicts": [
+            {
+              "candidate_id": "school_clubs_pron_wordstress_02",
+              "accepted": true,
+              "violations": []
+            }
+          ]
+        },
+        "tokens": {
+          "role": "evaluator",
+          "mode": "post-editor-2",
+          "model": "gpt-5.4",
+          "input": 817,
+          "output": 1963,
+          "reasoning": 1925,
+          "cached_input": 0,
+          "response_id": "resp_0fc4a72f8e1a4368006a69d3fcc1748198a6943b36078eb735"
+        }
+      }
+    },
+    {
+      "round": 1,
+      "editor": {
+        "response_id": "resp_0e3cccaf11554c78006a69d41212f0819bbf9f420d4793e1fc",
+        "elapsed_seconds": 9.005,
+        "parsed": {
+          "candidate_id": "school_clubs_pron_wordstress_03",
+          "difficulty_features": {
+            "here_and_now": true,
+            "num_elements": 2,
+            "reasoning_type": "description",
+            "abstractness": "concrete_personal"
+          },
+          "target_construct": "PRONUNCIATION",
+          "target_sub_attribute": "word_stress",
+          "vstep_part": 1,
+          "prompt_text": "Which school club do you like best: music club, basketball club, photography club, or another club? What do you do in that club?",
+          "suggested_ideas": [
+            "the name of the club",
+            "one activity you do there",
+            "simple words such as music, basketball, photography, reading, or science"
+          ],
+          "planning_time_seconds": 15,
+          "max_response_seconds": 45,
+          "max_followup_seconds": 0,
+          "evaluation_guide": {
+            "expected_content": "The student names a school club and says one simple activity they do in that club.",
+            "key_points": "A clear club name; one simple activity connected to that club; understandable word stress in club or activity words such as 'music', 'basketball', 'photography', 'reading', or 'science' if used.",
+            "acceptable_responses": "Any simple present-tense answer is acceptable if it names a school club and gives one relevant activity. The student may choose one of the example clubs or another suitable school club.",
+            "off_topic_examples": "Talking about future plans only, jobs, travel, family decisions, money, devices, or giving an answer with no club or no activity.",
+            "scoring_hints": "Strong responses clearly stress key words in the club name or activity, especially multi-syllable words when used. Minor hesitation is acceptable if the answer is easy to understand and answers both parts.",
+            "common_mistakes": "The student gives only a club name with no activity; the activity is not connected to the club; word stress is flat or misplaced on important words; final sounds are dropped and make key words hard to hear."
+          }
+        },
+        "tokens": {
+          "role": "editor",
+          "mode": "round-1",
+          "model": "gpt-5.4",
+          "input": 956,
+          "output": 637,
+          "reasoning": 242,
+          "cached_input": 0,
+          "response_id": "resp_0e3cccaf11554c78006a69d41212f0819bbf9f420d4793e1fc"
+        }
+      },
+      "evaluator": {
+        "response_id": "resp_088e57f45d95c3fe006a69d41b16908198a4c286267f121f3f",
+        "elapsed_seconds": 35.473,
+        "parsed": {
+          "verdicts": [
+            {
+              "candidate_id": "school_clubs_pron_wordstress_03",
+              "accepted": false,
+              "violations": [
+                "NEUTRAL_ACCESS_ASSUMES_SCHOOL_CLUB_PARTICIPATION",
+                "TARGET_SUBATTRIBUTE_WORD_STRESS_NOT_REQUIRED",
+                "INTERNAL_CONSISTENCY_ACCEPTABLE_RESPONSES_ALLOW_UNSCORABLE_MONOSYLLABIC_ANSWERS",
+                "EVAL_GUIDE_COMMON_MISTAKES_OFFTARGET_FINAL_SOUNDS"
+              ]
+            }
+          ]
+        },
+        "tokens": {
+          "role": "evaluator",
+          "mode": "post-editor-1",
+          "model": "gpt-5.4",
+          "input": 815,
+          "output": 3613,
+          "reasoning": 3508,
+          "cached_input": 0,
+          "response_id": "resp_088e57f45d95c3fe006a69d41b16908198a4c286267f121f3f"
+        }
+      }
+    },
+    {
+      "round": 2,
+      "editor": {
+        "response_id": "resp_0cf6a53354d8fff7006a69d43e8bbc819a89849c4eaab151ad",
+        "elapsed_seconds": 6.109,
+        "parsed": {
+          "candidate_id": "school_clubs_pron_wordstress_03",
+          "difficulty_features": {
+            "here_and_now": true,
+            "num_elements": 2,
+            "reasoning_type": "description",
+            "abstractness": "concrete_personal"
+          },
+          "target_construct": "PRONUNCIATION",
+          "target_sub_attribute": "word_stress",
+          "vstep_part": 1,
+          "prompt_text": "Which school club sounds most interesting to you: music club, basketball club, photography club, or another club? What activity would you do in that club?",
+          "suggested_ideas": [
+            "say the name of the club",
+            "say one activity in the club",
+            "use clear stress in words such as music, basketball, photography, reading, science, practice, or drawing"
+          ],
+          "planning_time_seconds": 15,
+          "max_response_seconds": 45,
+          "max_followup_seconds": 0,
+          "evaluation_guide": {
+            "expected_content": "The student names a school club that interests them and says one simple activity they would do in that club.",
+            "key_points": "A clear club name; one simple related activity; at least one multi-syllable club or activity word produced with understandable word stress.",
+            "acceptable_responses": "Any simple answer is acceptable if it names a school club and gives one relevant activity the student would do there. The response should include at least one multi-syllable word, such as music, basketball, photography, reading, science, practice, or drawing, so word stress can be assessed.",
+            "off_topic_examples": "Talking only about school subjects, jobs, travel, family, money, devices, or giving an answer with no club or no activity.",
+            "scoring_hints": "Score pronunciation for word stress. Strong responses place stress clearly in key multi-syllable words in the club name or activity. Minor hesitation is acceptable if the response answers both parts and word stress remains easy to hear.",
+            "common_mistakes": "The student gives only a club name with no activity; the activity is not connected to the club; the response uses only one-syllable words so word stress cannot be judged; stress is flat or misplaced on important multi-syllable words."
+          }
+        },
+        "tokens": {
+          "role": "editor",
+          "mode": "round-2",
+          "model": "gpt-5.4",
+          "input": 988,
+          "output": 551,
+          "reasoning": 123,
+          "cached_input": 0,
+          "response_id": "resp_0cf6a53354d8fff7006a69d43e8bbc819a89849c4eaab151ad"
+        }
+      },
+      "evaluator": {
+        "response_id": "resp_03dc029599a58e88006a69d444a7e8819ba700c1a421d87d99",
+        "elapsed_seconds": 20.812,
+        "parsed": {
+          "verdicts": [
+            {
+              "candidate_id": "school_clubs_pron_wordstress_03",
+              "accepted": true,
+              "violations": []
+            }
+          ]
+        },
+        "tokens": {
+          "role": "evaluator",
+          "mode": "post-editor-2",
+          "model": "gpt-5.4",
+          "input": 848,
+          "output": 1987,
+          "reasoning": 1949,
+          "cached_input": 0,
+          "response_id": "resp_03dc029599a58e88006a69d444a7e8819ba700c1a421d87d99"
+        }
+      }
+    },
+    {
+      "refiner": {
+        "response_id": "resp_0b73f136dc30560b006a69d459b598819985ff8f5058c0ee12",
+        "elapsed_seconds": 6.303,
+        "parsed": {
+          "candidates": [
+            {
+              "candidate_id": "school_clubs_pron_wordstress_02",
+              "difficulty_features": {
+                "here_and_now": true,
+                "num_elements": 2,
+                "reasoning_type": "description",
+                "abstractness": "concrete_personal"
+              },
+              "target_construct": "PRONUNCIATION",
+              "target_sub_attribute": "word_stress",
+              "vstep_part": 1,
+              "prompt_text": "Tell me about a school club you know. Say the name of the club and one activity students do there, for example, a computer club, a painting club, or a sports club.",
+              "suggested_ideas": [
+                "the name of the club",
+                "one activity students do there"
+              ],
+              "planning_time_seconds": 15,
+              "max_response_seconds": 45,
+              "max_followup_seconds": 0,
+              "evaluation_guide": {
+                "expected_content": "The student gives a short description of one school club they know, including the club name and one activity students do there.",
+                "key_points": "A clear club name; one clear activity; relevant school club vocabulary; noticeable word stress in multisyllabic words such as 'activity,' 'computer,' 'painting,' or 'popular.'",
+                "acceptable_responses": "Any short, relevant answer is acceptable, for example: 'I know a computer club. Students practice typing and make simple projects.' Another acceptable answer is: 'There is a painting club. Students paint pictures after class.'",
+                "off_topic_examples": "Talking only about a regular class lesson; describing a hobby with no school club context; talking about travel or family activities; listing unrelated words without describing one club activity.",
+                "scoring_hints": "Reward clear stress on key multisyllabic words and generally understandable rhythm. Minor grammar errors are acceptable if the club and activity are clear.",
+                "common_mistakes": "No club name is given; the response does not describe an activity; the answer becomes only a word list; stress on key multisyllabic words is unclear or incorrect; pronunciation is too unclear to identify the activity."
+              }
+            },
+            {
+              "candidate_id": "school_clubs_pron_wordstress_03",
+              "difficulty_features": {
+                "here_and_now": true,
+                "num_elements": 2,
+                "reasoning_type": "description",
+                "abstractness": "concrete_personal"
+              },
+              "target_construct": "PRONUNCIATION",
+              "target_sub_attribute": "word_stress",
+              "vstep_part": 1,
+              "prompt_text": "Which school club sounds most interesting to you: a music club, a basketball club, a photography club, or another club? What activity would you do in that club?",
+              "suggested_ideas": [
+                "say the name of the club",
+                "say one activity in the club",
+                "use clear stress in words such as music, basketball, photography, reading, science, practice, or drawing"
+              ],
+              "planning_time_seconds": 15,
+              "max_response_seconds": 45,
+              "max_followup_seconds": 0,
+              "evaluation_guide": {
+                "expected_content": "The student names a school club that interests them and says one simple activity they would do in that club.",
+                "key_points": "A clear club name; one simple related activity; at least one multisyllabic club or activity word produced with understandable word stress.",
+                "acceptable_responses": "Any simple answer is acceptable if it names a school club and gives one relevant activity the student would do there. The response should include at least one multisyllabic word, such as 'music,' 'basketball,' 'photography,' 'reading,' 'science,' 'practice,' or 'drawing,' so word stress can be assessed.",
+                "off_topic_examples": "Talking only about school subjects, jobs, travel, family, money, or devices, or giving an answer with no club or no activity.",
+                "scoring_hints": "Score pronunciation for word stress. Strong responses place stress clearly on key multisyllabic words in the club name or activity. Minor hesitation is acceptable if the response answers both parts and word stress remains easy to hear.",
+                "common_mistakes": "The student gives only a club name with no activity; the activity is not connected to the club; the response uses only one-syllable words, so word stress cannot be judged; stress is flat or misplaced on important multisyllabic words."
+              }
+            }
+          ]
+        },
+        "tokens": {
+          "role": "refiner",
+          "mode": "batch-2",
+          "model": "gpt-5.4",
+          "input": 1429,
+          "output": 844,
+          "reasoning": 11,
+          "cached_input": 0,
+          "response_id": "resp_0b73f136dc30560b006a69d459b598819985ff8f5058c0ee12"
+        }
+      }
+    }
+  ],
+  "rejected": [
+    {
+      "candidate": {
+        "candidate_id": "school_clubs_pron_wordstress_01",
+        "difficulty_features": {
+          "here_and_now": false,
+          "num_elements": 1,
+          "reasoning_type": "description",
+          "abstractness": "concrete_personal"
+        },
+        "target_construct": "PRONUNCIATION",
+        "target_sub_attribute": "word_stress",
+        "vstep_part": 1,
+        "prompt_text": "Which school club do you like most? Say its name and give one or two simple reasons.",
+        "suggested_ideas": [
+          "name of the club",
+          "what the club does",
+          "why you like it"
+        ],
+        "planning_time_seconds": 15,
+        "max_response_seconds": 45,
+        "max_followup_seconds": 0,
+        "evaluation_guide": {
+          "expected_content": "The student names one school club and gives one or two simple reasons for liking it. The response should be short, clear, and easy to understand.",
+          "key_points": "A relevant club name; at least one reason; understandable pronunciation of common words; attention to word stress in key words such as 'music', 'sports', 'science', 'English', 'reading', or 'drama'.",
+          "acceptable_responses": "Any simple personal preference is acceptable, including real or imagined clubs at school, for example: 'I like the music club because I enjoy singing.'",
+          "off_topic_examples": "Talking only about a school subject with no club mentioned; describing a family member; discussing travel or money; giving a long opinion about education in general.",
+          "scoring_hints": "Higher performance shows clear word stress in familiar multi-syllable words, natural pacing, and easy intelligibility. Lower performance may have unclear stress that makes key words hard to recognize.",
+          "common_mistakes": "No club is named; reasons are missing; stress falls on the wrong syllable in common words; speech is too quiet or broken to understand."
+        }
+      },
+      "stage": "rule",
+      "violations": [
+        "prompt_not_question"
+      ]
+    }
+  ]
+}

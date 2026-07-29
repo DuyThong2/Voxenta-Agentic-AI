@@ -1,0 +1,107 @@
+[
+  {
+    "id": "9ec88b9a-0eef-420a-a8db-8c0e47337752",
+    "candidate_id": "music_perf_pron_01",
+    "topic_id": "e9ba2c0a-7441-57f2-bc23-3a12dfeb87ad",
+    "topic_name": "Music and performance",
+    "interest_dimension": "ENTERTAINMENT_MEDIA",
+    "curriculum_group": "OUT_OF_CURRICULUM",
+    "question_text": "Do you like listening to music? Please say what kind of music you enjoy.",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 2,
+    "difficulty_features": {
+      "here_and_now": false,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The student gives a simple personal answer about whether they like music and names a kind of music they enjoy.",
+      "key_points": "Clear pronunciation of common music words; understandable stress and individual sounds; simple complete sentences; a direct answer to the question.",
+      "acceptable_responses": "Any brief personal response is acceptable, including liking music, not liking it very much, or liking different kinds such as pop, ballads, instrumental music, or songs with a slow or fast rhythm.",
+      "off_topic_examples": "Talking mainly about school subjects, sports, food, or a person unrelated to music, without answering what music they enjoy.",
+      "scoring_hints": "Focus on intelligibility, word stress, and clarity of sounds rather than idea complexity. A short answer can still score well if it is easy to understand.",
+      "common_mistakes": "Mispronouncing common music words so they are hard to understand, dropping final sounds, speaking too softly, or giving no clear answer about music preferences."
+    },
+    "suggested_ideas": [
+      "name one kind of music",
+      "say when you listen to it",
+      "say how it makes you feel"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "df9214fe-899d-4f64-9974-c3e36088fcc7",
+    "candidate_id": "music_perf_pron_02",
+    "topic_id": "e9ba2c0a-7441-57f2-bc23-3a12dfeb87ad",
+    "topic_name": "Music and performance",
+    "interest_dimension": "ENTERTAINMENT_MEDIA",
+    "curriculum_group": "OUT_OF_CURRICULUM",
+    "question_text": "Tell me about a song you know well.",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 2,
+    "difficulty_features": {
+      "here_and_now": false,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The student briefly describes one song they know well using simple, familiar words.",
+      "key_points": "Understandable pronunciation of familiar descriptive words; clear sentence stress; smooth production of short phrases; a direct description of the song.",
+      "acceptable_responses": "Any common song is acceptable, including a school song, a children's song, a popular song, or a traditional song. The student may also say they know the tune but not many of the words.",
+      "off_topic_examples": "Describing a movie, a singer's life story, or a music competition without talking about one song.",
+      "scoring_hints": "Reward clear and natural pronunciation even if the vocabulary is simple. Do not require the song title in English if the student can still describe it clearly.",
+      "common_mistakes": "Unclear vowel sounds in key words, speaking word by word with long pauses, not naming or describing any song, or repeating the same idea without describing the song."
+    },
+    "suggested_ideas": [
+      "say whether the song is fast or slow",
+      "say whether it sounds happy, calm, or loud",
+      "say a few words about the rhythm, melody, or lyrics"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "2ee08f75-d376-4d03-bc8e-f5aaa638bbaf",
+    "candidate_id": "music_perf_pron_03",
+    "topic_id": "e9ba2c0a-7441-57f2-bc23-3a12dfeb87ad",
+    "topic_name": "Music and performance",
+    "interest_dimension": "ENTERTAINMENT_MEDIA",
+    "curriculum_group": "OUT_OF_CURRICULUM",
+    "question_text": "Some students enjoy singing or dancing in front of other people. How do you feel about performing?",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 2,
+    "difficulty_features": {
+      "here_and_now": false,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The student states a simple feeling about performing in front of other people and gives a brief reason.",
+      "key_points": "Clear pronunciation of feeling words; intelligible rhythm and stress; a direct personal response; a simple reason such as fun, confidence, shyness, or enjoyment of music.",
+      "acceptable_responses": "Any personal view is acceptable, including liking performance, disliking it, feeling shy, or preferring to watch other people perform.",
+      "off_topic_examples": "Giving a long discussion about famous performers, equipment, money, or unrelated school events without saying how the student feels about performing.",
+      "scoring_hints": "Focus on whether the listener can easily understand the student's words and message. Short, simple answers are acceptable for this level.",
+      "common_mistakes": "Confusing key feeling words, unclear final sounds, very flat or broken delivery that reduces intelligibility, or failing to state a personal feeling about performing."
+    },
+    "suggested_ideas": [
+      "say whether you feel happy, nervous, or excited",
+      "say whether you prefer singing, dancing, or not performing",
+      "give one simple reason"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  }
+]

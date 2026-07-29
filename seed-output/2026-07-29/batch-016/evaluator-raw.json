@@ -1,0 +1,117 @@
+{
+  "separate": [
+    {
+      "response_id": "resp_0fedf83a3f773bed006a69dde134fc819b8ec6094e61462429",
+      "elapsed_seconds": 4.278,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "LF_PRON_01",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 825,
+        "output": 399,
+        "reasoning": 365,
+        "cached_input": 0,
+        "response_id": "resp_0fedf83a3f773bed006a69dde134fc819b8ec6094e61462429"
+      }
+    },
+    {
+      "response_id": "resp_067e03a52b38f295006a69dde580f8819ab59ba82a9f1c8bfe",
+      "elapsed_seconds": 9.255,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "LF_PRON_02",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 820,
+        "output": 756,
+        "reasoning": 722,
+        "cached_input": 0,
+        "response_id": "resp_067e03a52b38f295006a69dde580f8819ab59ba82a9f1c8bfe"
+      }
+    },
+    {
+      "response_id": "resp_07643ee0a8c81d05006a69ddeece648198be05cb740effe143",
+      "elapsed_seconds": 21.648,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "LF_PRON_03",
+            "accepted": false,
+            "violations": [
+              "DIFFICULTY_NOT_NEAR_RANK_1"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 833,
+        "output": 2077,
+        "reasoning": 2031,
+        "cached_input": 0,
+        "response_id": "resp_07643ee0a8c81d05006a69ddeece648198be05cb740effe143"
+      }
+    }
+  ],
+  "grouped": {
+    "response_id": "resp_0739007cfd64547a006a69de0466488198b7210fec0d0ce917",
+    "elapsed_seconds": 22.334,
+    "parsed": {
+      "verdicts": [
+        {
+          "candidate_id": "LF_PRON_01",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "LF_PRON_02",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "LF_PRON_03",
+          "accepted": false,
+          "violations": [
+            "DIFFICULTY_FEATURE_HERE_AND_NOW_FALSE_FOR_BAC1",
+            "NEUTRAL_ACCESS_ASSUMES_PAST_HELPFUL_EXPERIENCE_WITH_FRIENDS"
+          ]
+        }
+      ]
+    },
+    "tokens": {
+      "role": "evaluator",
+      "mode": "grouped",
+      "model": "gpt-5.4",
+      "input": 1492,
+      "output": 2173,
+      "reasoning": 2070,
+      "cached_input": 0,
+      "response_id": "resp_0739007cfd64547a006a69de0466488198b7210fec0d0ce917"
+    }
+  },
+  "rejected_before_evaluator": [],
+  "vector_similarity": {
+    "LF_PRON_01": 0.7535425099999999,
+    "LF_PRON_02": 0.8416262,
+    "LF_PRON_03": 0.72058362
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "separate": [
+    {
+      "response_id": "resp_03248c433a7ec527006a69dc5abd10819aaef7cbcbe272699b",
+      "elapsed_seconds": 7.983,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "gt_pron_01",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 862,
+        "output": 794,
+        "reasoning": 760,
+        "cached_input": 0,
+        "response_id": "resp_03248c433a7ec527006a69dc5abd10819aaef7cbcbe272699b"
+      }
+    },
+    {
+      "response_id": "resp_0812c8cde35be719006a69dc62bbb0819a8d06e26dd76682a9",
+      "elapsed_seconds": 19.085,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "gt_pron_02",
+            "accepted": false,
+            "violations": [
+              "VSTEP1_BAND_MISMATCH",
+              "DIFFICULTY_FEATURES_NOT_NEAR_1"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 862,
+        "output": 1857,
+        "reasoning": 1802,
+        "cached_input": 0,
+        "response_id": "resp_0812c8cde35be719006a69dc62bbb0819a8d06e26dd76682a9"
+      }
+    },
+    {
+      "response_id": "resp_0df9bba8b91188cd006a69dc75d1c0819896b8c7ea425decb3",
+      "elapsed_seconds": 26.894,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "gt_pron_03",
+            "accepted": false,
+            "violations": [
+              "difficulty_not_near_bac1_immediate_personal",
+              "prompt_elicits_familiar_general_explanation_rather_than_immediate_personal_info"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 872,
+        "output": 2571,
+        "reasoning": 2508,
+        "cached_input": 0,
+        "response_id": "resp_0df9bba8b91188cd006a69dc75d1c0819896b8c7ea425decb3"
+      }
+    }
+  ],
+  "grouped": {
+    "response_id": "resp_01a7669fe499264e006a69dc90b62c81999dd9f59ea7a83aa9",
+    "elapsed_seconds": 54.547,
+    "parsed": {
+      "verdicts": [
+        {
+          "candidate_id": "gt_pron_01",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "gt_pron_02",
+          "accepted": false,
+          "violations": [
+            "DIFFICULTY_FEATURE_COMPARISON_ABOVE_BAC1",
+            "DIFFICULTY_FEATURE_ABSTRACTNESS_MIXED_ABOVE_BAC1"
+          ]
+        },
+        {
+          "candidate_id": "gt_pron_03",
+          "accepted": true,
+          "violations": []
+        }
+      ]
+    },
+    "tokens": {
+      "role": "evaluator",
+      "mode": "grouped",
+      "model": "gpt-5.4",
+      "input": 1610,
+      "output": 5359,
+      "reasoning": 5260,
+      "cached_input": 0,
+      "response_id": "resp_01a7669fe499264e006a69dc90b62c81999dd9f59ea7a83aa9"
+    }
+  },
+  "rejected_before_evaluator": [],
+  "vector_similarity": {
+    "gt_pron_01": 0.45939606,
+    "gt_pron_02": 0.36613110000000004,
+    "gt_pron_03": 0.34648670000000004
+  }
+}

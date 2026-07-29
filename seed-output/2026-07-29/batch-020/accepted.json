@@ -1,0 +1,106 @@
+[
+  {
+    "id": "7918f21e-d27a-434e-ad0a-f70b5aadc01a",
+    "candidate_id": "school_clubs_fluency_01",
+    "topic_id": "79ab55c2-54d0-5861-ac3a-14ccf1558fd5",
+    "topic_name": "School clubs",
+    "interest_dimension": "PEOPLE_SOCIETY",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "What school club do you like? Please say which club it is and why you like it.",
+    "target_criterion_code": "FLUENCY",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 2,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The student gives a simple personal answer about a school club, names a club, and gives one clear reason.",
+      "key_points": "A suitable club is named; the answer stays on the topic of school clubs; at least one simple reason is given, such as fun, learning skills, meeting friends, or relaxing after class.",
+      "acceptable_responses": "Any clear answer is acceptable, including liking a sports club, music club, art club, reading club, science club, English club, or volunteer club. The student may also say they do not like any club if they explain why.",
+      "off_topic_examples": "Talking only about regular school subjects, describing a family member, discussing travel plans, or giving a general opinion about school without mentioning a club.",
+      "scoring_hints": "For fluency, reward smooth delivery, the ability to continue speaking without long pauses, and simple self-correction that does not interrupt communication. Content can be basic if it is clear and sustained.",
+      "common_mistakes": "Very short one-sentence answers; long unnatural pauses; repeating the same words many times; forgetting to name a club; giving a reason that is unclear or unrelated to the club."
+    },
+    "suggested_ideas": [
+      "name of the club",
+      "why you like it"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "1c578ea2-c2aa-4cf8-8b58-cb0eaad4f4b3",
+    "candidate_id": "school_clubs_fluency_02",
+    "topic_id": "79ab55c2-54d0-5861-ac3a-14ccf1558fd5",
+    "topic_name": "School clubs",
+    "interest_dimension": "PEOPLE_SOCIETY",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Tell me about a school club you know.",
+    "target_criterion_code": "FLUENCY",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The student gives a simple description of one school club they know.",
+      "key_points": "The club is named; the student describes basic activities; the student may mention when or where the club meets.",
+      "acceptable_responses": "Any school club is acceptable. The student may talk about a real club at their school or another school club they know well in a simple, personal way.",
+      "off_topic_examples": "Talking only about a favorite subject, describing a teacher, discussing hobbies with no connection to a school club, or speaking about school life in general without naming a club.",
+      "scoring_hints": "Focus on whether the speaker can keep talking with simple, connected ideas about one familiar topic. Minor grammar or vocabulary problems are acceptable if the message is clear.",
+      "common_mistakes": "Only naming the club without describing it; giving very short answers; repeating the same idea; losing the topic and talking about school in general."
+    },
+    "suggested_ideas": [
+      "the club name",
+      "what students do in the club",
+      "when or where the club meets"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "aae7220d-4c55-4f40-bde9-91e04b5a6da7",
+    "candidate_id": "school_clubs_fluency_03",
+    "topic_id": "79ab55c2-54d0-5861-ac3a-14ccf1558fd5",
+    "topic_name": "School clubs",
+    "interest_dimension": "PEOPLE_SOCIETY",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Tell me about a school club you like. If your school does not have clubs, you can talk about a club you would like to have.",
+    "target_criterion_code": "FLUENCY",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The student talks about a school club they like, or a club they would like to have at school, and gives a few simple details about it.",
+      "key_points": "A school club is identified; the answer includes a simple description of activities or members; the student says why they like it or would like it.",
+      "acceptable_responses": "Any school club is acceptable, such as a sports club, art club, music club, book club, or English club. If the student's school does not have clubs, they may talk about a club they would like to have at school.",
+      "off_topic_examples": "Talking only about hobbies at home with no school club context, discussing school subjects instead of clubs, or giving unrelated information about teachers or school rules.",
+      "scoring_hints": "Reward direct answers, simple connected ideas, and the ability to keep speaking with limited hesitation. Minor pauses or repetition are acceptable at this level if the response stays on topic.",
+      "common_mistakes": "Not naming a club; giving only one-word answers; repeating the prompt without adding details; going off topic; long pauses that stop the flow of the response."
+    },
+    "suggested_ideas": [
+      "the name or type of club",
+      "what students do in the club",
+      "why you like it or would like it"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  }
+]

@@ -1,0 +1,122 @@
+{
+  "separate": [
+    {
+      "response_id": "resp_0da2491e5c0fdc12006a69df7ce83c8199b59a9c3c36657d33",
+      "elapsed_seconds": 5.086,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "music_perf_pron_01",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 853,
+        "output": 485,
+        "reasoning": 450,
+        "cached_input": 0,
+        "response_id": "resp_0da2491e5c0fdc12006a69df7ce83c8199b59a9c3c36657d33"
+      }
+    },
+    {
+      "response_id": "resp_0e9abba718598d2d006a69df81fdb8819ba20e336ffecf0cf4",
+      "elapsed_seconds": 25.276,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "music_perf_pron_02",
+            "accepted": false,
+            "violations": [
+              "BAC1_DIFFICULTY_TOO_HIGH_LIMITED_REASONS_REQUIRED",
+              "INTERNAL_CONSISTENCY_REASONING_TYPE_MISMATCH"
+            ]
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 865,
+        "output": 2397,
+        "reasoning": 2334,
+        "cached_input": 0,
+        "response_id": "resp_0e9abba718598d2d006a69df81fdb8819ba20e336ffecf0cf4"
+      }
+    },
+    {
+      "response_id": "resp_0cd0fceb06f0b7d8006a69df9b8b40819ba33a6cf0f3ea1b39",
+      "elapsed_seconds": 10.89,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "music_perf_pron_03",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 850,
+        "output": 947,
+        "reasoning": 912,
+        "cached_input": 0,
+        "response_id": "resp_0cd0fceb06f0b7d8006a69df9b8b40819ba33a6cf0f3ea1b39"
+      }
+    }
+  ],
+  "grouped": {
+    "response_id": "resp_02d28212a2e0e2e0006a69dfa62870819a8deeeec8177e93b3",
+    "elapsed_seconds": 47.364,
+    "parsed": {
+      "verdicts": [
+        {
+          "candidate_id": "music_perf_pron_01",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "music_perf_pron_02",
+          "accepted": false,
+          "violations": [
+            "DIFFICULTY_NOT_NEAR_BAC1",
+            "REASONING_TYPE_MISMATCH",
+            "EVAL_GUIDE_FLUENCY_CONTAMINATION"
+          ]
+        },
+        {
+          "candidate_id": "music_perf_pron_03",
+          "accepted": false,
+          "violations": [
+            "DIFFICULTY_NOT_NEAR_BAC1",
+            "REASONING_TYPE_MISMATCH"
+          ]
+        }
+      ]
+    },
+    "tokens": {
+      "role": "evaluator",
+      "mode": "grouped",
+      "model": "gpt-5.4",
+      "input": 1582,
+      "output": 4826,
+      "reasoning": 4706,
+      "cached_input": 0,
+      "response_id": "resp_02d28212a2e0e2e0006a69dfa62870819a8deeeec8177e93b3"
+    }
+  },
+  "rejected_before_evaluator": [],
+  "vector_similarity": {
+    "music_perf_pron_01": 0.54302502,
+    "music_perf_pron_02": 0.50892287,
+    "music_perf_pron_03": 0.45563065999999997
+  }
+}

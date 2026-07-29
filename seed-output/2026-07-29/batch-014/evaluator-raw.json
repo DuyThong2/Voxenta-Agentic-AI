@@ -1,0 +1,112 @@
+{
+  "separate": [
+    {
+      "response_id": "resp_03ec8a5d32aed315006a69dcfd9a68819ba2832996dc9208e2",
+      "elapsed_seconds": 5.127,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "places_town_pron_01",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 884,
+        "output": 411,
+        "reasoning": 375,
+        "cached_input": 0,
+        "response_id": "resp_03ec8a5d32aed315006a69dcfd9a68819ba2832996dc9208e2"
+      }
+    },
+    {
+      "response_id": "resp_089d717063de5c71006a69dd02c4f4819bad397defde06123c",
+      "elapsed_seconds": 4.794,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "places_town_pron_02",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 873,
+        "output": 380,
+        "reasoning": 344,
+        "cached_input": 0,
+        "response_id": "resp_089d717063de5c71006a69dd02c4f4819bad397defde06123c"
+      }
+    },
+    {
+      "response_id": "resp_01eb02702dd5d6ca006a69dd0782d4819aa827b174ee1418ad",
+      "elapsed_seconds": 9.665,
+      "parsed": {
+        "verdicts": [
+          {
+            "candidate_id": "places_town_pron_03",
+            "accepted": true,
+            "violations": []
+          }
+        ]
+      },
+      "tokens": {
+        "role": "evaluator",
+        "mode": "separate",
+        "model": "gpt-5.4",
+        "input": 875,
+        "output": 931,
+        "reasoning": 895,
+        "cached_input": 0,
+        "response_id": "resp_01eb02702dd5d6ca006a69dd0782d4819aa827b174ee1418ad"
+      }
+    }
+  ],
+  "grouped": {
+    "response_id": "resp_01fc07b12022a091006a69dd112d6081989adbac99bc2c21f3",
+    "elapsed_seconds": 10.736,
+    "parsed": {
+      "verdicts": [
+        {
+          "candidate_id": "places_town_pron_01",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "places_town_pron_02",
+          "accepted": true,
+          "violations": []
+        },
+        {
+          "candidate_id": "places_town_pron_03",
+          "accepted": true,
+          "violations": []
+        }
+      ]
+    },
+    "tokens": {
+      "role": "evaluator",
+      "mode": "grouped",
+      "model": "gpt-5.4",
+      "input": 1644,
+      "output": 1057,
+      "reasoning": 983,
+      "cached_input": 0,
+      "response_id": "resp_01fc07b12022a091006a69dd112d6081989adbac99bc2c21f3"
+    }
+  },
+  "rejected_before_evaluator": [],
+  "vector_similarity": {
+    "places_town_pron_01": 0.51631227,
+    "places_town_pron_02": 0.4225171,
+    "places_town_pron_03": 0.46203446000000004
+  }
+}

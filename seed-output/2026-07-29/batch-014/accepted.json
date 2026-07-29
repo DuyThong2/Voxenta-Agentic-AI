@@ -1,0 +1,110 @@
+[
+  {
+    "id": "6b4076c5-0d99-47fa-a440-61ab1848ae02",
+    "candidate_id": "places_town_pron_01",
+    "topic_id": "a0af86dd-8512-59ec-865d-4034939b13be",
+    "topic_name": "Places in my town",
+    "interest_dimension": "TRAVEL_PLACES",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Talk about a place in your town that you know well. What is it, and what can people see there?",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 1,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The student describes one familiar place in their town and gives a few simple details about what people can see there.",
+      "key_points": "Identify the place clearly; give 2–3 visible features such as buildings, trees, shops, roads, lights, or people; keep the answer focused on one place.",
+      "acceptable_responses": "A park, street, market, school area, lake, square, library, or any other common local place is acceptable. Short, simple sentences are acceptable if they are understandable.",
+      "off_topic_examples": "Talking about a person instead of a place; explaining a school subject; discussing travel to another country; giving opinions about politics or religion.",
+      "scoring_hints": "For pronunciation, listen for clear individual sounds, word stress in common place words, and overall intelligibility. Minor grammar mistakes are acceptable if the spoken words are easy to understand.",
+      "common_mistakes": "Unclear final sounds; missing stress in multi-syllable words; speaking too softly to hear clearly; naming the place but giving no description."
+    },
+    "suggested_ideas": [
+      "name or type of place",
+      "where it is in the town",
+      "what people can see there",
+      "how it looks in the daytime"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "0a3b7503-2aa0-4294-a9c8-f4b7ade57dfb",
+    "candidate_id": "places_town_pron_02",
+    "topic_id": "a0af86dd-8512-59ec-865d-4034939b13be",
+    "topic_name": "Places in my town",
+    "interest_dimension": "TRAVEL_PLACES",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Describe a quiet place in your town where people can spend time. What is this place like?",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 2,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The student describes one quiet place in town and gives a few simple details about its atmosphere or appearance.",
+      "key_points": "Name the place; mention that it is quiet or calm; add 2–3 concrete details such as trees, benches, small roads, open space, or people reading or walking.",
+      "acceptable_responses": "A quiet corner of a park, a library area, a small street, a lakeside area, a school yard after class, or another calm local place is acceptable. The answer may be personal and simple.",
+      "off_topic_examples": "Talking only about a noisy place without describing it as quiet; discussing family members; talking about expensive travel plans; giving a speech about social issues.",
+      "scoring_hints": "Focus on whether the student pronounces common words clearly and can be understood throughout. Natural pausing is fine; perfect accuracy for every sound is not required.",
+      "common_mistakes": "Very short one-word answers; unclear vowel sounds in common words; dropping important sounds so words are hard to recognize; repeating the same phrase without adding detail."
+    },
+    "suggested_ideas": [
+      "type of place",
+      "sounds or noise level there",
+      "things people can do there",
+      "simple details about the area"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  },
+  {
+    "id": "364d6584-157a-4512-a780-cc1a01a79c54",
+    "candidate_id": "places_town_pron_03",
+    "topic_id": "a0af86dd-8512-59ec-865d-4034939b13be",
+    "topic_name": "Places in my town",
+    "interest_dimension": "TRAVEL_PLACES",
+    "curriculum_group": "IN_GDPT2018",
+    "question_text": "Choose a busy place in your town and describe it. What usually happens there?",
+    "target_criterion_code": "PRONUNCIATION",
+    "target_sub_attribute": null,
+    "difficulty_rank": 1,
+    "difficulty_features": {
+      "here_and_now": true,
+      "num_elements": 2,
+      "reasoning_type": "description",
+      "abstractness": "concrete_personal"
+    },
+    "evaluation_guide": {
+      "expected_content": "The student chooses one busy place in town and describes the usual activities or sights there in simple spoken English.",
+      "key_points": "State the place clearly; mention that it is busy; include 2–3 everyday activities such as walking, buying things, waiting, talking, or playing.",
+      "acceptable_responses": "A market, main street, bus stop area, school gate area, park entrance, or another common public place is acceptable. The student may use the present simple and basic vocabulary.",
+      "off_topic_examples": "Describing a place in another country; telling a story about a holiday; discussing money problems; talking about religion, politics, or stereotypes about regions.",
+      "scoring_hints": "Assess intelligibility first: can a listener understand the place name and main ideas? Notice word stress, consonant endings, and smooth production of familiar vocabulary related to places in town.",
+      "common_mistakes": "Mispronouncing common place words so the meaning is unclear; speaking too fast and losing many sounds; listing activities with no clear place; a long silence after the first sentence."
+    },
+    "suggested_ideas": [
+      "what the place is",
+      "who you can often see there",
+      "common activities there",
+      "what it looks or sounds like"
+    ],
+    "preparation_time_seconds": 15,
+    "max_response_seconds": 45,
+    "max_followup_seconds": 0,
+    "vstep_part": 1
+  }
+]

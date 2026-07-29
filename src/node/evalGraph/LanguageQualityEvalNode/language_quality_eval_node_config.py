@@ -11,6 +11,7 @@ from node.state_models import SpeakingInput
 from schemas.enums import SpeakingMode
 from schemas.scoring import CriterionScore
 from utils.confidence_utils import run_multi_criterion_consensus_judgment
+from utils.criterion_diagnostics import sanitize_criterion_diagnostics
 
 logger = logging.getLogger(__name__)
 
@@ -351,14 +352,35 @@ def build_user_prompt(
     return "\n".join(parts)
 
 
-def _to_criterion(response: Dict[str, Any]) -> CriterionScore:
+def _allowed_band_codes(
+    speaking_input: SpeakingInput,
+    criterion_key: str,
+) -> list[str]:
+    framework = _find_framework(speaking_input, criterion_key)
+    return [band.code for band in framework.bands if band.code] if framework else []
+
+
+def _to_criterion(
+    response: Dict[str, Any],
+    speaking_input: SpeakingInput,
+    criterion_key: str,
+) -> CriterionScore:
+    diagnostics = sanitize_criterion_diagnostics(
+        response,
+        criterion_key,
+        allowed_band_codes=_allowed_band_codes(speaking_input, criterion_key),
+        logger=logger,
+    )
     return CriterionScore(
         score=response["score"],
+        status="scored",
+        source="llm",
         subscores=response.get("subscores", {}),
         note=response.get(
             "note",
             "Evaluated by LLM from the student's transcript.",
         ),
+        **diagnostics,
     )
 
 
@@ -423,12 +445,21 @@ def language_quality_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "grammar_score_delta": grammar.score_delta_on_ten_point_scale,
             "lexical_score_delta": vocabulary.score_delta_on_ten_point_scale,
             "coherence_score_delta": coherence.score_delta_on_ten_point_scale,
+            "language_quality_allowed_band_codes": {
+                "grammar": _allowed_band_codes(speaking_input, "grammar"),
+                "vocabulary": _allowed_band_codes(speaking_input, "vocabulary"),
+                "coherence": _allowed_band_codes(speaking_input, "coherence"),
+            },
             "language_quality_diagnostics": {
                 "grammar": {
                     "evidence_spans": grammar.response.get("evidence_spans", []),
                     "weakness_labels": grammar.response.get("weakness_labels", []),
                     "recommendation_tag": grammar.response.get(
                         "recommendation_tag",
+                        "",
+                    ),
+                    "matched_band_code": grammar.response.get(
+                        "matched_band_code",
                         "",
                     ),
                 },
@@ -445,6 +476,10 @@ def language_quality_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
                         "recommendation_tag",
                         "",
                     ),
+                    "matched_band_code": vocabulary.response.get(
+                        "matched_band_code",
+                        "",
+                    ),
                 },
                 "coherence": {
                     "evidence_spans": coherence.response.get(
@@ -457,6 +492,10 @@ def language_quality_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
                     ),
                     "recommendation_tag": coherence.response.get(
                         "recommendation_tag",
+                        "",
+                    ),
+                    "matched_band_code": coherence.response.get(
+                        "matched_band_code",
                         "",
                     ),
                 },
@@ -474,9 +513,21 @@ def language_quality_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             coherence.response.get("score"),
         )
         return {
-            "grammar_criterion": _to_criterion(grammar.response),
-            "lexical_criterion": _to_criterion(vocabulary.response),
-            "coherence_criterion": _to_criterion(coherence.response),
+            "grammar_criterion": _to_criterion(
+                grammar.response,
+                speaking_input,
+                "grammar",
+            ),
+            "lexical_criterion": _to_criterion(
+                vocabulary.response,
+                speaking_input,
+                "vocabulary",
+            ),
+            "coherence_criterion": _to_criterion(
+                coherence.response,
+                speaking_input,
+                "coherence",
+            ),
             "metadata": metadata,
         }
     except json.JSONDecodeError as exc:

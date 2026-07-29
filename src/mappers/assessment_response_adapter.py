@@ -1,5 +1,6 @@
 """Adapter to convert current graph responses into the standardized UI API contract."""
 
+import logging
 from typing import Any, Dict, List, Optional
 
 from dtos.response.ui_response import UIResponse
@@ -13,7 +14,9 @@ from mappers.schema_mapper import (
 from schemas.enums import LengthCategory, ScoreColor
 from schemas.scoring import CriteriaScores
 from schemas.validity import ValidityResult
+from utils.criterion_diagnostics import sanitize_criterion_diagnostics
 
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -49,7 +52,12 @@ def format_phoneme_list(phonemes: List[str]) -> str:
 # Criterion normalization
 # ---------------------------------------------------------------------------
 
-def normalize_criterion(item: Any, default_source: str = "unknown") -> Dict[str, Any]:
+def normalize_criterion(
+    item: Any,
+    criterion_key: str,
+    default_source: str = "unknown",
+    allowed_band_codes: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     if not isinstance(item, dict):
         item = {}
 
@@ -62,6 +70,12 @@ def normalize_criterion(item: Any, default_source: str = "unknown") -> Dict[str,
     if source_value not in {"azure", "llm", "rule", "system"}:
         source_value = default_source if default_source in {"azure", "llm", "rule", "system"} else "system"
 
+    diagnostics = sanitize_criterion_diagnostics(
+        item,
+        criterion_key,
+        allowed_band_codes=allowed_band_codes,
+        logger=logger,
+    )
     result = {
         "score": score,
         "level": level_from_score(score),
@@ -70,20 +84,27 @@ def normalize_criterion(item: Any, default_source: str = "unknown") -> Dict[str,
         "subscores": item.get("subscores") or {},
         "note": item.get("note") or "",
         "suggestion": item.get("suggestion") or "",
+        **diagnostics,
     }
     return result
 
 
-def build_default_criteria(result: Dict[str, Any]) -> Dict[str, Any]:
+def build_default_criteria(
+    result: Dict[str, Any],
+    metadata: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """Build criteria from pronunciation_result.criteria (schema-aligned keys)."""
     raw_criteria = result.get("criteria") or {}
+    allowed_bands = (metadata or {}).get("language_quality_allowed_band_codes") or {}
 
     criteria = {
-        "pronunciation": normalize_criterion(raw_criteria.get("pronunciation") or {}, default_source="azure"),
-        "fluency": normalize_criterion(raw_criteria.get("fluency") or {}, default_source="azure"),
-        "grammar": normalize_criterion(raw_criteria.get("grammar") or {}, default_source="llm"),
-        "vocabulary": normalize_criterion(raw_criteria.get("vocabulary") or {}, default_source="llm"),
-        "coherence": normalize_criterion(raw_criteria.get("coherence") or {}, default_source="llm"),
+        key: normalize_criterion(
+            raw_criteria.get(key) or {},
+            key,
+            default_source="azure" if key in {"pronunciation", "fluency"} else "llm",
+            allowed_band_codes=allowed_bands.get(key),
+        )
+        for key in ("pronunciation", "fluency", "grammar", "vocabulary", "coherence")
     }
 
     return CriteriaScores.parse_obj(criteria).model_dump()
@@ -429,7 +450,7 @@ def adapt_current_response_to_ui_response(current: Dict[str, Any]) -> Dict[str, 
     validity = build_validity(validity_raw, details_length)
     topic_relevance = build_topic_relevance(metadata)
     language_details = build_language_details(metadata)
-    criteria = build_default_criteria(result)
+    criteria = build_default_criteria(result, metadata)
 
     # Question context: current.question → metadata fallback
     q = current.get("question") if isinstance(current.get("question"), dict) else {}

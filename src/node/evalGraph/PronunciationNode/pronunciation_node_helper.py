@@ -282,6 +282,8 @@ def build_criteria_scores(
     return CriteriaScores(
         pronunciation=CriterionScore(
             score=pronunciation_score,
+            status="scored",
+            source="azure",
             subscores={
                 "accuracy": round_score(result.accuracy_score),
                 "prosody": round_score(result.prosody_score),
@@ -291,6 +293,8 @@ def build_criteria_scores(
         ),
         fluency=CriterionScore(
             score=fluency_score,
+            status="scored",
+            source="azure",
             subscores={
                 "fluency": fluency_score,
             },

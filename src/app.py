@@ -123,6 +123,18 @@ async def lifespan(app: FastAPI):
         for index in range(settings.KAFKA_EXAM_CONSUMER_CONCURRENCY)
     ]
     app.state.exam_consumer_tasks = exam_consumer_tasks
+    practice_consumer_tasks = [
+        asyncio.create_task(
+            start_exam_attempt_consumer(
+                app,
+                instance_label=f"practice-{index}",
+                request_topic=settings.KAFKA_PRACTICE_REQUEST_TOPIC,
+                consumer_group=settings.KAFKA_PRACTICE_CONSUMER_GROUP,
+            )
+        )
+        for index in range(settings.KAFKA_EXAM_CONSUMER_CONCURRENCY)
+    ]
+    app.state.practice_consumer_tasks = practice_consumer_tasks
     force_end_consumer_task = asyncio.create_task(start_exam_attempt_force_end_consumer(app))
     app.state.force_end_consumer_task = force_end_consumer_task
     asset_analysis_consumer_task = asyncio.create_task(start_question_asset_analysis_consumer(app))
@@ -136,6 +148,8 @@ async def lifespan(app: FastAPI):
         await close_all_avatar_connections()
         consumer_task.cancel()
         for task in exam_consumer_tasks:
+            task.cancel()
+        for task in practice_consumer_tasks:
             task.cancel()
         force_end_consumer_task.cancel()
         asset_analysis_consumer_task.cancel()

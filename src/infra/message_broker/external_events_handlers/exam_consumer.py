@@ -24,6 +24,8 @@ from infra.message_broker.connection import (
 from infra.message_broker.publishers.exam_publisher import (
     publish_exam_attempt_evaluation_completed,
     publish_exam_attempt_evaluation_failed,
+    publish_practice_attempt_evaluation_completed,
+    publish_practice_attempt_evaluation_failed,
 )
 from infra.storage.audio_storage import download_from_s3_async
 from schemas.scoring import CriterionScore
@@ -773,10 +775,19 @@ def _build_clarification_only_completed_event(
     )
 
 
-async def start_exam_attempt_consumer(app, instance_label: str = "0"):
+async def start_exam_attempt_consumer(
+    app,
+    instance_label: str = "0",
+    *,
+    request_topic: str | None = None,
+    consumer_group: str | None = None,
+):
+    request_topic = request_topic or settings.KAFKA_EXAM_REQUEST_TOPIC
+    consumer_group = consumer_group or settings.KAFKA_EXAM_CONSUMER_GROUP
+    practice_mode = request_topic == settings.KAFKA_PRACTICE_REQUEST_TOPIC
     consumer = await get_topic_consumer_instance(
-        settings.KAFKA_EXAM_REQUEST_TOPIC,
-        group_id=settings.KAFKA_EXAM_CONSUMER_GROUP,
+        request_topic,
+        group_id=consumer_group,
         instance_label=instance_label,
     )
     graph = app.state.graph
@@ -788,7 +799,25 @@ async def start_exam_attempt_consumer(app, instance_label: str = "0"):
         while retries <= settings.KAFKA_MAX_RETRY:
             try:
                 payload = json.loads(message.value.decode())
-                request_event = ExamAttemptEvaluationRequestedEvent.model_validate(payload)
+                normalized_payload = dict(payload)
+                if practice_mode:
+                    normalized_payload["eventType"] = "ExamAttemptEvaluationRequested"
+                    normalized_payload["examAttemptId"] = payload["practiceSessionId"]
+                    normalized_payload["answerId"] = payload["practiceResponseId"]
+                    normalized_payload["questionId"] = payload["practiceQuestionId"]
+                request_event = ExamAttemptEvaluationRequestedEvent.model_validate(
+                    normalized_payload
+                )
+                publish_completed = (
+                    publish_practice_attempt_evaluation_completed
+                    if practice_mode
+                    else publish_exam_attempt_evaluation_completed
+                )
+                publish_failed = (
+                    publish_practice_attempt_evaluation_failed
+                    if practice_mode
+                    else publish_exam_attempt_evaluation_failed
+                )
                 request_payload = request_event.payload
                 turns = sorted(request_payload.turns, key=lambda turn: turn.turn_order)
                 if not turns:
@@ -800,7 +829,7 @@ async def start_exam_attempt_consumer(app, instance_label: str = "0"):
                         "[exam-consumer] no turns recorded, publishing 0-point result answer_id=%s exam_attempt_id=%s",
                         request_event.answer_id, request_event.exam_attempt_id,
                     )
-                    await publish_exam_attempt_evaluation_completed(
+                    await publish_completed(
                         _build_no_answer_completed_event(request_event)
                     )
                     await consumer.commit()
@@ -853,7 +882,7 @@ async def start_exam_attempt_consumer(app, instance_label: str = "0"):
                         "[exam-consumer] clarification-only answer, publishing zero-point result answer_id=%s",
                         request_event.answer_id,
                     )
-                    await publish_exam_attempt_evaluation_completed(
+                    await publish_completed(
                         _build_clarification_only_completed_event(request_event, turns)
                     )
                     await consumer.commit()
@@ -880,7 +909,7 @@ async def start_exam_attempt_consumer(app, instance_label: str = "0"):
                     per_turn_results,
                     _total_duration_seconds(turns),
                 )
-                await publish_exam_attempt_evaluation_completed(completed_event)
+                await publish_completed(completed_event)
                 await consumer.commit()
                 logger.info("[exam-consumer] completed and published answer_id=%s", request_event.answer_id)
                 break
@@ -895,11 +924,11 @@ async def start_exam_attempt_consumer(app, instance_label: str = "0"):
                 )
                 terminal_failure = isinstance(exc, TurnEvaluationRetriesExhausted)
                 if terminal_failure or retries > settings.KAFKA_MAX_RETRY:
-                    await publish_exam_attempt_evaluation_failed(
+                    await publish_failed(
                         ExamAttemptEvaluationFailedEvent(
-                            exam_attempt_id=payload.get("examAttemptId", "unknown"),
-                            answer_id=payload.get("answerId", "unknown"),
-                            question_id=payload.get("questionId", "unknown"),
+                            exam_attempt_id=normalized_payload.get("examAttemptId", "unknown"),
+                            answer_id=normalized_payload.get("answerId", "unknown"),
+                            question_id=normalized_payload.get("questionId", "unknown"),
                             payload=ExamAttemptEvaluationFailedPayload(
                                 error=str(exc),
                                 retry_count=(

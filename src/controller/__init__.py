@@ -7,6 +7,7 @@ from controller.evaluate_controller import router as evaluate_router
 from controller.archive_controller import router as archive_router
 from controller.realtime_controller import router as realtime_router
 from controller.avatar_webrtc_controller import router as avatar_webrtc_router
+from controller.practice_selection_controller import router as practice_selection_router
 
 
 router = APIRouter()
@@ -17,3 +18,4 @@ router.include_router(evaluate_router)
 router.include_router(archive_router)
 router.include_router(realtime_router)
 router.include_router(avatar_webrtc_router)
+router.include_router(practice_selection_router)

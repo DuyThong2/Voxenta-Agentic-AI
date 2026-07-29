@@ -353,7 +353,8 @@ def run_consensus_judgment(
 
     # Ép confidence = 0 CHỈ khi thật sự < 2 lượt có điểm hợp lệ (không đủ để đo độ ổn định) --
     # KHÔNG còn ép 0 chỉ vì 1/3 lượt hỏng/ungrounded như bản cũ, theo research Vietnam-focus
-    # (compass_artifact_wf-52df89c9: tách "không đủ evidence" khỏi "hệ thống bất ổn"; dùng
+    # (deep-research/confidence/05-ketqua-tinh-lai-cong-thuc-confidence.md: tách "không đủ
+    # evidence" khỏi "hệ thống bất ổn"; dùng
     # self-consistency trên các lượt hợp lệ thay vì zero-out cả tiêu chí).
     if len(scored) < 2:
         if not scored:

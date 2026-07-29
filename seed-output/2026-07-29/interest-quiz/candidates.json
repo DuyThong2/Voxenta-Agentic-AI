@@ -1,0 +1,1784 @@
+{
+  "groups": [
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Xem cách âm thanh làm nên cảnh phim",
+            "Thiết kế luật cho trò chơi thẻ mới",
+            "Tìm hiểu vì sao pin mặt trời tạo điện"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Chọn nhạc nền cho đoạn phim của lớp",
+            "Sắp xếp giao diện cho ứng dụng nhắc việc",
+            "Quan sát mô hình núi lửa phun trào"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Vẽ khung cảnh cho phim hoạt hình",
+            "Tìm lỗi trong mê cung lệnh đơn giản",
+            "So sánh cách cây lọc không khí"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Thử lồng tiếng cho đoạn giới thiệu ngắn",
+            "Nghĩ cách thưởng điểm cho trò chơi nhóm",
+            "Xem kính thiên văn hoạt động thế nào"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Sắp ảnh thành áp phích cho buổi diễn",
+            "Phác thảo màn chơi vượt chướng ngại",
+            "Khám phá vì sao xà phòng rửa sạch dầu"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Tập bài khởi động cho buổi chạy ngắn",
+            "Phỏng vấn bạn mới về câu lạc bộ yêu thích",
+            "Đánh dấu đường đi thú vị trên bản đồ công viên"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Thử chiến thuật chuyền bóng trong sân nhỏ",
+            "Quan sát cách mọi người xếp hàng ở hội chợ",
+            "Lên lộ trình tham quan quanh hồ gần trường"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Rèn nhịp thở khi nhảy dây nhanh",
+            "Ghi lại câu chuyện của bác bảo vệ trường",
+            "So sánh hai tuyến xe đến bảo tàng"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Chọn bài tập giãn cơ sau giờ học",
+            "Tổ chức trò làm quen cho nhóm mới",
+            "Tìm lối đi ngắn nhất trong sơ đồ vườn thú"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Luyện giữ thăng bằng khi đi cầu thăng bằng",
+            "Hỏi vì sao bạn thích tham gia thiện nguyện",
+            "Xem các ký hiệu đường mòn trong khu sinh thái"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Dựng tiết mục nhảy cho ngày hội trường",
+            "Thử tư thế ném bóng vào rổ thấp",
+            "Lắng nghe bạn kể về áp lực thi cử"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Chọn góc chụp đẹp cho bộ ảnh lớp",
+            "Tập phối hợp khi chơi kéo co",
+            "Quan sát cách nhóm bạn giải quyết tranh cãi"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Viết lời giới thiệu cho chương trình văn nghệ",
+            "Học động tác xoay người trong cầu lông",
+            "Rủ bạn chia sẻ kỷ niệm đầu năm học"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Tạo danh sách bài hát cho giờ sinh hoạt",
+            "Soi kỹ kỹ thuật xuất phát khi chạy ngắn",
+            "Tìm hiểu vì sao một tin đồn lan nhanh"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Chọn màu sân khấu cho vở kịch ngắn",
+            "Luyện phản xạ bắt bóng bằng hai tay",
+            "Quan sát cách lớp phối hợp khi làm việc nhóm"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Phác họa máy bán vé tự động dễ dùng",
+            "Tìm tuyến xe buýt đến thư viện thành phố",
+            "Xem vì sao cầu vồng xuất hiện sau mưa"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Sắp bước lệnh cho robot giao sách",
+            "Đọc sơ đồ đường đi trong khu cắm trại",
+            "Làm thử bộ lọc nước từ cát và sỏi"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Nghĩ biểu tượng rõ ràng cho ứng dụng trường",
+            "Chọn điểm dừng hợp lý cho chuyến dã ngoại",
+            "Soi cách nam châm hút các vật khác nhau"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Tạo thử màn hướng dẫn cho trò giải đố",
+            "Xem bản đồ tàu điện để đổi tuyến nhanh",
+            "Tìm hiểu vì sao băng tan làm mực nước tăng"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Sắp cơ chế mở cửa cho mê cung giấy",
+            "Lên đường tham quan các gian nhà cổ",
+            "Quan sát cách bóng đổ thay đổi theo nắng"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Viết cảm nhận sau khi xem một vở múa",
+            "Trò chuyện với người lạ tại ngày hội sách",
+            "Tìm góc ngắm hoàng hôn đẹp ở bờ hồ"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Chọn đạo cụ cho tiết mục kể chuyện sân khấu",
+            "Hỏi bạn vì sao thích làm trưởng nhóm",
+            "Lập danh sách điểm dừng quanh phố cổ"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Xem cách biên tập viên chọn ảnh bìa báo",
+            "Quan sát nét khác nhau giữa các nhóm học",
+            "So sánh đường ven sông và đường trong phố"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Tập dẫn chương trình cho buổi giao lưu",
+            "Nghe anh chị kể về lần làm tình nguyện",
+            "Đánh dấu nơi muốn chụp ảnh ở bảo tàng"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Ghép cảnh cho một đoạn kịch học đường",
+            "Tìm hiểu cách bạn mới hòa nhập lớp",
+            "Chọn lối dạo quanh khu vườn nhiều cây"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "SPORTS_HEALTH",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Vẽ giao diện đồng hồ báo thức dễ nhìn",
+            "Tập nước rút ở đoạn cuối đường chạy",
+            "Xem vì sao máy bay giấy bay xa hơn"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "SPORTS_HEALTH",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Thiết kế câu hỏi thưởng cho trò chơi lớp",
+            "Luyện động tác bật xa trên cát mềm",
+            "Tìm hiểu cách men làm bột nở"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "SPORTS_HEALTH",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Nghĩ hệ thống điểm công bằng cho giải đấu",
+            "Thử nhịp tay đúng khi bơi cạn mô phỏng",
+            "Quan sát hạt nảy mầm trong khăn ẩm"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "SPORTS_HEALTH",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Sắp nút điều khiển cho xe mô hình giấy",
+            "Rèn sức bền bằng đi bộ nhanh vòng sân",
+            "So sánh bóng tối ở các thời điểm khác nhau"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "SPORTS_HEALTH",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Sắp lệnh đường đi cho nhân vật vượt hố",
+            "Tập tư thế phòng thủ trong bóng rổ",
+            "Xem nước bốc hơi nhanh ở chỗ nắng"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "SPORTS_HEALTH"
+          ],
+          "statements": [
+            "Chọn âm thanh mở đầu cho bản thu âm lớp",
+            "Ghép các bước cho khóa số bí mật",
+            "Tập chuyền cầu chính xác qua lưới thấp"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "SPORTS_HEALTH"
+          ],
+          "statements": [
+            "Tạo bìa minh họa cho tập truyện ngắn",
+            "Vẽ sơ đồ cấp độ cho trò phiêu lưu",
+            "Luyện cú đá phạt vào góc khung thành"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "SPORTS_HEALTH"
+          ],
+          "statements": [
+            "Viết tiêu đề hấp dẫn cho bản tin trường",
+            "Sửa luật để trò đuổi bắt công bằng hơn",
+            "Học cách giữ nhịp khi chèo thuyền cạn"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "SPORTS_HEALTH"
+          ],
+          "statements": [
+            "Chọn ánh sáng phù hợp cho buổi diễn nhỏ",
+            "Tìm quy luật mở khóa trong trò ô số",
+            "Tập xoay cổ tay khi đánh bóng bàn"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "SPORTS_HEALTH"
+          ],
+          "statements": [
+            "Thử vai dẫn chuyện trong kịch âm thanh",
+            "Nghĩ vật cản mới cho trò vượt mê cung",
+            "Rèn tốc độ đổi hướng khi chơi cầu lông"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Hỏi khách tham quan thích gian nào nhất",
+            "Tìm đường yên tĩnh quanh khu hồ lớn",
+            "Xem vì sao lá đổi màu theo mùa"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Ghi lại cách nhóm khác phân chia việc",
+            "Chọn nơi nghỉ chân hợp lý trên tuyến đi bộ",
+            "Thử làm cầu giấy chịu nhiều sách"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Nghe câu chuyện tuổi thơ của cô bán vé",
+            "So sánh hai lối vào khu triển lãm",
+            "Quan sát đường kiến tìm thức ăn"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Tìm hiểu vì sao bạn thích làm việc đôi",
+            "Đánh dấu chỗ có bóng mát ở công viên",
+            "Xem phản ứng khi trộn giấm với muối nở"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Quan sát nét mặt khán giả khi chờ bắt đầu",
+            "Lập lộ trình qua các phòng của bảo tàng",
+            "Soi cách gió làm chong chóng quay"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Vẽ áp phích cho hội chợ cuối tuần",
+            "Tập dẫn bóng zíc zắc qua chướng ngại",
+            "Tìm con đường nhiều cây nhất đến thư viện"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Chọn trang phục cho buổi biểu diễn dân vũ",
+            "Luyện cú giao cầu ngắn qua lưới",
+            "Đọc bản đồ tham quan khu di tích cũ"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Làm danh sách phim cho đêm xem chung",
+            "Tập giữ nhịp đều khi leo cầu thang",
+            "So sánh hai bến xe gần nơi tổ chức hội sách"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Sắp ảnh thành câu chuyện cho triển lãm lớp",
+            "Học cách tiếp đất an toàn khi nhảy xa",
+            "Chọn lối đi qua các gian hàng đông vui"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Thử viết lời bình cho đoạn múa ngắn",
+            "Luyện phòng thủ một đối một trên sân",
+            "Tìm góc nhìn rộng ở tháp quan sát"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Sắp câu lệnh để đèn bật đúng giờ",
+            "Hỏi nhóm bạn cách phân vai khi làm dự án",
+            "Xem vì sao hạt tiêu chạy khỏi xà phòng"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Thiết kế biểu tượng dễ hiểu cho thư mục lớp",
+            "Quan sát cách người mới bắt chuyện ở câu lạc bộ",
+            "Tìm hiểu vì sao trăng có lúc tròn khuyết"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Nghĩ mẹo thưởng xu cho trò giải ô chữ",
+            "Ghi chú ai thường kết nối các bạn trong lớp",
+            "So sánh tốc độ tan của đá ở nắng râm"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Vẽ sơ đồ nút bấm cho máy bán nước",
+            "Tìm hiểu vì sao có nhóm trưởng tự nhiên",
+            "Xem cách bóng giấy rơi chậm hơn viên đá"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Chọn màu báo lỗi rõ nhất cho ứng dụng",
+            "Phỏng vấn bạn về điều làm nhóm gắn kết",
+            "Quan sát hơi nước đọng trên nắp nồi"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Chọn nhịp cắt cảnh cho video giới thiệu câu lạc bộ",
+            "Sắp luật để trò đố vui bớt may rủi",
+            "Quan sát ai thường kéo mọi người cùng tham gia"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Vẽ bìa cho tuyển tập thơ của lớp",
+            "Tạo mật mã hình ảnh cho cuộc săn tìm",
+            "Nghe bạn kể cách làm quen ở trường mới"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Thử thu tiếng động cho cảnh mưa giả",
+            "Nghĩ cách xếp hạng công bằng trong trò tiếp sức",
+            "Tìm hiểu vì sao vài bạn hay đứng ra hòa giải"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Chọn câu khẩu hiệu hay cho chương trình phát thanh",
+            "Vẽ đường đi bí mật trong trò săn kho báu",
+            "Ghi lại cách lớp phản ứng khi có tin vui"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Sắp thứ tự cảnh cho đoạn quảng bá ngắn",
+            "Tạo thẻ nhiệm vụ cho trò chơi nhập vai",
+            "Quan sát cách hai nhóm làm quen với nhau"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Tập leo bậc thang đều nhịp trong sân trường",
+            "Chọn đường vòng ít dốc khi đi bộ",
+            "Xem vì sao sương xuất hiện buổi sáng"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Luyện đổi chân nhanh ở bài vượt ô",
+            "Đánh dấu điểm nghỉ trên tuyến lên đồi",
+            "Quan sát bóng Mặt Trời đổi hướng trong ngày"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Thử cách giữ lưng đúng khi mang ba lô",
+            "So sánh lối vào chính và lối vào phụ",
+            "Tìm hiểu vì sao giấy ướt dễ rách hơn"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Tập tung bắt liên tục bằng khăn mềm",
+            "Đọc ký hiệu chỉ đường trong khu tham quan",
+            "Xem muối làm nước đá lạnh nhanh hơn"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Luyện chạy bền theo nhịp nhạc chậm",
+            "Tìm chỗ quan sát toàn cảnh trên đồi thấp",
+            "Soi cách âm vang thay đổi trong hành lang"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Chọn góc quay cho thử thách nhảy đồng diễn",
+            "Học cách xoay hông khi ném đĩa mềm",
+            "Xem vì sao cầu giấy cong vẫn chịu lực"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Vẽ hình nhân vật cho truyện dài kỳ",
+            "Tập bước đà đúng khi bật cao",
+            "Quan sát hạt mưa tạo vòng tròn trên nước"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Thử ghép tiếng nền cho cảnh rượt đuổi",
+            "Rèn cổ chân chắc khi nhảy lò cò",
+            "Tìm hiểu vì sao quả cam nổi trên nước muối"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Chọn lời dẫn cho video phỏng vấn ngắn",
+            "Luyện cách đổi tay khi rê bóng thấp",
+            "Xem ánh sáng qua lá tạo bóng lốm đốm"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Tạo bảng màu cho truyện tranh phiêu lưu",
+            "Học cách dừng gấp mà vẫn giữ thăng bằng",
+            "So sánh tốc độ khô của khăn trong nắng"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Vẽ sơ đồ phòng trốn thoát cho bạn chơi",
+            "Quan sát ai hay nhường lượt trong nhóm",
+            "Chọn tuyến dạo ngắn qua khu phố nghệ thuật"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Nghĩ nút trợ giúp cho ứng dụng mượn sách",
+            "Hỏi bạn vì sao thích đi cùng nhóm đông",
+            "Đọc bản đồ gian hàng ở lễ hội xuân"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Sắp mã màu cho bảng điểm điện tử",
+            "Ghi lại cách các nhóm chọn người phát biểu",
+            "Tìm lối đi nối hai sân trong trường"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Tạo quy tắc cho trò săn tem quanh lớp",
+            "Tìm hiểu ai thường gắn kết các thành viên",
+            "So sánh đường dưới tán cây và đường ven hồ"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "PEOPLE_SOCIETY",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Vẽ lộ trình nhiệm vụ cho trò phiêu lưu giấy",
+            "Nghe bạn kể lần đi chung khiến nhóm thân hơn",
+            "Đánh dấu nơi có tầm nhìn đẹp trên bản đồ"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Chọn bố cục ảnh cho nhật ký chuyến đi",
+            "Sắp manh mối cho trò giải mật thư",
+            "Tìm con ngõ nhiều tranh tường để dạo"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Thử viết lời giới thiệu cho điểm tham quan",
+            "Nghĩ vật phẩm thưởng trong trò thu thập",
+            "Đọc sơ đồ đường đi giữa các nhà trưng bày"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Ghép nhạc phù hợp cho đoạn phim về công viên",
+            "Vẽ bản đồ màn chơi quanh ngọn hải đăng",
+            "Chọn bến dừng để ngắm cảnh ven sông"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Vẽ ký họa nhanh của khu chợ cũ",
+            "Tạo chuỗi thử thách cho trò vượt trạm",
+            "So sánh lối đi đá và lối đi gỗ"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "TECH_GAMING",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Chọn lời bình cho bộ ảnh đường phố",
+            "Sắp ô thưởng phạt trên bàn cờ tự làm",
+            "Tìm vị trí ngắm tàu thuyền ở bến sông"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Tập hít thở đều trước phần chạy tiếp sức",
+            "Hỏi bạn cảm thấy ra sao khi thi đấu",
+            "Xem vì sao cơ bắp mỏi sau vận động"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Luyện bật nhảy chạm mốc bằng một tay",
+            "Quan sát cách cổ vũ làm nhóm hăng hơn",
+            "Tìm hiểu vì sao tim đập nhanh khi chạy"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Học cách khởi động cổ tay trước ném bóng",
+            "Nghe bạn kể lần vượt qua ngại ngùng",
+            "So sánh hơi thở trước và sau leo cầu thang"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Tập giữ nhịp khi chạy theo nhóm nhỏ",
+            "Ghi chú ai giúp các bạn bớt căng thẳng",
+            "Xem nước mất đi qua mồ hôi thế nào"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Rèn tư thế plank đúng trong một phút",
+            "Tìm hiểu vì sao lời khen làm người khác vui",
+            "Quan sát nhịp tim hồi chậm sau nghỉ"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Viết nhận xét về một nhân vật trong phim",
+            "Quan sát vì sao vài bạn dễ được tin tưởng",
+            "Xem cách mắt thích nghi khi vào phòng tối"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Chọn đoạn truyện gây hồi hộp nhất để kể",
+            "Hỏi bạn điều gì làm một nhóm đoàn kết",
+            "Tìm hiểu vì sao cầu vồng có nhiều màu"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Ghép ảnh cho bài đăng về hoạt động trường",
+            "Nghe cách bạn giải quyết hiểu lầm với bạn thân",
+            "Soi vì sao đá viên nhỏ tan nhanh hơn"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Thử viết lời thoại cho cảnh tranh luận",
+            "Ghi lại điều khiến khán giả cùng cười",
+            "Xem hơi nước thành giọt trên ly lạnh"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "PEOPLE_SOCIETY",
+            "FUTURE_SCIENCE"
+          ],
+          "statements": [
+            "Chọn nhạc kết cho câu chuyện cảm động",
+            "Tìm hiểu vì sao có người dễ kết bạn",
+            "Quan sát giấy đổi màu dưới nắng lâu"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Vẽ đường đi cho robot giao hàng trong sân",
+            "Tập đổi hướng nhanh qua các cọc thấp",
+            "Chọn lối băng qua công viên ít đông người"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Sắp thẻ lệnh để nhân vật vượt mê lộ",
+            "Luyện tư thế đạp xe tại chỗ đúng nhịp",
+            "Đọc biển chỉ đường ở khu sinh hoạt chung"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Nghĩ cách báo lỗi rõ cho máy giữ xe",
+            "Học bước né đối thủ trong môn đối kháng",
+            "Tìm đường nối nhà thi đấu với thư viện"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Tạo bảng nhiệm vụ ngày hội theo cấp độ",
+            "Tập bật nhảy chạm dây treo thấp",
+            "So sánh hai tuyến đi qua cầu đi bộ"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "SPORTS_HEALTH",
+            "TRAVEL_PLACES"
+          ],
+          "statements": [
+            "Vẽ màn thưởng cho trò chạy vượt dốc",
+            "Rèn sải chân dài hơn khi đi bộ nhanh",
+            "Đánh dấu điểm nghỉ gần suối trên sơ đồ"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Thử đọc lời bình cho trận đấu của trường",
+            "Học cách xoạc chân nhẹ để đỡ bóng",
+            "Quan sát ai giúp đội giữ tinh thần tốt"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Vẽ huy hiệu cho câu lạc bộ cổ vũ",
+            "Tập ném vòng trúng cọc từ nhiều khoảng cách",
+            "Nghe bạn kể cách kết bạn trong đội mới"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Chọn bài hát cổ vũ cho ngày thi đấu",
+            "Rèn bước chạy tiếp cận khi đá cầu xa",
+            "Tìm hiểu vì sao vài nhóm phối hợp rất ăn ý"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Ghép cảnh cho video điểm lại giải đấu",
+            "Tập giữ trọng tâm khi đổi hướng gấp",
+            "Hỏi điều gì khiến bạn thích sinh hoạt nhóm"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "ENTERTAINMENT_MEDIA",
+            "SPORTS_HEALTH",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Viết mô tả hấp dẫn cho buổi biểu diễn võ",
+            "Luyện nhịp tay chân khi tập thể dục theo nhạc",
+            "Ghi lại cách lớp động viên người đang buồn"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    },
+    {
+      "candidates": [
+        {
+          "probability": 0.24,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "TRAVEL_PLACES",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Sắp sơ đồ bàn cho trò chơi chiến thuật giấy",
+            "Chọn đường ghé ba điểm trong một buổi",
+            "Hỏi bạn thích đi khám phá cùng ai nhất"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.22,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "TRAVEL_PLACES",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Vẽ biểu tượng cho bản đồ chỉ lối trong trường",
+            "Tìm vị trí yên tĩnh để ngồi ngắm phố",
+            "Quan sát cách nhóm quyết định điểm hẹn chung"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.2,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "TRAVEL_PLACES",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Tạo mật thư bằng hình cho cuộc dạo tìm dấu",
+            "So sánh lối đi dọc hồ với lối qua vườn",
+            "Nghe bạn kể chuyến đi giúp thân hơn"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.18,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "TRAVEL_PLACES",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Nghĩ luật chia lượt cho trò bàn cờ tự vẽ",
+            "Đọc sơ đồ tầng của trung tâm triển lãm",
+            "Tìm hiểu ai thường đề xuất kế hoạch chung"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        },
+        {
+          "probability": 0.16,
+          "dimension_per_statement": [
+            "TECH_GAMING",
+            "TRAVEL_PLACES",
+            "PEOPLE_SOCIETY"
+          ],
+          "statements": [
+            "Sắp biểu tượng chỉ vật cản trên mê cung giấy",
+            "Chọn nơi dừng chân có gió mát nhất",
+            "Ghi chú cách các bạn rủ nhau tham gia"
+          ],
+          "desirability_check": {
+            "balanced": true,
+            "note": "Ba hoạt động đều quen thuộc và tích cực."
+          }
+        }
+      ]
+    }
+  ]
+}

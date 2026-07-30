@@ -5,6 +5,7 @@ accumulation and turn processing are delegated to their turn-scoped components.
 """
 
 import logging
+import math
 from typing import Any, Dict, List, Optional
 
 from infra.database import archive_store
@@ -41,6 +42,7 @@ class QuestionSession:
         self.graph = graph or build_text_followup_graph()
         self.turn_order = 1
         self.turns: List[Dict[str, Any]] = []
+        self.speech_budget_elapsed_seconds = 0.0
         self.transcript = TranscriptAccumulator()
 
     @classmethod
@@ -82,6 +84,15 @@ class QuestionSession:
         self._apply_resume_state(resume_state)
 
     def _apply_resume_state(self, resume_state: Dict[str, Any]) -> None:
+        elapsed_seconds = resume_state.get("speech_budget_elapsed_seconds")
+        if isinstance(elapsed_seconds, (int, float)) and math.isfinite(
+            elapsed_seconds
+        ):
+            self.speech_budget_elapsed_seconds = max(
+                self.speech_budget_elapsed_seconds,
+                float(elapsed_seconds),
+            )
+
         turns = resume_state.get("turns") or []
         if not turns:
             return

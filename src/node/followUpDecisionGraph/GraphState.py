@@ -58,6 +58,9 @@ class FollowUpGraphState(TypedDict, total=False):
     # words the Speech SDK sometimes garbles into nonsense English, e.g. "banh MI" instead of
     # "bánh mì"). See archive_store.persist_realtime_transcript / exam_consumer.py.
     realtime_transcripts: Annotated[List[Dict[str, Any]], add]
+    # Total student speaking time already consumed for this question. WPF checkpoints this
+    # while a turn is active so closing and reopening the app cannot reset MaxResponseSeconds.
+    speech_budget_elapsed_seconds: float
     signals: Dict[str, Any]
     edge_case_handled: bool
     decision: Dict[str, Any]

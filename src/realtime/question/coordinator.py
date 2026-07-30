@@ -1,6 +1,7 @@
 """Owns the active question session for one realtime attempt connection."""
 
 import logging
+import math
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
@@ -112,6 +113,29 @@ class QuestionSessionCoordinator:
             )
             return None
         return await self.turn_processor.process(self.active_session, message)
+
+    async def checkpoint_speech_budget(self, message: Dict[str, Any]) -> None:
+        session = self.active_session
+        if session is None or message.get("answer_id") != session.answer_id:
+            return
+
+        try:
+            elapsed_seconds = float(message.get("elapsed_seconds"))
+        except (TypeError, ValueError):
+            return
+        if not math.isfinite(elapsed_seconds):
+            return
+
+        elapsed_seconds = max(0.0, elapsed_seconds)
+        if elapsed_seconds <= session.speech_budget_elapsed_seconds:
+            return
+
+        session.speech_budget_elapsed_seconds = elapsed_seconds
+        await archive_store.persist_speech_budget_elapsed(
+            session.archive_graph,
+            session.answer_id,
+            elapsed_seconds,
+        )
 
     async def resume(self, message: Dict[str, Any]) -> ResumeResult:
         answer_id = message.get("answer_id")

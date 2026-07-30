@@ -30,6 +30,34 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/realtime", tags=["Realtime"])
 
 
+def _elapsed_speech_seconds(resume_state: dict | None) -> float:
+    state = resume_state or {}
+    durations_by_turn: dict[int, float] = {}
+    entries = [
+        *(state.get("turns") or []),
+        *(state.get("realtime_transcripts") or []),
+    ]
+    for entry in entries:
+        try:
+            turn_order = int(entry.get("turn_order"))
+            duration = max(0.0, float(entry.get("duration_seconds") or 0))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        durations_by_turn[turn_order] = max(
+            durations_by_turn.get(turn_order, 0.0),
+            duration,
+        )
+
+    try:
+        checkpointed = max(
+            0.0,
+            float(state.get("speech_budget_elapsed_seconds") or 0),
+        )
+    except (TypeError, ValueError):
+        checkpointed = 0.0
+    return max(checkpointed, sum(durations_by_turn.values()))
+
+
 @router.get("/attempts/{exam_attempt_id}/current-answer")
 async def get_current_answer(request: Request, exam_attempt_id: str):
     """Which answer_id (question) exam_attempt_id was last on, per
@@ -59,6 +87,7 @@ async def get_attempt_resume_state(
         answer_id,
     )
     turns = (resume_state or {}).get("turns") or []
+    elapsed_speech_seconds = _elapsed_speech_seconds(resume_state)
     if not turns:
         return {
             "answerId": answer_id,
@@ -66,6 +95,7 @@ async def get_attempt_resume_state(
             "turnOrder": 1,
             "activePromptText": None,
             "hasFollowUp": False,
+            "elapsedSpeechSeconds": elapsed_speech_seconds,
         }
 
     turn_order = max(int(turn.get("turn_order") or 0) for turn in turns) + 1
@@ -83,6 +113,7 @@ async def get_attempt_resume_state(
         "turnOrder": turn_order,
         "activePromptText": active_prompt_text,
         "hasFollowUp": True,
+        "elapsedSpeechSeconds": elapsed_speech_seconds,
     }
 
 

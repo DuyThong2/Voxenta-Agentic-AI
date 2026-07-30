@@ -56,6 +56,7 @@ class QuestionSessionCoordinator:
             else None
         )
         language = message.get("language", "en-US")
+        remaining_graded_seconds = message.get("remaining_graded_seconds")
 
         self.active_session = QuestionSession(
             answer_id=answer_id,
@@ -64,6 +65,7 @@ class QuestionSessionCoordinator:
             question=question,
             prompt_text=prompt_text,
             language=language,
+            remaining_graded_seconds=remaining_graded_seconds,
             archive_graph=self.archive_graph,
             graph=self.text_followup_graph,
         )
@@ -74,6 +76,7 @@ class QuestionSessionCoordinator:
             paper_item_id=paper_item_id,
             language=language,
             prompt_text=prompt_text,
+            remaining_graded_seconds=remaining_graded_seconds,
         )
         await archive_store.set_current_answer_id(
             self.archive_graph,

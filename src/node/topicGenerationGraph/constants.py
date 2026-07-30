@@ -1,0 +1,4 @@
+import os
+
+MODEL = os.getenv("PRACTICE_GENERATION_MODEL", "gpt-5.4")
+DUPLICATE_THRESHOLD = 0.90

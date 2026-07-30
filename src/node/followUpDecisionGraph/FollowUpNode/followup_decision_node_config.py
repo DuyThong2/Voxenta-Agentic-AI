@@ -305,6 +305,19 @@ def followup_decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "followup_decision_error": "current_turn is required for followup_decision_node",
         }
 
+    remaining_graded_seconds = state.get("remaining_graded_seconds")
+    if (
+        remaining_graded_seconds is not None
+        and int(remaining_graded_seconds) <= 0
+    ):
+        return {
+            "followup_decision_result": {
+                "should_continue": False,
+                "next_prompt_text": None,
+                "reason": "graded_budget_exhausted",
+            },
+        }
+
     signals = state.get("signals") or {}
     if signals.get("hard_stop"):
         return {

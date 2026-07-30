@@ -45,6 +45,8 @@ class AttemptConnection:
             self._speak(self.questions.present_question(message))
         elif message_type == "turn_end":
             await self._handle_turn_end(message)
+        elif message_type == "speech_budget_progress":
+            await self.questions.checkpoint_speech_budget(message)
         elif message_type == "resume":
             await self._handle_resume(message)
         elif message_type == "exam_end":

@@ -134,6 +134,16 @@ async def get_current_answer_id(archive_graph, exam_attempt_id: str) -> str | No
     return (state.values or {}).get("current_answer_id")
 
 
+async def persist_speech_budget_elapsed(
+    archive_graph,
+    answer_id: str,
+    elapsed_seconds: float,
+) -> None:
+    await aupdate_state(archive_graph, archive_config(answer_id), {
+        "speech_budget_elapsed_seconds": max(0.0, elapsed_seconds),
+    })
+
+
 async def persist_realtime_transcript(
     archive_graph,
     answer_id: str,
@@ -242,4 +252,7 @@ async def get_resume_state(archive_graph, answer_id: str) -> dict | None:
         "language": values.get("language"),
         "prompt_text": values.get("prompt_text"),
         "realtime_transcripts": list(values.get("realtime_transcripts") or []),
+        "speech_budget_elapsed_seconds": values.get(
+            "speech_budget_elapsed_seconds"
+        ),
     }

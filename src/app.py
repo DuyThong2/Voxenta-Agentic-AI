@@ -63,6 +63,7 @@ from controller import router
 from controller.webrtc import close_all_connections
 from realtime._legacy_avatar.avatar_webrtc import close_all_connections as close_all_avatar_connections
 from realtime.attempt.registry import close_all_attempt_connections
+from realtime.practice_attempt.registry import close_all_practice_attempt_connections
 from node.followUpDecisionGraph.graphConfig import build_archive_graph, build_text_followup_graph
 from node.evalGraph.graphConfig import build_graph
 from config.kafka_config import settings
@@ -144,6 +145,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await close_all_attempt_connections()
+        await close_all_practice_attempt_connections()
         await close_all_connections()
         await close_all_avatar_connections()
         consumer_task.cancel()

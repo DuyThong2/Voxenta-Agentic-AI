@@ -8,6 +8,7 @@ from controller.realtime_controller import router as realtime_router
 from controller.avatar_webrtc_controller import router as avatar_webrtc_router
 from controller.practice_selection_controller import router as practice_selection_router
 from controller.practice_generation_controller import router as practice_generation_router
+from controller.practice_realtime_controller import router as practice_realtime_router
 
 
 router = APIRouter()
@@ -19,3 +20,4 @@ router.include_router(realtime_router)
 router.include_router(avatar_webrtc_router)
 router.include_router(practice_selection_router)
 router.include_router(practice_generation_router)
+router.include_router(practice_realtime_router)

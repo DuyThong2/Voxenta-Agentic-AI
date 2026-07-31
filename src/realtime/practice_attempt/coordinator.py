@@ -197,6 +197,13 @@ class PracticeQuestionSessionCoordinator:
             if recovered is None and session is not None
             else None
         )
+        if prompt_to_speak:
+            # Was computed but never actually reached the client before -- carry it in the
+            # ack itself so Flutter can re-send present_question with it (see
+            # PracticeAttemptConnection._handle_resume and practice_session_screen.dart's
+            # _handleResumeAck), the same "client always re-presents, server never
+            # auto-speaks" rule as every other transition.
+            acknowledgement["prompt_to_speak"] = prompt_to_speak
         return ResumeResult(
             acknowledgement=acknowledgement,
             recovered_decision=recovered_decision,

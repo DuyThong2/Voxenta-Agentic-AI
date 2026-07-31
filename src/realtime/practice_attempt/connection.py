@@ -91,7 +91,20 @@ class PracticeAttemptConnection:
         if message_type == "question_start":
             await self._handle_question_start(message)
         elif message_type == "present_question":
+            # Discard whatever accumulated in the mic buffer while the student was reading
+            # feedback and deciding to tap "Tiếp tục" (audio keeps streaming continuously,
+            # see practice_session_screen.dart) -- otherwise that dead air/ambient noise
+            # would prepend onto the NEXT turn's WAV once turn_end fires.
+            self._turn_audio_buffer.clear()
             self._speak(self.questions.present_question(message))
+        elif message_type == "ready_to_answer":
+            # Client-local signal that TTS actually finished speaking the prompt (see
+            # _onAiSpeechDone in practice_session_screen.dart) -- Python has no other way to
+            # know that moment, so the buffer clear at present_question above still leaves the
+            # whole TTS-playback duration (silence/ambient noise, possibly echo on
+            # speaker+mic devices) sitting at the front of the WAV. Re-clearing here shrinks
+            # that window down to just the (short, unavoidable) barge-in reaction latency.
+            self._turn_audio_buffer.clear()
         elif message_type == "turn_end":
             await self._handle_turn_end(message)
         elif message_type == "speech_budget_progress":
@@ -156,15 +169,14 @@ class PracticeAttemptConnection:
             upload_task = asyncio.create_task(
                 self._upload_turn_audio(audio_path, current_turn.get("turn_order"))
             )
-            next_question_task = (
-                asyncio.create_task(self._resolve_and_push_next_question())
-                if not should_continue
-                else None
-            )
 
             corrections, pronunciation_result = await correction_task
             audio_url = await upload_task
-            await self._submit_turn(
+            # Only resolve/push the next MAIN question -- which mutates the paper on Java's
+            # side -- once the CURRENT turn is confirmed saved (recorded + quota-consumed).
+            # Firing it concurrently with _submit_turn let the session silently advance past
+            # a turn that was never recorded (network hiccup or quota exceeded).
+            submit_status = await self._submit_turn(
                 session, corrections, pronunciation_result, audio_url,
                 question_complete=not should_continue,
             )
@@ -177,8 +189,20 @@ class PracticeAttemptConnection:
                 }
             )
 
-            if next_question_task is not None:
-                await next_question_task
+            if submit_status in ("quota_exceeded", "failed"):
+                # Both are unrecoverable mid-conversation: Java's paper/quota state and the
+                # client's UI have now diverged (this turn is unsaved or rejected), so letting
+                # the student tap "Tiếp tục" as if nothing happened would silently continue past
+                # data loss. End the session cleanly instead -- same shape as budget_exhausted/
+                # pool_exhausted (mục 2.9), just a different reason for the summary screen to
+                # explain.
+                await self.socket.send_json(
+                    {"type": "practice_session_ended", "reason": submit_status}
+                )
+                return
+
+            if not should_continue:
+                await self._resolve_and_push_next_question()
         finally:
             if audio_path:
                 Path(audio_path).unlink(missing_ok=True)
@@ -230,7 +254,10 @@ class PracticeAttemptConnection:
         audio_url: Optional[str],
         *,
         question_complete: bool,
-    ) -> None:
+    ) -> str:
+        """Returns "ok", "quota_exceeded" (Java's ConsumeQuotaUseCase rejected it, HTTP 409),
+        or "failed" (anything else) -- caller (_after_turn) uses this to decide whether it's
+        safe to keep advancing the session."""
         current_turn = session.turns[-1]
         payload = {
             "questionId": session.question_id,
@@ -255,14 +282,44 @@ class PracticeAttemptConnection:
                 for c in corrections
             ],
         }
-        try:
-            await practice_session_client.submit_turn(self.practice_session_id, payload)
-        except httpx.HTTPError:
-            logger.exception(
-                "[practice_attempt_connection] submit_turn failed practice_session_id=%s answer_id=%s",
-                self.practice_session_id,
-                session.answer_id,
-            )
+        # A turn that fails to save is unrecoverable client-side (the recorded audio/corrections
+        # already got handed off) -- retry transient failures here, server-to-server, rather than
+        # push the problem to the student. 409 (quota exceeded) is a definitive business
+        # rejection, not transient, so it's never retried.
+        attempts = 3
+        for attempt in range(1, attempts + 1):
+            try:
+                await practice_session_client.submit_turn(self.practice_session_id, payload)
+                return "ok"
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 409:
+                    logger.warning(
+                        "[practice_attempt_connection] quota exceeded practice_session_id=%s "
+                        "answer_id=%s",
+                        self.practice_session_id,
+                        session.answer_id,
+                    )
+                    return "quota_exceeded"
+                logger.exception(
+                    "[practice_attempt_connection] submit_turn failed (attempt %d/%d) "
+                    "practice_session_id=%s answer_id=%s",
+                    attempt,
+                    attempts,
+                    self.practice_session_id,
+                    session.answer_id,
+                )
+            except httpx.HTTPError:
+                logger.exception(
+                    "[practice_attempt_connection] submit_turn failed (attempt %d/%d) "
+                    "practice_session_id=%s answer_id=%s",
+                    attempt,
+                    attempts,
+                    self.practice_session_id,
+                    session.answer_id,
+                )
+            if attempt < attempts:
+                await asyncio.sleep(1.5 * attempt)
+        return "failed"
 
     async def _resolve_and_push_next_question(self) -> None:
         push_result = await self.questions.resolve_and_push_next_question()
@@ -282,8 +339,22 @@ class PracticeAttemptConnection:
     async def _handle_resume(self, message: dict) -> None:
         result = await self.questions.resume(message)
         await self.socket.send_json(result.acknowledgement)
-        # No auto-speak on resume either (click-to-continue) -- the client re-sends
-        # present_question itself once it has redrawn the UI for the resumed prompt.
+        # No auto-speak on resume either (click-to-continue) -- the ack carries
+        # prompt_to_speak (if any) for the client to re-send present_question itself, same as
+        # every other transition.
+        if result.recovered_decision is not None:
+            # A turn_end WAS archived before the connection dropped, but this connection
+            # object (and its in-memory _turn_audio_buffer) died with it before _after_turn
+            # ever ran -- correction/submit/resolve-next-question never happened for that
+            # turn. The raw audio is unrecoverable (it lived only in the dead connection's
+            # buffer), so re-run _after_turn with empty audio: _write_turn_wav/
+            # _run_correction/_upload_turn_audio all already no-op cleanly on no audio (see
+            # their own guards), but the turn still gets recorded/quota-consumed/graded from
+            # its transcript, and the next MAIN question still gets resolved if needed --
+            # rather than silently stalling the session forever.
+            asyncio.create_task(
+                self._after_turn(self.questions.active_session, result.recovered_decision, b"")
+            )
 
     def _speak(self, text: Optional[str], *, slow: bool = False) -> None:
         self._utterance_sequence += 1

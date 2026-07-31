@@ -14,7 +14,14 @@ logger = logging.getLogger(__name__)
 
 _JAVA_BASE_URL = os.environ.get("VOX_JAVA_BASE_URL", "http://localhost:8080")
 _INTERNAL_SECRET = os.environ.get("PRACTICE_INTERNAL_SECRET", "")
-_NEXT_QUESTION_TIMEOUT_SECONDS = 8.0
+# Must comfortably exceed Java's worst-case latency for this call, not just the common case:
+# ResolveNextPracticeQuestionUseCase can fall through to bậc 4 (online LLM generation, up to
+# PracticeGenerationProperties.onlineBudget = 20s) AND holds a FOR UPDATE row lock on the
+# session for the whole transaction. A retry that fires while attempt 1 is still mid-generation
+# just blocks on that same lock for the remainder of attempt 1's run -- an 8s budget left almost
+# no room for that, causing spurious next_question_call_failed / session-ends on the completely
+# normal "brand new topic, question bank still empty" cold-start path.
+_NEXT_QUESTION_TIMEOUT_SECONDS = 30.0
 _SUBMIT_TURN_TIMEOUT_SECONDS = 8.0
 _UPLOAD_URL_TIMEOUT_SECONDS = 5.0
 _S3_PUT_TIMEOUT_SECONDS = 15.0
@@ -28,10 +35,25 @@ async def request_next_question(practice_session_id: str) -> dict:
     """POST /internal/practice-sessions/{id}/next-question -- returns Java's
     {"message":..., "data": {"status": "ok"|"no_more_questions", "reason": ..., "question": {...}}}.
     Raises httpx.HTTPStatusError/TimeoutException on failure -- caller decides how to treat that
-    (see PracticeQuestionSessionCoordinator.resolve_and_push_next_question)."""
+    (see PracticeQuestionSessionCoordinator.resolve_and_push_next_question).
+
+    Retries once on a timeout specifically: Java's ResolveNextPracticeQuestionUseCase is
+    @Transactional and may have already committed a new paper item by the time the client-side
+    timeout fires (slow network/DB, not a Java-side failure). A retry is safe because that use
+    case is now idempotent -- if the previous call's item was never delivered to the student, a
+    retry returns that SAME item instead of picking a new one (see the "existsResponse" check in
+    ResolveNextPracticeQuestionUseCase.execute), so this can't create an orphaned duplicate."""
     url = f"{_JAVA_BASE_URL}/internal/practice-sessions/{practice_session_id}/next-question"
     async with httpx.AsyncClient(timeout=_NEXT_QUESTION_TIMEOUT_SECONDS) as client:
-        response = await client.post(url, headers=_headers())
+        try:
+            response = await client.post(url, headers=_headers())
+        except httpx.TimeoutException:
+            logger.warning(
+                "[practice_session_client] next-question timed out, retrying once "
+                "practice_session_id=%s",
+                practice_session_id,
+            )
+            response = await client.post(url, headers=_headers())
         response.raise_for_status()
         return response.json()["data"]
 

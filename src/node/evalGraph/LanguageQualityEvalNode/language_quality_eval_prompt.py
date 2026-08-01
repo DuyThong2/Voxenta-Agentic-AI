@@ -77,6 +77,12 @@ For each criterion:
 - `weakness_labels` may only use that criterion's allowed taxonomy and may be empty.
 - `recommendation_tag` must be a short stable tag, or an empty string when no targeted practice
   is needed.
+- `matched_band_code` is INDEPENDENT of the score. The score measures how fully the answer
+  satisfies the TARGET band's descriptor. `matched_band_code` states which band's descriptor the
+  answer ACTUALLY matches best.
+- You MAY and SHOULD return a band WEAKER or STRONGER than the target when the evidence points
+  there. Returning the target band for every answer defeats the purpose of this field.
+- Use only band codes listed in that criterion's band ladder.
 - Evidence and labels for one criterion must not be reused automatically for another criterion.
 
 ## Output
@@ -93,7 +99,8 @@ Return only one valid JSON object with this exact top-level shape:
     "note": "<brief grammar-only explanation>",
     "evidence_spans": ["<exact student span>"],
     "weakness_labels": ["<grammar label>"],
-    "recommendation_tag": "<short tag or empty string>"
+    "recommendation_tag": "<short tag or empty string>",
+    "matched_band_code": "<code from the grammar band ladder>"
   },
   "vocabulary": {
     "score": <number within the vocabulary framework range>,
@@ -104,7 +111,8 @@ Return only one valid JSON object with this exact top-level shape:
     "note": "<brief vocabulary-only explanation>",
     "evidence_spans": ["<exact student span>"],
     "weakness_labels": ["<vocabulary label>"],
-    "recommendation_tag": "<short tag or empty string>"
+    "recommendation_tag": "<short tag or empty string>",
+    "matched_band_code": "<code from the vocabulary band ladder>"
   },
   "coherence": {
     "score": <number within the coherence framework range>,
@@ -117,7 +125,8 @@ Return only one valid JSON object with this exact top-level shape:
     "note": "<brief coherence-only explanation including relevance category>",
     "evidence_spans": ["<exact student span>"],
     "weakness_labels": ["<coherence label>"],
-    "recommendation_tag": "<short tag or empty string>"
+    "recommendation_tag": "<short tag or empty string>",
+    "matched_band_code": "<code from the coherence band ladder>"
   }
 }
 

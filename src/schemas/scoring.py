@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -13,6 +13,10 @@ class CriterionScore(_CamelMessage):
     subscores: Dict[str, Any] = Field(default_factory=dict)
     note: str = ""
     suggestion: str = ""
+    weakness_labels: List[str] = Field(default_factory=list)
+    evidence_spans: List[str] = Field(default_factory=list)
+    recommendation_tag: str = ""
+    matched_band_code: str = ""
 
 
 class CriteriaScores(BaseModel):

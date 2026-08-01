@@ -40,6 +40,7 @@ class FollowUpGraphState(TypedDict, total=False):
     # reducer) -- each write simply overwrites the previous one, which is
     # exactly the "latest pending prompt" semantics wanted.
     active_prompt_text: Optional[str]
+    remaining_graded_seconds: Optional[int]
     current_turn: Dict[str, Any]
     turns: Annotated[List[Dict[str, Any]], add]
     published_turn_orders: Annotated[List[int], add]

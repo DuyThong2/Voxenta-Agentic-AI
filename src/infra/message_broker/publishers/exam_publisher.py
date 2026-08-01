@@ -1,3 +1,4 @@
+import json
 import logging
 
 from config.kafka_config import settings
@@ -48,6 +49,46 @@ async def publish_exam_attempt_evaluation_failed(
         answer_id=event.answer_id,
         topic=settings.KAFKA_EXAM_COMPLETED_TOPIC,
     )
+
+
+async def publish_practice_attempt_evaluation_completed(
+    event: ExamAttemptEvaluationCompletedEvent,
+) -> None:
+    producer = await connection.get_producer()
+    body, session_id = practice_event_body(
+        event,
+        "PracticeAttemptEvaluationCompleted",
+    )
+    await producer.send_and_wait(
+        settings.KAFKA_PRACTICE_COMPLETED_TOPIC,
+        json.dumps(body).encode(),
+        key=session_id.encode(),
+    )
+
+
+async def publish_practice_attempt_evaluation_failed(
+    event: ExamAttemptEvaluationFailedEvent,
+) -> None:
+    producer = await connection.get_producer()
+    body, session_id = practice_event_body(
+        event,
+        "PracticeAttemptEvaluationFailed",
+    )
+    await producer.send_and_wait(
+        settings.KAFKA_PRACTICE_COMPLETED_TOPIC,
+        json.dumps(body).encode(),
+        key=session_id.encode(),
+    )
+
+
+def practice_event_body(event, event_type: str) -> tuple[dict, str]:
+    body = event.model_dump(by_alias=True)
+    session_id = body.pop("examAttemptId")
+    body["practiceSessionId"] = session_id
+    body["practiceResponseId"] = body.pop("answerId")
+    body["practiceQuestionId"] = body.pop("questionId")
+    body["eventType"] = event_type
+    return body, session_id
 
 
 async def publish_answer_turns_recorded(

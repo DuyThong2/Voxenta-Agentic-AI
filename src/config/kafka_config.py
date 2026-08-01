@@ -29,11 +29,14 @@ class KafkaSettings(BaseSettings):
     # phân biệt bằng EventEnvelope.event_type (xem src/dtos/), không cần thêm topic DLQ riêng.
     KAFKA_EXAM_REQUEST_TOPIC: str = "exam-attempt-evaluation-requested"
     KAFKA_EXAM_COMPLETED_TOPIC: str = "exam-attempt-evaluation-completed"
+    KAFKA_PRACTICE_REQUEST_TOPIC: str = "practice-attempt-evaluation-requested"
+    KAFKA_PRACTICE_COMPLETED_TOPIC: str = "practice-attempt-evaluation-completed"
     KAFKA_ANSWER_TURN_TOPIC: str = "answer-turns-recorded"
     KAFKA_QUESTION_ASSET_ANALYSIS_REQUEST_TOPIC: str = "question-asset-analysis-requested"
     KAFKA_QUESTION_ASSET_ANALYSIS_COMPLETED_TOPIC: str = "question-asset-analysis-completed"
     KAFKA_EXAM_FORCE_END_TOPIC: str = "exam-attempt-force-end-requested"
     KAFKA_EXAM_CONSUMER_GROUP: str = "exam-attempt-evaluation"
+    KAFKA_PRACTICE_CONSUMER_GROUP: str = "practice-attempt-evaluation"
     KAFKA_EXAM_CONSUMER_CONCURRENCY: int = 4
     KAFKA_EXAM_FORCE_END_CONSUMER_GROUP: str = "exam-attempt-force-end"
     KAFKA_QUESTION_ASSET_ANALYSIS_CONSUMER_GROUP: str = "question-asset-analysis"

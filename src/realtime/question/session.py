@@ -26,6 +26,7 @@ class QuestionSession:
         question: Optional[QuestionContext],
         prompt_text: Optional[str],
         language: str,
+        remaining_graded_seconds: Optional[int],
         archive_graph: Any,
         graph=None,
     ) -> None:
@@ -36,6 +37,7 @@ class QuestionSession:
         self.prompt_text = prompt_text
         self.current_prompt_text = prompt_text
         self.language = language
+        self.remaining_graded_seconds = remaining_graded_seconds
         self.archive_graph = archive_graph
         self.graph = graph or build_text_followup_graph()
         self.turn_order = 1
@@ -63,6 +65,9 @@ class QuestionSession:
             question=resume_state.get("question"),
             prompt_text=resume_state.get("prompt_text"),
             language=resume_state.get("language") or "en-US",
+            remaining_graded_seconds=resume_state.get(
+                "remaining_graded_seconds"
+            ),
             archive_graph=archive_graph,
             graph=graph,
         )
@@ -135,6 +140,7 @@ class QuestionSession:
             "turn_order": self.turn_order,
             "prompt_text": self.prompt_text,
             "active_prompt_text": self.current_prompt_text or self.prompt_text,
+            "remaining_graded_seconds": self.remaining_graded_seconds,
             "current_turn": current_turn,
             "turns": self.turns,
             "status": "idle",

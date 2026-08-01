@@ -62,6 +62,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "ipykernel>=6.29.5",
+    "pytest>=8.3.0",
 ]
 
 [tool.uv.sources]
@@ -70,6 +71,9 @@ dev = [
 # avatar pipeline, but kept since it's a known-working pin, not worth re-churning without reason.
 torch = [{ index = "pytorch-cu118" }]
 torchvision = [{ index = "pytorch-cu118" }]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
 
 [[tool.uv.index]]
 name = "pytorch-cu118"

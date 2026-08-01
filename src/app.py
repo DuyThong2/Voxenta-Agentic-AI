@@ -63,6 +63,7 @@ from controller import router
 from controller.webrtc import close_all_connections
 from realtime._legacy_avatar.avatar_webrtc import close_all_connections as close_all_avatar_connections
 from realtime.attempt.registry import close_all_attempt_connections
+from realtime.practice_attempt.registry import close_all_practice_attempt_connections
 from node.followUpDecisionGraph.graphConfig import build_archive_graph, build_text_followup_graph
 from node.evalGraph.graphConfig import build_graph
 from config.kafka_config import settings
@@ -123,6 +124,18 @@ async def lifespan(app: FastAPI):
         for index in range(settings.KAFKA_EXAM_CONSUMER_CONCURRENCY)
     ]
     app.state.exam_consumer_tasks = exam_consumer_tasks
+    practice_consumer_tasks = [
+        asyncio.create_task(
+            start_exam_attempt_consumer(
+                app,
+                instance_label=f"practice-{index}",
+                request_topic=settings.KAFKA_PRACTICE_REQUEST_TOPIC,
+                consumer_group=settings.KAFKA_PRACTICE_CONSUMER_GROUP,
+            )
+        )
+        for index in range(settings.KAFKA_EXAM_CONSUMER_CONCURRENCY)
+    ]
+    app.state.practice_consumer_tasks = practice_consumer_tasks
     force_end_consumer_task = asyncio.create_task(start_exam_attempt_force_end_consumer(app))
     app.state.force_end_consumer_task = force_end_consumer_task
     asset_analysis_consumer_task = asyncio.create_task(start_question_asset_analysis_consumer(app))
@@ -132,10 +145,13 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         await close_all_attempt_connections()
+        await close_all_practice_attempt_connections()
         await close_all_connections()
         await close_all_avatar_connections()
         consumer_task.cancel()
         for task in exam_consumer_tasks:
+            task.cancel()
+        for task in practice_consumer_tasks:
             task.cancel()
         force_end_consumer_task.cancel()
         asset_analysis_consumer_task.cancel()

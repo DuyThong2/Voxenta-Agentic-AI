@@ -94,6 +94,7 @@ async def persist_question_snapshot(
     paper_item_id,
     language: str,
     prompt_text,
+    remaining_graded_seconds=None,
 ) -> None:
     """Durably snapshots the question payload for answer_id, once, right when
     AttemptConnection._handle_question_start first receives it. This is what
@@ -109,6 +110,7 @@ async def persist_question_snapshot(
         "paper_item_id": paper_item_id,
         "language": language,
         "prompt_text": prompt_text,
+        "remaining_graded_seconds": remaining_graded_seconds,
     })
 
 

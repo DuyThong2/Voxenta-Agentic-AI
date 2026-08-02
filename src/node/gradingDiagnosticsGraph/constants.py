@@ -1,0 +1,4 @@
+import os
+
+MODEL = os.getenv("GRADING_DIAGNOSTICS_MODEL", "gpt-5.4")
+MAX_EVIDENCE_SPAN_LENGTH = 200

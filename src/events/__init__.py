@@ -30,7 +30,6 @@ from events.exam_attempt_evaluation_shared import (
     TurnDetail,
     TurnInput,
 )
-from events.paper_ingestion import PaperIngestionCompletedMessage, PaperIngestionMessage
 
 __all__ = [
     "AnswerTurnPayload",
@@ -51,6 +50,4 @@ __all__ = [
     "PronunciationOverallScores",
     "TurnDetail",
     "TurnInput",
-    "PaperIngestionMessage",
-    "PaperIngestionCompletedMessage",
 ]

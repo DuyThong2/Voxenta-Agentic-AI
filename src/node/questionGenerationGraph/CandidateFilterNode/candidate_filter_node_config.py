@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 from node.questionGenerationGraph.constants import (
     ALLOWED_SUB_ATTRIBUTES,
     DUPLICATE_THRESHOLD,
@@ -73,6 +75,10 @@ def candidate_filter_node(
     cosines = []
     topic_name = state["topic"][0]
     tokens = state["token_calls"]
+
+    # Lọc bằng luật (thuần CPU) trước, rồi mới nhúng -- ứng viên trượt luật
+    # không tốn call embedding nào.
+    passed_rules = []
     for candidate in state["candidates"]:
         violations = rule_violations(candidate)
         if violations:
@@ -87,9 +93,23 @@ def candidate_filter_node(
                 }
             )
             continue
+        passed_rules.append(candidate)
+
+    # Mỗi ứng viên 1 lượt embed + 1 lượt tra Chroma, hoàn toàn độc lập nhau ->
+    # chạy song song, tổng thời gian bằng lượt chậm nhất thay vì cộng dồn.
+    def _embed_and_score(candidate):
         embedding, token_count = runtime.embed(
             question_embedding_text(topic_name, candidate.prompt_text)
         )
+        return candidate, embedding, token_count, runtime.max_similarity(embedding)
+
+    if passed_rules:
+        with ThreadPoolExecutor(max_workers=len(passed_rules)) as pool:
+            scored = list(pool.map(_embed_and_score, passed_rules))
+    else:
+        scored = []
+
+    for candidate, embedding, token_count, similarity in scored:
         tokens.append(
             TokenCall(
                 role="embedding",
@@ -102,7 +122,6 @@ def candidate_filter_node(
                 response_id="",
             )
         )
-        similarity = runtime.max_similarity(embedding)
         cosines.append(similarity)
         if similarity >= DUPLICATE_THRESHOLD:
             reasons.add("DUPLICATE_COSINE")

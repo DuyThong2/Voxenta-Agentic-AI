@@ -7,8 +7,8 @@ from node.topicGenerationGraph.TopicProposalNode.topic_proposal_prompt import (
 )
 from schemas.topic_generation import (
     TopicProposal,
-    TopicProposalBatch,
     TopicProposalRequest,
+    build_topic_batch_model,
 )
 
 
@@ -33,13 +33,15 @@ def topic_proposal_node(
                 "content": build_topic_proposal_prompt(request),
             },
         ],
-        text_format=TopicProposalBatch,
+        # Schema dựng theo danh mục chiều Java gửi xuống -- model không thể trả về chiều
+        # không tồn tại trong hệ thống.
+        text_format=build_topic_batch_model(request.effective_dimensions()),
     )
     proposals = (
         []
         if response.output_parsed is None
         else enforce_evidence_caps(
-            response.output_parsed.proposals,
+            [_to_open_proposal(item) for item in response.output_parsed.proposals],
             request,
         )
     )
@@ -48,6 +50,23 @@ def topic_proposal_node(
             proposals[: request.max_proposals]
         )
     }
+
+
+def _to_open_proposal(item) -> TopicProposal:
+    """Model động dùng Enum cho interest_dimension -> đổi về str thuần để phần còn lại
+    (và Java) chỉ thấy chuỗi như trước."""
+    dimension = item.interest_dimension
+    return TopicProposal(
+        name=item.name,
+        interest_dimension=str(getattr(dimension, "value", dimension)),
+        curriculum_group=item.curriculum_group,
+        confidence=item.confidence,
+        reason_text=item.reason_text,
+        distinct_from=item.distinct_from,
+        evidence_type=item.evidence_type,
+        evidence_keywords=list(item.evidence_keywords),
+        grounded_in_keyword=item.grounded_in_keyword,
+    )
 
 
 def enforce_evidence_caps(

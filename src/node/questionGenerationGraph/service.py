@@ -33,7 +33,16 @@ def generate_questions(
         request.target_criterion_code,
         request.target_sub_attribute,
     )
-    state = graph.invoke(topic, criterion, request.target_rank)
+    # fast=True: đây là đường ONLINE (Java gọi khi học sinh đang chờ vào phiên).
+    # pipeline.py (nghiên cứu) vẫn gọi graph.invoke mặc định fast=False nên số
+    # liệu đã đo không đổi. Xem constants.FAST_* để biết cắt những gì.
+    state = graph.invoke(
+        topic,
+        criterion,
+        request.target_rank,
+        fast=True,
+        needed=request.count,
+    )
     records = []
     for candidate in state["refined"]:
         if rule_violations(candidate):

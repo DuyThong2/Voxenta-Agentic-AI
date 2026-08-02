@@ -53,12 +53,19 @@ class QuestionGenerationGraph:
         topic: tuple[str, str, str],
         criterion: tuple[str, str | None],
         target_rank: int,
+        *,
+        fast: bool = False,
+        needed: int = 1,
     ) -> QuestionGenerationState:
+        """fast=True: đường online (học sinh đang chờ) -- xem constants.FAST_*.
+        Mặc định False để pipeline nghiên cứu giữ nguyên phương pháp đã đo."""
         return self.compiled.invoke(
             {
                 "topic": topic,
                 "criterion": criterion,
                 "target_rank": target_rank,
+                "fast": fast,
+                "needed": needed,
                 "token_calls": [],
                 "rejected": [],
                 "filter_reasons": set(),

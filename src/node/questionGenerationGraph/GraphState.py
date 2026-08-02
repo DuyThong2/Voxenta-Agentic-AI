@@ -10,6 +10,11 @@ class QuestionGenerationState(TypedDict, total=False):
     topic: tuple[str, str, str]
     criterion: tuple[str, str | None]
     target_rank: int
+    # Đường online (học sinh đang chờ): cắt bớt các bước chỉ phục vụ đo đạc /
+    # đánh bóng. Xem constants.FAST_* để biết chính xác bỏ gì và vì sao.
+    fast: bool
+    # Số câu thực sự cần -- fast mode dừng sửa/chấm ngay khi đã đủ.
+    needed: int
     candidates: list[PracticeQuestionCandidate]
     survivors: list[PracticeQuestionCandidate]
     survivor_embeddings: dict[str, list[float]]

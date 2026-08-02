@@ -13,6 +13,15 @@ def refiner_node(
     state: QuestionGenerationState,
     runtime: QuestionGenerationRuntime,
 ) -> dict:
+    # Refiner chỉ là copy-editing nhẹ trên câu ĐÃ được nhận -- không phải cổng
+    # chất lượng (cổng thật là evaluator + rule_violations chạy lại ở
+    # service.generate_questions). Đường online bỏ hẳn để tiết kiệm 1 lượt gọi.
+    if state.get("fast"):
+        return {
+            "refined": state["live"],
+            "editor_raw": list(state["editor_raw"]),
+        }
+
     refined = []
     raw_calls = list(state["editor_raw"])
     live = state["live"]

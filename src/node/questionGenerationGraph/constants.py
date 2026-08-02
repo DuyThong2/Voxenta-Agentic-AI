@@ -10,6 +10,24 @@ MAX_EDITOR_ROUNDS = 3
 REFINER_BATCH_SIZE = 4
 DUPLICATE_THRESHOLD = 0.92
 
+# --- Chế độ FAST (đường online, học sinh đang chờ) ---------------------------
+# Đường nghiên cứu (pipeline.py) giữ nguyên đầy đủ để không đổi số liệu đã đo.
+# Đường online chỉ cần 1-2 câu dùng được NGAY, nên cắt các bước chỉ phục vụ đo
+# đạc/đánh bóng:
+#   - bỏ hẳn lượt evaluator "grouped" (chỉ sinh comparison_total/different cho
+#     build_summary, không tham gia quyết định nhận/loại câu nào)
+#   - chấm cả lô trong 1 lượt thay vì mỗi câu 1 lượt (3 call -> 1 call)
+#   - effort thấp thay vì cao
+#   - tối đa 1 vòng sửa: đã có 3 ứng viên, câu nào sửa 1 lần chưa đạt thì bỏ,
+#     rẻ hơn nhiều so với cố cứu bằng 2 vòng nữa (mỗi vòng 2 call tuần tự)
+#   - bỏ refiner (chỉ là copy-editing, không phải cổng chất lượng)
+FAST_EDITOR_ROUNDS = 1
+# "medium" chứ không "low": chấm là bước quyết định câu nào tới tay học sinh, hạ
+# hẳn xuống low làm chất lượng trôi thấy rõ. Phần tiết kiệm thời gian lớn đã đến
+# từ việc bỏ lượt grouped + gộp cả lô vào 1 lượt + chạy song song, không cần vắt
+# thêm ở đây.
+FAST_EVALUATOR_EFFORT = "medium"
+
 BAND_LADDER = """SIX-BAND SPEAKING LADDER - KEEP THIS PREFIX EXACT
 1 BAC_1: concrete, immediate personal information; short simple descriptions.
 2 BAC_2: familiar matters; connected basic details with limited reasons.

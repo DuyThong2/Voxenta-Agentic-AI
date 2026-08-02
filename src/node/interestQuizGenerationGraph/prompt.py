@@ -33,6 +33,9 @@ _FEW_SHOT_EXAMPLES = [
 
 
 def build_interest_quiz_prompt(request: InterestQuizItemGenerationRequest) -> str:
+    # Danh mục chiều đến từ bảng interest_dimension bên vox (Java gửi kèm request), không
+    # gắn cứng ở đây -- admin thêm chiều là prompt tự có ngay.
+    dimensions_block = ", ".join(request.effective_dimensions())
     examples_block = "\n".join(
         f"- dimensions={example['dimension_per_statement']}, "
         f"statements={example['statements']}"
@@ -50,8 +53,7 @@ Each item is a triplet of 3 short everyday activities, one per dimension below, 
 which topics a student will find engaging (NOT a career/ability test -- keep activities
 familiar, low-stakes, age-appropriate, in Vietnamese).
 
-Dimensions (each triplet must use 3 DIFFERENT ones): ENTERTAINMENT_MEDIA, TECH_GAMING,
-SPORTS_HEALTH, PEOPLE_SOCIETY, TRAVEL_PLACES, FUTURE_SCIENCE.
+Dimensions (each triplet must use 3 DIFFERENT ones): {dimensions_block}.
 
 Format rules:
 1. Each statement is a short activity, under {MAX_STATEMENT_WORDS} words, in Vietnamese.
@@ -60,6 +62,19 @@ Format rules:
    matching). Explain this balance briefly in desirability_check.
 3. Do NOT repeat or rephrase any statement already listed below.
 4. Generate up to {request.max_items} triplets in this one response.
+5. CRITICAL -- each statement must be an activity the student can picture themselves CHOOSING
+   TO DO, more than once, because they enjoy it. It must NOT be a one-off micro-observation,
+   a physics puzzle, or a riddle. The student answers "which is most/least like me", so a
+   statement they cannot see themselves in is useless.
+   BAD (do not produce anything like these -- they are curiosities, not interests):
+     - "Xem vì sao bánh quy mềm đi khi để hở"
+     - "So sánh vì sao ly kim loại lạnh lâu hơn"
+     - "Thử đo bóng đổ để đoán giờ ngoài sân"
+     - "Đoán lý do một tin nhắn dễ bị hiểu sai"
+   Avoid openers of the form "Xem vì sao...", "So sánh vì sao...", "Đoán lý do..." entirely.
+   GOOD shape: a concrete thing the student does or makes with/for other people, a hobby, or a
+   recurring task they would pick up willingly -- e.g. "Dựng video ngắn cho câu lạc bộ",
+   "Hướng dẫn bạn mới cách chơi", "Lên lịch tập cho cả nhóm".
 
 Examples (style/length/dimension-set to match, do NOT copy verbatim):
 {examples_block}

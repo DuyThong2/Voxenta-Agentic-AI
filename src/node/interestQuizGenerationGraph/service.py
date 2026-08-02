@@ -6,6 +6,7 @@ from schemas.interest_quiz_generation import (
     GeneratedQuizItem,
     InterestQuizItemBatch,
     InterestQuizItemGenerationRequest,
+    build_quiz_batch_model,
 )
 
 _client: OpenAI | None = None
@@ -30,11 +31,26 @@ def generate_interest_quiz_items(
                 "content": build_interest_quiz_prompt(request),
             },
         ],
-        text_format=InterestQuizItemBatch,
+        # Schema dựng theo danh mục chiều Java gửi xuống -> model bị ràng buộc ngay lúc
+        # sinh token, không thể trả về chiều không tồn tại trong hệ thống.
+        text_format=build_quiz_batch_model(request.effective_dimensions()),
     )
-    generated = (
+    raw_items = (
         [] if response.output_parsed is None else response.output_parsed.items
     )
+    # Model động dùng Enum cho dimension -> đổi về str thuần trước khi trả ra ngoài, để
+    # phần còn lại (và Java) chỉ thấy chuỗi như cũ.
+    generated = [
+        GeneratedQuizItem(
+            dimension_per_statement=[
+                str(getattr(value, "value", value))
+                for value in item.dimension_per_statement
+            ],
+            statements=list(item.statements),
+            desirability_check=item.desirability_check,
+        )
+        for item in raw_items
+    ]
     existing = {_normalize(s) for s in request.existing_statements}
     valid = _filter_structurally_valid(generated, existing)
     return InterestQuizItemBatch(items=valid[: request.max_items])

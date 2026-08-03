@@ -133,8 +133,9 @@ def persist_batch(dsn: str | None, records: list[dict[str, Any]]) -> None:
                         target_criterion_code, target_sub_attribute,
                         difficulty_rank, difficulty_features_json,
                         evaluation_guide_json, suggested_ideas_json,
-                        preparation_time_seconds, max_response_seconds,
-                        max_followup_seconds, vstep_part, source,
+                        question_type,
+                        min_response_seconds, max_response_seconds,
+                        vstep_part, source,
                         usage_count, active, created_at
                     ) VALUES (
                         %s, %s, %s, %s, %s, %s, %s, %s, %s,
@@ -161,9 +162,9 @@ def persist_batch(dsn: str | None, records: list[dict[str, Any]]) -> None:
                             record["suggested_ideas"],
                             ensure_ascii=False,
                         ),
-                        record["preparation_time_seconds"],
+                        record["question_type"],
+                        record["min_response_seconds"],
                         record["max_response_seconds"],
-                        record["max_followup_seconds"],
                         record["vstep_part"],
                     ),
                 )

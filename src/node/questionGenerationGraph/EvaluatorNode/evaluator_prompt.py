@@ -11,8 +11,16 @@ def build_evaluator_prompt(
     candidates: list[PracticeQuestionCandidate],
     topic: tuple[str, str, str],
     target_rank: int,
+    band_ladder: str | None = None,
 ) -> str:
-    return f"""{BAND_LADDER}
+    """Prompt cham ung vien.
+
+    `band_ladder` do Java gui xuong (dung tu framework_result_bands cua truong). Rong thi lui
+    ve hang so BAND_LADDER -- hang so do viet cung BAC_1..BAC_6 kieu VSTEP nen chi dung lam
+    fallback cho pipeline nghien cuu/goi tay, khong dung cho duong that.
+    """
+    ladder = band_ladder or BAND_LADDER
+    return f"""{ladder}
 
 EVALUATION RULES
 Return one verdict per candidate. accepted=true only when violations is empty.

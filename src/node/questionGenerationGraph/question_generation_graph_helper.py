@@ -149,6 +149,7 @@ def question_record(
     topic: tuple[str, str, str],
     candidate: PracticeQuestionCandidate,
     topic_id: str | None = None,
+    band_count: int = 6,
 ) -> dict[str, Any]:
     return {
         "id": question_id,
@@ -160,13 +161,13 @@ def question_record(
         "question_text": candidate.prompt_text,
         "target_criterion_code": candidate.target_construct,
         "target_sub_attribute": candidate.target_sub_attribute,
-        "difficulty_rank": difficulty_rank(candidate.difficulty_features),
+        "difficulty_rank": difficulty_rank(candidate.difficulty_features, band_count),
         "difficulty_features": candidate.difficulty_features.model_dump(),
         "evaluation_guide": candidate.evaluation_guide.model_dump(),
         "suggested_ideas": candidate.suggested_ideas,
-        "preparation_time_seconds": candidate.planning_time_seconds,
+        "question_type": candidate.question_type,
+        "min_response_seconds": candidate.min_response_seconds,
         "max_response_seconds": candidate.max_response_seconds,
-        "max_followup_seconds": candidate.max_followup_seconds,
         "vstep_part": candidate.vstep_part,
     }
 
@@ -180,7 +181,12 @@ def percentile(values: list[float], quantile: float) -> float:
 
 
 def rank_distribution(records: list[dict[str, Any]]) -> dict[str, int]:
-    result = {str(rank): 0 for rank in range(1, 7)}
-    for record in records:
-        result[str(record["difficulty_rank"])] += 1
+    # Suy khoang tu chinh du lieu, KHONG cung range(1, 7): thang bac do framework quyet dinh
+    # (IELTS 9 bac), rank >= 7 tung lam ham nay nem KeyError.
+    ranks = [int(record["difficulty_rank"]) for record in records]
+    if not ranks:
+        return {}
+    result = {str(rank): 0 for rank in range(1, max(ranks) + 1)}
+    for rank in ranks:
+        result[str(rank)] += 1
     return result

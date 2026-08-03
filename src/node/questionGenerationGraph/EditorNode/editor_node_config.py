@@ -10,6 +10,7 @@ from node.questionGenerationGraph.EditorNode.editor_prompt import (
 )
 from node.questionGenerationGraph.EvaluatorNode.evaluator_node_config import (
     evaluate,
+    ladder_for,
 )
 from node.questionGenerationGraph.GraphState import QuestionGenerationState
 from node.questionGenerationGraph.question_generation_graph_helper import (
@@ -62,6 +63,7 @@ def _repair_one(
             mode=f"post-editor-{rounds}",
             tokens=state["token_calls"],
             effort=effort,
+            band_ladder=ladder_for(state),
         )
         verdict = evaluation.verdicts[0]
         raw_calls.append(

@@ -13,6 +13,10 @@ class QuestionGenerationState(TypedDict, total=False):
     # Đường online (học sinh đang chờ): cắt bớt các bước chỉ phục vụ đo đạc /
     # đánh bóng. Xem constants.FAST_* để biết chính xác bỏ gì và vì sao.
     fast: bool
+    # So bac + mo ta thang cua framework dang ap (Java gui xuong). Xem constants.BAND_LADDER
+    # de biet vi sao khong dung hang so 6 bac cua VSTEP nua.
+    band_count: int
+    band_ladder: list[Any]
     # Số câu thực sự cần -- fast mode dừng sửa/chấm ngay khi đã đủ.
     needed: int
     candidates: list[PracticeQuestionCandidate]

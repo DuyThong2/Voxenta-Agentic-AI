@@ -20,8 +20,8 @@ class SimilarityResponse(BaseModel):
 class NeighborQuestionRequest(BaseModel):
     topic_name: str = Field(min_length=1, max_length=200)
     criterion_code: str = Field(min_length=1, max_length=32)
-    rank_min: int = Field(ge=1, le=6)
-    rank_max: int = Field(ge=1, le=6)
+    rank_min: int = Field(ge=1, le=20)
+    rank_max: int = Field(ge=1, le=20)
     limit: int = Field(default=50, ge=1, le=50)
 
 

@@ -28,6 +28,8 @@ FAST_EDITOR_ROUNDS = 1
 # thêm ở đây.
 FAST_EVALUATOR_EFFORT = "medium"
 
+# Fallback khi Java khong gui thang xuong (goi tay, pipeline nghien cuu). Dung
+# build_band_ladder() de dung tu du lieu that -- hang so nay khoa vao VSTEP 6 bac.
 BAND_LADDER = """SIX-BAND SPEAKING LADDER - KEEP THIS PREFIX EXACT
 1 BAC_1: concrete, immediate personal information; short simple descriptions.
 2 BAC_2: familiar matters; connected basic details with limited reasons.
@@ -108,3 +110,29 @@ FILTER_REASON_CODES = frozenset(
         "DUPLICATE_COSINE",
     }
 )
+
+
+def build_band_ladder(rungs, band_count: int = 6) -> str:
+    """Dung mo ta thang bac tu du lieu Java gui xuong.
+
+    Vi sao khong giu hang so BAND_LADDER: no viet cung BAC_1..BAC_6 kieu VSTEP, doi truong
+    sang CEFR/IELTS thi prompt cham mo ta SAI thang ma khong ai biet. Rong -> lui ve hang so
+    cu de goi tay/pipeline nghien cuu van chay nhu truoc.
+    """
+    if not rungs:
+        return BAND_LADDER
+    header = f"{band_count}-BAND SPEAKING LADDER - KEEP THIS PREFIX EXACT"
+    lines = []
+    for rung in sorted(rungs, key=lambda item: _rung_field(item, "order", 0)):
+        order = _rung_field(rung, "order", 0)
+        code = _rung_field(rung, "code", "")
+        description = _rung_field(rung, "description", "")
+        lines.append(f"{order} {code}: {description}".rstrip(": "))
+    footer = f"END {band_count}-BAND SPEAKING LADDER"
+    return "\n".join([header, *lines, footer])
+
+
+def _rung_field(rung, name: str, default):
+    if isinstance(rung, dict):
+        return rung.get(name, default)
+    return getattr(rung, name, default)

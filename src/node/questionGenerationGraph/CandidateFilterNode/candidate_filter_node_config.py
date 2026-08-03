@@ -17,7 +17,14 @@ from schemas.question_generation import PracticeQuestionCandidate
 
 def rule_violations(
     candidate: PracticeQuestionCandidate,
+    requested_sub_attribute: str | None = None,
 ) -> list[tuple[str, str]]:
+    """Vi pham cung cua mot ung vien.
+
+    `requested_sub_attribute` la sub-attribute Java YEU CAU (None = khong chi dinh).
+    None -> chap nhan ca ung vien null lan ung vien co gia tri hop le trong taxonomy.
+    Co gia tri -> ung vien phai dung y gia tri do.
+    """
     violations: list[tuple[str, str]] = []
     text = candidate.prompt_text.strip()
     words = text.split()
@@ -41,6 +48,11 @@ def rule_violations(
             )
         )
     allowed = ALLOWED_SUB_ATTRIBUTES.get(candidate.target_construct)
+    rendered = (
+        "null"
+        if candidate.target_sub_attribute is None
+        else candidate.target_sub_attribute
+    )
     if allowed is None:
         violations.append(
             (
@@ -48,12 +60,24 @@ def rule_violations(
                 f"{candidate.target_construct} is not a framework criterion",
             )
         )
-    elif candidate.target_sub_attribute not in allowed:
-        rendered = (
-            "null"
-            if candidate.target_sub_attribute is None
-            else candidate.target_sub_attribute
-        )
+    elif requested_sub_attribute is not None:
+        # Java co chi dinh sub-attribute cu the -> phai dung cai do, khong duoc lech.
+        if candidate.target_sub_attribute != requested_sub_attribute:
+            violations.append(
+                (
+                    "SUB_ATTRIBUTE_NOT_ALLOWED",
+                    f"{rendered} does not match requested "
+                    f"{requested_sub_attribute}",
+                )
+            )
+    elif (
+        candidate.target_sub_attribute is not None
+        and candidate.target_sub_attribute not in allowed
+    ):
+        # Java KHONG chi dinh (chua co du lieu diem yeu) -> null la hop le, nghia la "luyen
+        # tieu chi nay noi chung". Truoc day null bi loai cho GRAMMAR/VOCABULARY/COHERENCE,
+        # khien hoc sinh moi khong bao gio sinh duoc cau nao -- be tac: khong luyen duoc thi
+        # khong co diem yeu, khong co diem yeu thi mai gui null.
         violations.append(
             (
                 "SUB_ATTRIBUTE_NOT_ALLOWED",
@@ -80,7 +104,7 @@ def candidate_filter_node(
     # không tốn call embedding nào.
     passed_rules = []
     for candidate in state["candidates"]:
-        violations = rule_violations(candidate)
+        violations = rule_violations(candidate, state["criterion"][1])
         if violations:
             reason, detail = violations[0]
             reasons.update(item[0] for item in violations)

@@ -6,6 +6,13 @@ from pydantic import BaseModel, Field, create_model
 from schemas.interest_quiz_generation import DEFAULT_INTEREST_DIMENSIONS
 
 
+# Trần số đề xuất một lượt. Java xin NHIỀU hơn số chủ đề thực cần vì bộ lọc trùng-gần của nó
+# cắt rất mạnh (xem TopicSuggestionService.synchronousOffers). Con số này phải khớp ở CẢ BA
+# nơi bên dưới -- request, response, và schema decode gửi cho LLM; để lệch thì hoặc 422 ở cửa,
+# hoặc LLM bị ép trả ít hơn số đã xin mà không ai thấy.
+MAX_TOPIC_PROPOSALS = 8
+
+
 class KeywordEvidence(BaseModel):
     keyword: str
     session_count: int = Field(ge=0)
@@ -19,7 +26,7 @@ class TopicProposalRequest(BaseModel):
     rejected_topics: list[str] = Field(default_factory=list)
     exhausted_topics: list[str] = Field(default_factory=list)
     search_keyword: bool = False
-    max_proposals: int = Field(default=3, ge=1, le=3)
+    max_proposals: int = Field(default=3, ge=1, le=MAX_TOPIC_PROPOSALS)
     # Danh mục chiều hiện hành do Java gửi xuống (bảng interest_dimension); rỗng thì dùng mặc định.
     dimensions: list[str] = Field(default_factory=list)
 
@@ -43,7 +50,7 @@ class TopicProposal(BaseModel):
 
 
 class TopicProposalBatch(BaseModel):
-    proposals: list[TopicProposal] = Field(max_length=3)
+    proposals: list[TopicProposal] = Field(max_length=MAX_TOPIC_PROPOSALS)
 
 
 def build_topic_batch_model(dimensions: list[str]) -> type[BaseModel]:
@@ -71,7 +78,7 @@ def build_topic_batch_model(dimensions: list[str]) -> type[BaseModel]:
     )
     return create_model(
         "DynamicTopicProposalBatch",
-        proposals=(list[proposal_model], Field(max_length=3)),  # type: ignore[valid-type]
+        proposals=(list[proposal_model], Field(max_length=MAX_TOPIC_PROPOSALS)),  # type: ignore[valid-type]
     )
 
 

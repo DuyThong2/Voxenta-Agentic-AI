@@ -32,6 +32,83 @@ _FEW_SHOT_EXAMPLES = [
 ]
 
 
+def dimension_triplets(dimensions: list[str], count: int) -> list[list[str]]:
+    """Phân công trước bộ ba chiều cho từng item, cân bằng số lần mỗi chiều xuất hiện.
+
+    Vì sao phải phân công thay vì để model tự chọn: sinh song song thì mỗi lượt KHÔNG BIẾT
+    các lượt kia viết gì, nên nếu để tự do sẽ ra hai item cùng nói về game trong khi một
+    chiều không câu nào chạm tới. Bản một-lượt trước đây không gặp chuyện này vì model nhìn
+    thấy toàn bộ 7 item cùng lúc -- đó cũng chính là thứ khiến nó mất 47 giây.
+
+    Tham lam theo "chiều ít dùng nhất trước", kèm tránh lặp lại nguyên một tổ hợp đã dùng.
+    """
+    usage = {code: 0 for code in dimensions}
+    used_sets: set[frozenset] = set()
+    triplets: list[list[str]] = []
+    for _ in range(count):
+        ordered = sorted(dimensions, key=lambda code: (usage[code], dimensions.index(code)))
+        chosen = ordered[:3]
+        if frozenset(chosen) in used_sets and len(dimensions) > 3:
+            # Đổi phần tử thứ ba sang chiều ít dùng kế tiếp để không lặp nguyên tổ hợp.
+            for alternative in ordered[3:]:
+                if frozenset(chosen[:2] + [alternative]) not in used_sets:
+                    chosen = chosen[:2] + [alternative]
+                    break
+        used_sets.add(frozenset(chosen))
+        for code in chosen:
+            usage[code] += 1
+        triplets.append(chosen)
+    return triplets
+
+
+# Bối cảnh phân công cho từng lượt sinh. Cần vì các lượt chạy SONG SONG nên không thấy nhau:
+# đo thật lần đầu ra hai item cùng "làm playlist nhạc" và hai item cùng "tùy chỉnh nhân vật
+# game", rồi bộ lọc trùng cắt mất một item (6/7). Bản một-lượt trước đây không gặp chuyện này
+# vì model nhìn thấy hết các item cùng lúc -- nhưng đó cũng là thứ khiến nó chậm gấp bốn.
+#
+# Phân công bối cảnh rẻ hơn nhiều so với cho các lượt "nói chuyện" với nhau, và vẫn giữ được
+# đúng thứ cần: các item không đè ý nhau.
+_ITEM_CONTEXTS = [
+    "ở trường, giờ ra chơi hoặc sinh hoạt lớp",
+    "ở nhà, lúc rảnh sau giờ học",
+    "đi chơi cuối tuần với bạn bè",
+    "trên mạng: điện thoại, máy tính, mạng xã hội",
+    "trong câu lạc bộ hoặc hoạt động ngoại khoá",
+    "khi ở ngoài trời hoặc di chuyển trong thành phố",
+    "khi làm việc nhóm cho một dự án hoặc bài tập",
+]
+
+
+def build_single_item_prompt(
+    request: InterestQuizItemGenerationRequest,
+    assigned_dimensions: list[str],
+    context_index: int = 0,
+) -> str:
+    """Prompt cho MỘT item với bộ ba chiều đã được phân công sẵn.
+
+    Khác bản batch ở hai chỗ, và cả hai đều là lý do nó nhanh: model không phải tự cân bằng
+    chiều (đã phân công), và không phải trải 14 ứng viên rồi chọn 7 -- chỉ cân nhắc vài
+    phương án cho đúng một item.
+    """
+    base = build_interest_quiz_prompt(request)
+    head, _, _ = base.partition("Diversity instruction")
+    context = _ITEM_CONTEXTS[context_index % len(_ITEM_CONTEXTS)]
+    return (
+        head
+        + f"""Write EXACTLY ONE triplet, using these 3 dimensions in this order:
+{assigned_dimensions[0]}, {assigned_dimensions[1]}, {assigned_dimensions[2]}.
+
+Set all 3 activities in this context: {context}.
+Other items are being written for other contexts, so stay inside yours -- do not write about
+making playlists, customising game characters, or any other theme unless it genuinely fits
+this context.
+
+Consider a few candidate triplets internally, then return the single best one.
+
+Return structured data only."""
+    )
+
+
 def build_interest_quiz_prompt(request: InterestQuizItemGenerationRequest) -> str:
     # Danh mục chiều đến từ bảng interest_dimension bên vox (Java gửi kèm request), không
     # gắn cứng ở đây -- admin thêm chiều là prompt tự có ngay.

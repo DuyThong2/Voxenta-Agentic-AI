@@ -77,14 +77,34 @@ def enforce_evidence_caps(
         item.keyword.casefold(): item.session_count
         for item in request.keyword_evidence
     }
+    # Trần "tối đa MỘT đề xuất ungrounded" chỉ có nghĩa khi ĐANG CÓ từ khoá quan sát được: nó
+    # ngăn LLM bịa thêm chủ đề chẳng liên quan gì tới bằng chứng đang có. Khi danh sách từ khoá
+    # RỖNG (đường TopicSuggestionService.synchronousOffers -- đề xuất dựa hoàn toàn vào
+    # interest_scores) thì MỌI đề xuất đều nằm ngoài từ khoá, vì không có từ khoá nào cả; giữ
+    # nguyên trần ở đây là cắt còn đúng 1 chủ đề mỗi lượt.
+    #
+    # Trần này nằm SAU khâu sinh, nên tăng max_proposals không cứu được -- LLM trả về 8 rồi bị
+    # cắt còn 1 ở đây, im lặng, không log.
+    cap_ungrounded = bool(evidence_counts)
     ungrounded = 0
     filtered = []
     for proposal in proposals:
         if not proposal.grounded_in_keyword:
             ungrounded += 1
-            proposal.confidence = min(proposal.confidence, 0.4)
-            if ungrounded > 1:
-                continue
+            if cap_ungrounded:
+                proposal.confidence = min(proposal.confidence, 0.4)
+                if ungrounded > 1:
+                    continue
+            else:
+                # 0.4 là trần dành cho "bịa thêm ngoài bằng chứng đang có". Ở đây không phải
+                # vậy -- bằng chứng là interest_scores -- nên chấm trần theo evidence_type,
+                # đúng như luật 5 trong prompt.
+                proposal.confidence = min(
+                    proposal.confidence,
+                    0.6 if proposal.evidence_type == "INTEREST"
+                    else 0.7 if proposal.evidence_type == "EXHAUSTED"
+                    else 0.4,
+                )
         elif proposal.evidence_type in {"KEYWORD", "SEARCH"}:
             counts = [
                 evidence_counts[keyword.casefold()]

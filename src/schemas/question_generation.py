@@ -39,7 +39,11 @@ PracticeQuestionType = Literal[
 #
 # Doi chinh sach thi sua DUY NHAT bang nay.
 PRACTICE_TYPE_SECONDS: dict[str, tuple[tuple[int, int], tuple[int, int]]] = {
-    "SHORT_ANSWER": ((15, 25), (30, 45)),
+    # Sàn 15-25s mâu thuẫn với chính định nghĩa của loại này ("a couple of sentences is a
+    # complete answer" -- vài câu ở tốc độ nói bình thường là ~10-15s). Model giải mâu thuẫn
+    # đó bằng cách gộp thêm vế hỏi cho đủ giây, nên SHORT_ANSWER sinh ra toàn câu hai vế.
+    # Hạ sàn để con số thôi ép ngược lại luật "một vế" trong drafter_prompt.
+    "SHORT_ANSWER": ((10, 18), (30, 45)),
     "LONG_ANSWER": ((25, 35), (50, 65)),
     "DESCRIPTION": ((30, 45), (60, 80)),
     "OPINION": ((35, 45), (60, 85)),

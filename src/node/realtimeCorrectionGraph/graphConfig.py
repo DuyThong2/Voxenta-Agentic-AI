@@ -1,6 +1,13 @@
 from langgraph.graph import END, START, StateGraph
 
+from node.realtimeCorrectionGraph.EnglishRenderingNode.english_rendering_node_config import (
+    english_rendering_node,
+)
 from node.realtimeCorrectionGraph.GraphState import RealtimeCorrectionGraphState
+from node.realtimeCorrectionGraph.language_guard import (
+    is_vietnamese_word,
+    is_wrong_language,
+)
 from node.realtimeCorrectionGraph.LightCorrectionNode.light_correction_node_config import (
     light_correction_node,
 )
@@ -47,6 +54,12 @@ def _pronunciation_rows(state: RealtimeCorrectionGraphState) -> list:
     rows = []
     for word in words:
         if not isinstance(word, dict):
+            continue
+        # BỎ từ tiếng Việt. Lượt lẫn ngôn ngữ (dưới ngưỡng nên vẫn đi đường sửa lỗi bình
+        # thường) vẫn được Azure chấm từng từ bằng mô hình âm TIẾNG ANH -- mọi từ tiếng Việt
+        # trong đó đều trả accuracy gần 0 và bị báo "phát âm sai". Học sinh nói đúng từ tiếng
+        # Việt của mình mà bị chấm sai, rồi lỗi giả đó thành phoneme_* trong hồ sơ điểm yếu.
+        if is_vietnamese_word(word.get("word")):
             continue
         score = word.get("accuracy_score")
         if score is None or float(score) >= _PRONUNCIATION_WEAK_THRESHOLD:
@@ -130,6 +143,17 @@ def format_feedback_node(state: RealtimeCorrectionGraphState) -> dict:
     return {"corrections": corrections, "category_counts": counts}
 
 
+def _route_by_language(state: RealtimeCorrectionGraphState):
+    """Rẽ nhánh TRƯỚC khi fan-out, không lọc sau.
+
+    Lọc sau thì ba nhánh vẫn chạy: vẫn tốn hai lượt gọi LLM và một lượt Azure cho một lượt nói
+    sẽ bị bỏ đi, và vẫn có nguy cơ sót đường nào đó ghi dữ liệu xuống.
+    """
+    if is_wrong_language(state.get("transcript")):
+        return "english_rendering"
+    return ["pronunciation", "light_correction", "word_choice"]
+
+
 def build_realtime_correction_graph():
     """Stateless per-call graph (no checkpointer) -- the caller (PracticeAttemptConnection)
     already has the transcript/audio_path in hand for this turn and doesn't need resume
@@ -138,18 +162,26 @@ def build_realtime_correction_graph():
     g.add_node("pronunciation", pronunciation_node)
     g.add_node("light_correction", light_correction_node)
     g.add_node("word_choice", word_choice_node)
+    g.add_node("english_rendering", english_rendering_node)
     g.add_node("merge_correction", merge_correction_node)
     g.add_node("format_feedback", format_feedback_node)
 
     # Ba nhánh song song -> gộp -> định dạng. Thêm word_choice KHÔNG làm chậm thêm vì nó
     # chạy cùng lúc với hai nhánh kia; tổng thời gian vẫn bằng nhánh chậm nhất.
-    g.add_edge(START, "pronunciation")
-    g.add_edge(START, "light_correction")
-    g.add_edge(START, "word_choice")
+    #
+    # Cổng ngôn ngữ nằm ngay ở START: lượt nói bằng tiếng Việt rẽ thẳng sang english_rendering
+    # -- không đụng vào nhánh nào khác, nên Azure không chấm phát âm tiếng Việt và LLM không
+    # sửa ngữ pháp tiếng Việt.
+    g.add_conditional_edges(
+        START,
+        _route_by_language,
+        ["pronunciation", "light_correction", "word_choice", "english_rendering"],
+    )
     g.add_edge("pronunciation", "merge_correction")
     g.add_edge("light_correction", "merge_correction")
     g.add_edge("word_choice", "merge_correction")
     g.add_edge("merge_correction", "format_feedback")
     g.add_edge("format_feedback", END)
+    g.add_edge("english_rendering", END)
 
     return g.compile()

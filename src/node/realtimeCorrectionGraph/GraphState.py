@@ -25,5 +25,11 @@ class RealtimeCorrectionGraphState(TypedDict, total=False):
     # PracticeAttemptConnection pushes to the client / forwards to Java's
     # /internal/practice-sessions/{id}/turns
     corrections: List[Dict[str, Any]]
+
+    # Written by wrong_language_node -- lượt nói không phải tiếng Anh, đã bỏ qua toàn bộ việc
+    # sửa lỗi. Client dùng cờ này để nói cho học sinh biết vì sao lượt vừa rồi không có phản
+    # hồi, thay vì hiện một thẻ trống trông như hệ thống hỏng.
+    wrong_language: bool
+
     status: str
     error: Optional[str]

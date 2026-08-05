@@ -195,7 +195,7 @@ class PracticeAttemptConnection:
                 self._upload_turn_audio(audio_path, current_turn.get("turn_order"))
             )
 
-            corrections, pronunciation_result = await correction_task
+            corrections, pronunciation_result, wrong_language = await correction_task
             audio_url = await upload_task
             # Only resolve/push the next MAIN question -- which mutates the paper on Java's
             # side -- once the CURRENT turn is confirmed saved (recorded + quota-consumed).
@@ -211,6 +211,7 @@ class PracticeAttemptConnection:
                     "answer_id": session.answer_id,
                     "corrections": corrections,
                     "pronunciation": pronunciation_result,
+                    "wrong_language": wrong_language,
                 }
             )
             await self._send_session_budget(
@@ -243,7 +244,16 @@ class PracticeAttemptConnection:
             if audio_path:
                 Path(audio_path).unlink(missing_ok=True)
 
-    async def _run_correction(self, session, audio_path: Optional[str]) -> tuple[list, Optional[dict]]:
+    async def _run_correction(
+        self, session, audio_path: Optional[str]
+    ) -> tuple[list, Optional[dict], bool]:
+        """Tra ve (corrections, pronunciation_result, wrong_language).
+
+        `wrong_language` = luot noi khong phai tieng Anh nen da bo qua toan bo viec sua loi
+        (xem realtimeCorrectionGraph.language_guard). Chuyen ra client de noi cho hoc sinh
+        biet VI SAO luot vua roi khong co phan hoi -- khong noi thi man hinh chi hien mot the
+        trong, trong nhu he thong hong.
+        """
         current_turn = session.turns[-1]
         state = {
             "transcript": current_turn.get("transcript") or "",
@@ -257,8 +267,20 @@ class PracticeAttemptConnection:
                 "[practice_attempt_connection] correction graph failed practice_session_id=%s",
                 self.practice_session_id,
             )
-            return [], None
-        return result.get("corrections") or [], result.get("pronunciation_result")
+            return [], None, False
+        if result.get("wrong_language"):
+            logger.info(
+                "[practice_attempt_connection] luot noi khong phai tieng Anh -- bo qua sua loi "
+                "practice_session_id=%s answer_id=%s turn_order=%s",
+                self.practice_session_id,
+                session.answer_id,
+                current_turn.get("turn_order"),
+            )
+        return (
+            result.get("corrections") or [],
+            result.get("pronunciation_result"),
+            bool(result.get("wrong_language")),
+        )
 
     async def _upload_turn_audio(self, audio_path: Optional[str], turn_order: int) -> Optional[str]:
         """Permanent archival for teacher review (TeacherPracticeTurnView.audioUrl) -- separate

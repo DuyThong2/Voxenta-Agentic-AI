@@ -195,6 +195,10 @@ def question_record(
         "question_text": candidate.prompt_text,
         "target_criterion_code": candidate.target_construct,
         "target_sub_attribute": candidate.target_sub_attribute,
+        # Ghi vao ban ghi de Java luu xuong practice_question.target_tense. Thieu doan nay thi
+        # thi chi ton tai trong luc soan roi bien mat, va thang leo khong bao gio tra duoc
+        # "cau qua khu cua chu de nay" -- moi luot doi thi lai phai goi LLM.
+        "target_tense": candidate.target_tense,
         "difficulty_rank": difficulty_rank(candidate.difficulty_features, band_count),
         "difficulty_features": candidate.difficulty_features.model_dump(),
         "evaluation_guide": candidate.evaluation_guide.model_dump(),

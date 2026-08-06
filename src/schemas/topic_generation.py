@@ -41,6 +41,13 @@ class TopicProposal(BaseModel):
     name: str
     interest_dimension: str
     curriculum_group: Literal["IN_GDPT2018", "OUT_OF_CURRICULUM"]
+    # Chu de nay tu nhien goi ra khung thoi gian nao. Java doc de quyet thi dich cho tung cau
+    # (TensePolicy.forSlot): PAST/FUTURE thi khoa, MIXED thi xoay vong qua cac thi theo o.
+    #
+    # Hoi o day chu khong doan ve sau: ngay luc soan, mo hinh dang hieu chu de noi ve cai gi.
+    # Doan lai tu ten chu de thi khong co co so, va doan sai thi moi cau cua chu de do bi ep
+    # sai khung thoi gian ma khong ai thay.
+    temporal_affordance: Literal["PAST", "FUTURE", "MIXED"] = "MIXED"
     confidence: float = Field(ge=0, le=1)
     reason_text: str = Field(min_length=1)
     distinct_from: str = Field(min_length=1)
@@ -66,6 +73,7 @@ def build_topic_batch_model(dimensions: list[str]) -> type[BaseModel]:
         name=(str, ...),
         interest_dimension=(dimension_enum, ...),  # type: ignore[valid-type]
         curriculum_group=(Literal["IN_GDPT2018", "OUT_OF_CURRICULUM"], ...),
+        temporal_affordance=(Literal["PAST", "FUTURE", "MIXED"], ...),
         confidence=(float, Field(ge=0, le=1)),
         reason_text=(str, Field(min_length=1)),
         distinct_from=(str, Field(min_length=1)),

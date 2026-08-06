@@ -47,10 +47,11 @@ def generate_questions(
         band_count=request.band_count,
         band_ladder=request.band_ladder,
         exclude_question_ids=request.exclude_question_ids,
+        target_tense=request.target_tense,
     )
     records = []
     for candidate in state["refined"]:
-        if rule_violations(candidate, request.target_sub_attribute):
+        if rule_violations(candidate, request.target_sub_attribute, request.target_tense):
             continue
         records.append(
             question_record(

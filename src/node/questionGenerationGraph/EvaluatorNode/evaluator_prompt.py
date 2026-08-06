@@ -30,6 +30,19 @@ The target_sub_attribute taxonomy is closed. PRONUNCIATION and FLUENCY require n
 null is correct for those two constructs and must never be reported as missing. GRAMMAR allows
 tense_control, complex_clause_control. VOCABULARY allows no sub-attribute. COHERENCE allows
 weak_progression, limited_support.
+
+TENSE ANCHOR - judge the question, not the label
+Each candidate declares a `target_tense`. Reject it (violation code TENSE_NOT_FORCED) unless
+the wording makes that tense the only natural way to answer. The test is concrete: imagine a
+learner answering in a different tense - if that answer would still be correct English and on
+topic, the anchor failed.
+- "Tell me about your school's history" declaring PAST: REJECT. "My school is old and has a
+  big garden" answers it in the present and is perfectly correct.
+- "What did your class do for the school festival last year?" declaring PAST: accept.
+- A CONDITIONAL candidate must describe something unreal or not yet true, not merely a
+  future plan.
+Also check `suggested_ideas`: they are shown to the learner as a starting point, so ideas
+written in a different tense pull against the anchor the question set.
 {SAFETY_CONSTRAINTS}
 Do not assign a total quality score. Return concrete violation codes.
 

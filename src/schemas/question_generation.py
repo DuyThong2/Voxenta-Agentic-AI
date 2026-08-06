@@ -30,6 +30,14 @@ ReasoningType = Literal[
 ]
 Abstractness = Literal["concrete_personal", "mixed", "abstract"]
 
+# Tap dong 5 thi. PHAI khop tung chu voi TensePolicy.java -- lech mot noi thi cau bi loc LANG
+# LE o CandidateFilterNode, khong no. Day dung cai bay da dinh voi taxonomy sub-attribute.
+#
+# San do kho cua tung thi (raw_difficulty): PRESENT 1; PAST/FUTURE/PERFECT 2 (khong neo vao
+# hien tai -> here_and_now=False -> +1); CONDITIONAL 4 (them reasoning_type=hypothetical -> +2).
+# Java da chan truoc bang TensePolicy.allowedFor nen o day khong lap lai phep chan do.
+Tense = Literal["PRESENT", "PAST", "FUTURE", "PERFECT", "CONDITIONAL"]
+
 # KHONG co READ_ALOUD: dang do can van ban mau de doc theo, ma luyen noi tu do thi khong
 # co van ban nao. Bon dang con lai dung bang enum QuestionType cua de thi.
 PracticeQuestionType = Literal[
@@ -85,6 +93,9 @@ class PracticeQuestionCandidate(BaseModel):
     difficulty_features: DifficultyFeatures
     target_construct: CriterionCode
     target_sub_attribute: str | None = Field(default=None, max_length=64)
+    # Thi ma cau nay EP hoc sinh dung. Bat buoc o duong sinh: de None duoc thi mo hinh se de
+    # trong bat cu khi nao no thay kho, va ca co che ep thi thanh tuy chon.
+    target_tense: Tense
     vstep_part: int = Field(ge=1, le=3)
     question_type: PracticeQuestionType
     prompt_text: str = Field(min_length=1)
@@ -166,6 +177,9 @@ class QuestionGenerationRequest(BaseModel):
     curriculum_group: str = Field(min_length=1, max_length=24)
     target_criterion_code: CriterionCode
     target_sub_attribute: str | None = Field(default=None, max_length=64)
+    # Java gui xuong thi dich cho O nay (TensePolicy.forSlot). None = goi tay/pipeline nghien
+    # cuu, luc do de mo hinh tu chon thi tu nhien nhat cho chu de.
+    target_tense: Tense | None = None
     # le=20 chu khong 6: thang bac do framework cua truong quyet dinh (CEFR 6, IELTS 9...),
     # khong phai hang so VSTEP. Tran that do Java tinh tu framework_result_bands.
     target_rank: int = Field(ge=1, le=20)
@@ -191,6 +205,7 @@ class GeneratedQuestion(BaseModel):
     question_text: str
     target_criterion_code: CriterionCode
     target_sub_attribute: str | None
+    target_tense: Tense | None
     difficulty_rank: int
     difficulty_features: dict
     evaluation_guide: dict

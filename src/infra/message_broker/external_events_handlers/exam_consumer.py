@@ -28,6 +28,7 @@ from infra.message_broker.publishers.exam_publisher import (
     publish_practice_attempt_evaluation_failed,
 )
 from infra.storage.audio_storage import download_from_s3_async
+from schemas.framework import to_source_keys
 from schemas.scoring import CriterionScore
 from schemas.validity import RuleResult, ValidityResult
 from mappers.exam_event_builder import (
@@ -673,7 +674,12 @@ def _build_multi_turn_completed_event(
         question_id=request_event.question_id,
         payload=ExamAttemptEvaluationCompletedPayload(
             turns=completed_turns,
-            criteria=_merge_multi_turn_criteria(aggregate_result, per_turn_results),
+            # Trả về đúng từ vựng Java đã gửi (tc03...), không phải khoá chuẩn nội bộ
+            # (grammar...) -- xem to_source_keys.
+            criteria=to_source_keys(
+                _merge_multi_turn_criteria(aggregate_result, per_turn_results),
+                request_event.payload.criteria_frameworks,
+            ),
             signals=build_signals(
                 aggregate_result,
                 speaking_input,
@@ -736,7 +742,7 @@ def _build_no_answer_completed_event(
         question_id=request_event.question_id,
         payload=ExamAttemptEvaluationCompletedPayload(
             turns=[],
-            criteria=criteria,
+            criteria=to_source_keys(criteria, request_event.payload.criteria_frameworks),
             signals=signals,
             validity=validity,
             feedback_summary="Hoc sinh khong tra loi cau hoi nay.",
@@ -790,7 +796,7 @@ def _build_clarification_only_completed_event(
         question_id=request_event.question_id,
         payload=ExamAttemptEvaluationCompletedPayload(
             turns=completed_turns,
-            criteria=criteria,
+            criteria=to_source_keys(criteria, request_event.payload.criteria_frameworks),
             signals=EvaluationSignals(
                 duration_seconds=_total_duration_seconds(turns),
                 word_count=0,

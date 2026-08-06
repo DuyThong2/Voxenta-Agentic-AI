@@ -9,6 +9,9 @@ from schemas.question_generation import (
 class QuestionGenerationState(TypedDict, total=False):
     topic: tuple[str, str, str]
     criterion: tuple[str, str | None]
+    # Thi dich Java yeu cau cho O nay (TensePolicy.forSlot). None = khong chi dinh, luc do
+    # mo hinh tu chon thi tu nhien nhat va van phai khai ra.
+    target_tense: str | None
     target_rank: int
     # Đường online (học sinh đang chờ): cắt bớt các bước chỉ phục vụ đo đạc /
     # đánh bóng. Xem constants.FAST_* để biết chính xác bỏ gì và vì sao.

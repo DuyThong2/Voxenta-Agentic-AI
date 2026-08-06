@@ -60,6 +60,7 @@ def _to_open_proposal(item) -> TopicProposal:
         name=item.name,
         interest_dimension=str(getattr(dimension, "value", dimension)),
         curriculum_group=item.curriculum_group,
+        temporal_affordance=item.temporal_affordance,
         confidence=item.confidence,
         reason_text=item.reason_text,
         distinct_from=item.distinct_from,

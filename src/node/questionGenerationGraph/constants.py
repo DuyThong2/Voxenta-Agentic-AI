@@ -1,8 +1,11 @@
 import os
 
 from config.chroma_config import settings
+from typing import get_args
+
 from schemas.question_generation import (
     DRAFTER_CANDIDATES as SCHEMA_DRAFTER_CANDIDATES,
+    Tense,
 )
 
 MODEL = os.getenv("PRACTICE_GENERATION_MODEL", "gpt-5.4")
@@ -89,6 +92,10 @@ ALLOWED_SUB_ATTRIBUTES: dict[str, frozenset[str | None]] = {
     "COHERENCE": frozenset({"weak_progression", "limited_support"}),
 }
 
+# Suy tu chinh Literal thay vi viet tay lai: them mot thi ma quen sua o day thi cong loc se
+# vut sach cau mang thi moi, khong bao loi. Cung ly do voi ALLOWED_SUB_ATTRIBUTES o tren.
+ALLOWED_TENSES: frozenset[str] = frozenset(get_args(Tense))
+
 FILTER_REASON_CODES = frozenset(
     {
         "NOT_ENGLISH",
@@ -97,6 +104,7 @@ FILTER_REASON_CODES = frozenset(
         "SUB_ATTRIBUTE_NOT_ALLOWED",
         "CRITERION_UNKNOWN",
         "DUPLICATE_COSINE",
+        "TENSE_MISMATCH",
     }
 )
 

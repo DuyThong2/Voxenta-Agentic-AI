@@ -36,5 +36,15 @@ Propose at most {request.max_proposals} new topics. Rules:
 7. Keep topics inclusive and answerable without money, travel, or specialist knowledge.
 8. For direct search, return one proposal only, evidence_type=SEARCH, and confidence
    must be >=0.9 or return none.
+9. Set temporal_affordance to the time frame the topic itself pulls toward. This decides
+   which tense later questions will drill, so answer about the TOPIC, not about a single
+   question you imagine:
+   - PAST: the subject is finished or historical, and most natural questions look
+     backwards ("The history of my school", "A festival my class held").
+   - FUTURE: the subject has not happened yet ("Inventions that could change school",
+     "Where I want to study after graduation").
+   - MIXED: everything else, including anything discussable in more than one time frame.
+     Choose MIXED when unsure - it lets the system rotate tenses across a session, whereas
+     a wrong PAST/FUTURE locks every question of this topic into the wrong time frame.
 
 Return the best proposals, not diverse samples. Structured data only."""

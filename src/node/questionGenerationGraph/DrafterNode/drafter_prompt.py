@@ -63,12 +63,51 @@ did: a mismatch is caught downstream, a forced question is not.
 {"Fewer distinct dial settings exist at this band than candidates, so some repeat; vary the wording and angle instead." if repeated else ""}"""
 
 
+def _tense_block(target_tense: str | None) -> str:
+    """Ép thì bằng MỐC THỜI GIAN, không bằng mệnh lệnh.
+
+    Bảo mô hình "viết câu luyện quá khứ đơn" thì nó viết câu *nói về* quá khứ mà học sinh
+    vẫn trả lời được bằng hiện tại -- "Tell me about your school's history" nhận được
+    "My school is very old and has many trees". Thứ ép được là mốc thời gian nằm trong
+    chính câu hỏi: "What **did** you do last weekend?" thì quá khứ là bắt buộc.
+
+    Không có thì đích (gọi tay / pipeline nghiên cứu) thì để mô hình tự chọn thì tự nhiên
+    nhất cho chủ đề, nhưng vẫn phải KHAI ra nó chọn gì -- cột target_tense là thứ thang leo
+    dùng để tra kho ở các lượt sau.
+    """
+    if target_tense is None:
+        return """TARGET TENSE - none requested
+Pick whichever tense the topic naturally calls for, then report it in `target_tense`.
+Report what the question actually forces, not what would sound impressive."""
+    return f"""TARGET TENSE - {target_tense}, and the question must MAKE it unavoidable
+Report `target_tense` as exactly {target_tense}.
+
+Naming the tense in the prompt does nothing. What forces a tense is the TIME ANCHOR inside
+the question, so that answering in any other tense would be wrong English:
+- PRESENT: habits or current states - "What do you usually do after class?"
+- PAST: a finished moment, named - "What did you do last weekend?", "Tell me about a time
+  your class changed something."
+- FUTURE: a moment that has not arrived - "What will your school look like in ten years?"
+- PERFECT: experience up to now, or a change with present relevance - "Have you ever
+  taught someone else a skill?"
+- CONDITIONAL: an unreal or unlikely situation - "What would you do if your school had no
+  exams?"
+
+Write `suggested_ideas` in that same tense: they are shown to the student as a starting
+point, so ideas in the wrong tense undo the anchor the question just set.
+
+If the topic cannot carry this tense without an absurd question, write the natural question
+and report the tense you actually forced. A mismatch is caught downstream; a question like
+"What will your school's history be like?" is not fixable later."""
+
+
 def build_drafter_prompt(
     topic: tuple[str, str, str],
     criterion: tuple[str, str | None],
     target_rank: int,
     band_ladder: list | None = None,
     band_count: int = 6,
+    target_tense: str | None = None,
 ) -> str:
     # Dai thoi luong lay THANG tu PRACTICE_TYPE_SECONDS -- cung bang ma validator dung de
     # kep. Viet tay lai o day la mo duong cho prompt va bo kep noi hai dieu khac nhau.
@@ -87,6 +126,8 @@ Target sub-attribute: {json.dumps(criterion[1])}
 Target band: {target_rank}.
 
 {_difficulty_block(target_rank, band_count)}
+
+{_tense_block(target_tense)}
 
 {SAFETY_CONSTRAINTS}
 

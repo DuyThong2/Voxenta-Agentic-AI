@@ -28,6 +28,7 @@ def drafter_node(
             # nút VIẾT chỉ nhận một con số trần -- bên viết không hiểu đích, bên chấm thì hiểu.
             state.get("band_ladder"),
             state.get("band_count", 6),
+            state.get("target_tense"),
         ),
         schema=DraftBatch,
         tokens=state["token_calls"],

@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from node.questionGenerationGraph.constants import (
     ALLOWED_SUB_ATTRIBUTES,
+    ALLOWED_TENSES,
     EMBEDDING_MODEL,
     FILTER_REASON_CODES,
 )
@@ -17,12 +18,19 @@ from schemas.question_generation import PracticeQuestionCandidate
 def rule_violations(
     candidate: PracticeQuestionCandidate,
     requested_sub_attribute: str | None = None,
+    requested_tense: str | None = None,
 ) -> list[tuple[str, str]]:
     """Vi pham cung cua mot ung vien.
 
     `requested_sub_attribute` la sub-attribute Java YEU CAU (None = khong chi dinh).
     None -> chap nhan ca ung vien null lan ung vien co gia tri hop le trong taxonomy.
     Co gia tri -> ung vien phai dung y gia tri do.
+
+    `requested_tense` cung nguyen tac. O day CHI kiem phan CUNG -- nhan tra ve co nam trong
+    tap dong va co khop cai Java xin khong. Viec "moc thoi gian cua cau co THAT SU ep duoc
+    thi do khong" thi khong kiem duoc bang luat: bat tu khoa (did/last/will/would) chi la do
+    dau hieu be mat, va cau "Tell me about a time your school changed" ep qua khu ma khong
+    chua tu nao trong danh sach. Phan do giao cho evaluator -- xem evaluator_prompt.
     """
     violations: list[tuple[str, str]] = []
     text = candidate.prompt_text.strip()
@@ -83,6 +91,20 @@ def rule_violations(
                 f"{rendered} is not allowed for {candidate.target_construct}",
             )
         )
+    if candidate.target_tense not in ALLOWED_TENSES:
+        violations.append(
+            (
+                "TENSE_MISMATCH",
+                f"{candidate.target_tense} is not in the closed tense taxonomy",
+            )
+        )
+    elif requested_tense is not None and candidate.target_tense != requested_tense:
+        violations.append(
+            (
+                "TENSE_MISMATCH",
+                f"{candidate.target_tense} does not match requested {requested_tense}",
+            )
+        )
     assert all(reason in FILTER_REASON_CODES for reason, _ in violations)
     return violations
 
@@ -103,7 +125,9 @@ def candidate_filter_node(
     # không tốn call embedding nào.
     passed_rules = []
     for candidate in state["candidates"]:
-        violations = rule_violations(candidate, state["criterion"][1])
+        violations = rule_violations(
+            candidate, state["criterion"][1], state.get("target_tense")
+        )
         if violations:
             reason, detail = violations[0]
             reasons.update(item[0] for item in violations)

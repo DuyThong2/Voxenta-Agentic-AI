@@ -103,6 +103,49 @@ class PracticeAttemptConnection:
         # not a second capture path. Reset in _handle_turn_end once handed off to
         # _run_correction, so it never spans more than one turn.
         self._turn_audio_buffer = bytearray()
+        # Nap truoc cau MAIN ke tiep -- xem _prefetch_next_question.
+        self._prefetch_task: Optional[asyncio.Task] = None
+
+    def _prefetch_next_question(self) -> None:
+        """Bao Java sinh san cau MAIN ke tiep, chay nen, BO QUA ket qua.
+
+        Van de: khi kho cau cua chu de da can, resolveNextQuestion phai nho LLM soan cau moi --
+        10-40 giay. Truoc day loi goi do chi bat dau SAU khi chuoi follow-up ket thuc, nen hoc
+        sinh ngoi nhin man hinh trong tron ngan ay giay.
+
+        Cach lam: sau MOI luot noi, ban mot lan goi next-question chay nen. Chuoi follow-up con
+        tiep thi cau do nam cho; chuoi ket thuc thi _resolve_and_push_next_question goi lai va
+        nhan duoc ngay.
+
+        KHONG doan truoc "luot sau con follow-up khong". Da tinh: quyet dinh dung thuong den tu
+        LLM trong followup_decision_node, khong suy ra duoc tu dem luot (MAX_TURNS = 10, gan nhu
+        khong bao gio cham toi). Muon doan thi phai sua prompt do -- ma file do DUNG CHUNG voi
+        luong THI, nen khong dung toi.
+
+        Goi nhieu lan khong ton them: ResolveNextPracticeQuestionClaimService kiem
+        existsResponse, thay cau moi nhat chua duoc tra loi thi tra lai DUNG cau do (~50ms),
+        khong sinh cau moi. Nen ca chuoi follow-up chi ton dung MOT luot LLM.
+
+        Cau nap truoc ma phien dut giua chung se duoc tra ve kho luc dong phien -- xem
+        UndeliveredQuestionCleanupService ben Java. Khong tra thi student_question_exposure
+        danh dau "da gap" vinh vien va cau do bien mat khoi kho cua hoc sinh.
+        """
+        if self._prefetch_task is not None and not self._prefetch_task.done():
+            return
+
+        async def _run() -> None:
+            try:
+                await practice_session_client.request_next_question(self.practice_session_id)
+            except Exception:
+                # Nap truoc that bai KHONG duoc lam gi ca: duong chinh
+                # (_resolve_and_push_next_question) van se goi lai va tu xu ly loi cua no.
+                logger.debug(
+                    "[practice_connection] prefetch next-question failed practice_session_id=%s",
+                    self.practice_session_id,
+                    exc_info=True,
+                )
+
+        self._prefetch_task = asyncio.create_task(_run())
 
     async def start(self) -> None:
         await self.voice_live_client.start()
@@ -229,6 +272,23 @@ class PracticeAttemptConnection:
                     {"type": "practice_session_ended", "reason": submit_outcome.status}
                 )
                 return
+
+            # CON follow-up -> nap truoc cau ke tiep ngay bay gio.
+            #
+            # Day la ca diem an tien: 10-40 giay sinh cau chay song song voi tron ven luot noi
+            # tiep theo cua hoc sinh, nen luc chuoi follow-up ket thuc that su thi cau da nam san
+            # trong DB va duong day ben duoi tra ve trong ~50ms.
+            #
+            # Ba dieu kien deu can:
+            #   - SAU _submit_turn: next-question lam THAY DOI paper, ban truoc luc luot hien tai
+            #     duoc xac nhan luu tung khien phien am tham di tiep qua mot luot khong duoc ghi.
+            #   - CHI khi should_continue: neu chuoi da ket thuc thi duong day chinh ngay ben duoi
+            #     goi that -- them mot lan nap truoc o day chi tao ra hai loi goi tranh nhau cung
+            #     mot ReentrantLock ben Java, lam cham chinh cai no dinh tang toc.
+            #   - KHONG khi last_question: phien sap dong vi het ngan sach, cau nap ra chac chan
+            #     thua va se phai tra ve kho.
+            if should_continue and not getattr(session, "last_question", False):
+                self._prefetch_next_question()
 
             if not should_continue:
                 # Cau CUOI da duoc Java may do vua dung ngan sach con lai -- tra loi xong

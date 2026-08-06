@@ -1,11 +1,16 @@
 import os
 
 from config.chroma_config import settings
+from schemas.question_generation import (
+    DRAFTER_CANDIDATES as SCHEMA_DRAFTER_CANDIDATES,
+)
 
 MODEL = os.getenv("PRACTICE_GENERATION_MODEL", "gpt-5.4")
 EMBEDDING_MODEL = settings.OPENAI_EMBEDDING_MODEL
 HARD_CAP = 80
-DRAFTER_CANDIDATES = 3
+# Re-export tu schemas: dinh nghia phai nam o tang duoi de DraftBatch bam theo duoc ma khong
+# tao vong lap import. Xem chu thich tai cho dinh nghia de biet vi sao la 5.
+DRAFTER_CANDIDATES = SCHEMA_DRAFTER_CANDIDATES
 MAX_EDITOR_ROUNDS = 3
 REFINER_BATCH_SIZE = 4
 DUPLICATE_THRESHOLD = 0.92
@@ -59,45 +64,29 @@ TOPICS = [
 CRITERIA = [
     ("PRONUNCIATION", None),
     ("FLUENCY", None),
-    ("GRAMMAR", "sv_agreement"),
+    ("VOCABULARY", None),
     ("GRAMMAR", "tense_control"),
     ("GRAMMAR", "complex_clause_control"),
-    ("GRAMMAR", "third_person_s_omission"),
-    ("GRAMMAR", "article_use"),
-    ("GRAMMAR", "word_form"),
-    ("VOCABULARY", "limited_range"),
-    ("VOCABULARY", "repetition"),
-    ("VOCABULARY", "weak_collocation"),
     ("COHERENCE", "weak_progression"),
     ("COHERENCE", "limited_support"),
-    ("COHERENCE", "connector_overuse"),
-    ("COHERENCE", "topic_drift"),
 ]
 
+# Taxonomy dong, 4 nhan. Truoc day 13.
+#
+# Phep thu de giu mot nhan: nhan do lai duoc can gat nao khi ra de? Bon nhan duoi day moi
+# nhan ung voi dung mot can gat co that -- khung thoi gian cau hoi, kieu lap luan, dang cau
+# hoi. Chin nhan bi cat deu DO duoc, nhung khong co cach nao ra mot de nham trung chung.
+#
+# PHAI khop tung chu voi SubAttributePolicy.java ben Java: taxonomy nay duoc khai bao lap o
+# 4 noi (policy Java, hang so nay, prompt cham, prompt sinh). Lech mot noi thi nhan bi loc
+# LANG LE, khong no.
 ALLOWED_SUB_ATTRIBUTES: dict[str, frozenset[str | None]] = {
     "PRONUNCIATION": frozenset({None}),
     "FLUENCY": frozenset({None}),
-    "GRAMMAR": frozenset(
-        {
-            "sv_agreement",
-            "tense_control",
-            "complex_clause_control",
-            "third_person_s_omission",
-            "article_use",
-            "word_form",
-        }
-    ),
-    "VOCABULARY": frozenset(
-        {"limited_range", "repetition", "weak_collocation"}
-    ),
-    "COHERENCE": frozenset(
-        {
-            "weak_progression",
-            "limited_support",
-            "connector_overuse",
-            "topic_drift",
-        }
-    ),
+    # VOCABULARY khong con nhan nao -- chi luyen duoc o muc tieu chi.
+    "VOCABULARY": frozenset({None}),
+    "GRAMMAR": frozenset({"tense_control", "complex_clause_control"}),
+    "COHERENCE": frozenset({"weak_progression", "limited_support"}),
 }
 
 FILTER_REASON_CODES = frozenset(

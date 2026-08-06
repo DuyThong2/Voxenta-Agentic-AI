@@ -96,19 +96,53 @@ class QuestionGenerationRuntime:
         )
         return response.data[0].embedding, response.usage.prompt_tokens
 
-    def max_similarity(self, embedding: list[float]) -> float:
-        if self.question_collection.count() == 0:
+    def max_similarity(
+        self,
+        embedding: list[float],
+        exclude_ids: set[str] | None = None,
+    ) -> float:
+        """Cau da co trong kho giong ban nhap nay nhat la bao nhieu -- BO QUA nhung cau da chet
+        vinh vien voi hoc sinh dang cho.
+
+        Vi sao phai bo qua: Chroma khong co khai niem hoc sinh (where chi loc {"active": True}),
+        con luat loai cau thi theo TUNG hoc sinh. Hai pham vi lech nhau tao ra khoa cung:
+
+            HS luyen cau A, dat bac  -> A loai vinh vien voi em ay
+            chon lai chu de do       -> doc kho khong con gi
+            nho LLM soan cau moi     -> cung chu de/tieu chi/bac nen rat giong A
+            chan trung 0,92 voi A    -> vut sach -> pool_exhausted, MAI MAI
+
+        Thu chan no lai la thu no khong duoc phep dung. Loai A ra khoi phep so thi ban nhap moi
+        song, va hoc sinh co cau de luyen tiep.
+
+        Danh doi da biet: kho SE co hai cau gan trung nhau (A va ban moi). Voi hoc sinh nay thi
+        vo hai -- A da chet. Voi hoc sinh khac chua gap ca hai thi co the gap lan luot qua nhieu
+        buoi; cong chan-hoi trong mot phien (max_similarities, 0,85) van do duoc phan trong cung
+        mot buoi. Chap nhan, vi doi lai la go duoc khoa cung.
+
+        Chroma khong loc duoc theo id trong query(), nen lay du n_results roi bo -- lay
+        len(exclude) + 5 de con du ung vien sau khi bo het phan bi loai.
+        """
+        total = self.question_collection.count()
+        if total == 0:
             return 0.0
+        excluded = exclude_ids or set()
+        n_results = min(total, len(excluded) + 5)
         result = self.question_collection.query(
             query_embeddings=[embedding],
-            n_results=1,
+            n_results=n_results,
             where={"active": True},
             include=["distances"],
         )
-        distances = result.get("distances") or []
-        if not distances or not distances[0]:
-            return 0.0
-        return max(0.0, min(1.0, 1.0 - float(distances[0][0])))
+        ids = (result.get("ids") or [[]])[0]
+        distances = (result.get("distances") or [[]])[0]
+        for question_id, distance in zip(ids, distances, strict=True):
+            if question_id in excluded:
+                continue
+            # Chroma tra ve theo thu tu khoang cach tang dan, nen cai dau tien khong bi loai
+            # CHINH LA cai giong nhat -- khong can duyet het.
+            return max(0.0, min(1.0, 1.0 - float(distance)))
+        return 0.0
 
 
 def question_embedding_text(topic_name: str, prompt_text: str) -> str:

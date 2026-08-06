@@ -1,8 +1,18 @@
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import BaseModel, Field, model_validator
+
+# Dinh nghia O DAY chu khong o node/questionGenerationGraph/constants.py: schemas la tang duoi,
+# node import len duoc con nguoc lai thi vong lap (constants -> package __init__ -> cac node ->
+# schemas). constants.py re-export lai de moi cho van goi ten quen thuoc.
+#
+# 5 chu khong 3: tu khi bo cong chan-trung-lich-su o CandidateFilterNode, ung vien chi con rot
+# o luat cung (do dai, ASCII, taxonomy) va o evaluator. Soan du ra vai cai de mot lo hong bao
+# gio ve tay khong -- lo rong nghia la pool_exhausted, tuc phien luyen dut giua chung. Chi phi
+# them nam trong CUNG mot luot drafter, khong phai them vong nao.
+DRAFTER_CANDIDATES = 5
 
 CriterionCode = Literal[
     "PRONUNCIATION",
@@ -108,14 +118,16 @@ class PracticeQuestionCandidate(BaseModel):
 
 
 class DraftBatch(BaseModel):
+    # Bam theo DRAFTER_CANDIDATES (5). Khong dat cung so o hai noi: prompt bao "generate exactly
+    # N" con schema ep dung N, lech nhau la LLM tra ve hop le ma pydantic van nem.
     candidates: list[PracticeQuestionCandidate] = Field(
-        min_length=3,
-        max_length=3,
+        min_length=DRAFTER_CANDIDATES,
+        max_length=DRAFTER_CANDIDATES,
     )
 
     @model_validator(mode="after")
     def unique_ids(self) -> "DraftBatch":
-        if len({candidate.candidate_id for candidate in self.candidates}) != 3:
+        if len({candidate.candidate_id for candidate in self.candidates}) != DRAFTER_CANDIDATES:
             raise ValueError("Drafter candidate IDs must be unique")
         return self
 
@@ -131,9 +143,11 @@ class EvaluationBatch(BaseModel):
 
 
 class RefinedBatch(BaseModel):
+    # Tran bam theo DRAFTER_CANDIDATES: refiner khong the tra ve nhieu hon so ung vien di vao.
+    # De cung 4 trong khi drafter sinh 5 thi mot lo toan cau tot lai bi pydantic nem.
     candidates: list[PracticeQuestionCandidate] = Field(
         min_length=1,
-        max_length=4,
+        max_length=DRAFTER_CANDIDATES,
     )
 
 
@@ -155,11 +169,19 @@ class QuestionGenerationRequest(BaseModel):
     # le=20 chu khong 6: thang bac do framework cua truong quyet dinh (CEFR 6, IELTS 9...),
     # khong phai hang so VSTEP. Tran that do Java tinh tu framework_result_bands.
     target_rank: int = Field(ge=1, le=20)
-    count: int = Field(default=3, ge=1, le=3)
+    # le=5 theo DRAFTER_CANDIDATES: Java xin bao nhieu cau thi nhieu nhat cung chi bang so
+    # ung vien mot luot drafter sinh ra.
+    count: int = Field(default=3, ge=1, le=DRAFTER_CANDIDATES)
     # So bac cua thang dang ap; Java gui xuong. Mac dinh 6 de goi tay/test khong vo.
     band_count: int = Field(default=6, ge=1, le=20)
     # Mo ta tung bac, de dung ladder trong prompt cham. Rong -> dung BAND_LADDER mac dinh.
     band_ladder: list[BandRung] = Field(default_factory=list)
+    # Cau da CHET VINH VIEN voi chinh hoc sinh dang cho: bi loai khoi phep so trung o
+    # CandidateFilterNode. Xem runtime.max_similarity de biet vi sao.
+    #
+    # Rong (goi tay, pipeline nghien cuu, hoac hoc sinh chua luyen cau nao) -> so voi ca kho
+    # nhu cu, khong doi hanh vi.
+    exclude_question_ids: list[str] = Field(default_factory=list)
 
 
 class GeneratedQuestion(BaseModel):
@@ -210,6 +232,73 @@ def raw_difficulty(features: DifficultyFeatures) -> int:
         + (features.abstractness == "abstract")
     )
     return max(RAW_DIFFICULTY_MIN, min(RAW_DIFFICULTY_MAX, int(raw)))
+
+
+def raw_for_rank(rank: int, band_count: int = RAW_DIFFICULTY_MAX) -> int:
+    """Nghịch đảo của `difficulty_rank`: bậc của trường -> mức khó thô Robinson 1..6.
+
+    Cần vì nút soạn câu phải biết đặt bốn cần gạt Robinson ở đâu, mà bốn cần gạt đó chỉ nói
+    chuyện bằng thang thô. Với thang 6 bậc thì đây là phép đồng nhất.
+    """
+    safe_band_count = max(1, int(band_count))
+    safe_rank = max(1, min(safe_band_count, int(rank)))
+    if safe_band_count == RAW_DIFFICULTY_MAX:
+        return safe_rank
+    if safe_band_count == 1:
+        return RAW_DIFFICULTY_MIN
+    normalized = (safe_rank - 1) / (safe_band_count - 1)
+    raw = RAW_DIFFICULTY_MIN + round(
+        normalized * (RAW_DIFFICULTY_MAX - RAW_DIFFICULTY_MIN)
+    )
+    return max(RAW_DIFFICULTY_MIN, min(RAW_DIFFICULTY_MAX, int(raw)))
+
+
+def feature_profiles_for_raw(raw: int) -> list[DifficultyFeatures]:
+    """Mọi tổ hợp đặc trưng Robinson cho ra ĐÚNG mức khó thô này.
+
+    Liệt kê vét cạn từ chính `raw_difficulty` chứ không viết tay: đổi trọng số trong công
+    thức thì danh sách này tự đi theo, không có cách nào lệch.
+
+    Vì sao cần: `raw_difficulty` là phép ĐO trên bốn đặc trưng, không phải cái đích nhắm
+    được. Bảo mô hình "viết câu bậc 6" giống bảo ai đó "hãy cao 1m80" -- cao là kết quả.
+    Thứ nhắm được là bốn cần gạt. Và khoảng tự do rất lệch nhau:
+
+        bậc 1: 2/60 tổ hợp      bậc 4: 19/60
+        bậc 2: 9/60             bậc 5: 10/60
+        bậc 3: 18/60            bậc 6: 2/60
+
+    Hai đầu thang gần như chỉ có một cách viết đúng. Không nói ra thì xác suất trúng bậc 6
+    khi soạn tự do chỉ ~3%, và đó chính là lý do kho không bao giờ tự có câu khó.
+
+    Thứ tự trả về ổn định, ưu tiên tổ hợp tự nhiên trước: cái trừu tượng thì thường cũng
+    không phải chuyện đang diễn ra trước mắt, nên xếp `abstract` + `here_and_now=False` lên
+    trên. Chỉ là thứ tự ưu tiên, không phải điểm số.
+    """
+    safe_raw = max(RAW_DIFFICULTY_MIN, min(RAW_DIFFICULTY_MAX, int(raw)))
+    profiles: list[DifficultyFeatures] = []
+    for here_and_now in (True, False):
+        # 2 và 5 chỉ là đại diện hai phía ngưỡng `num_elements >= 4`; công thức không phân
+        # biệt gì hơn trong mỗi phía.
+        for num_elements in (2, 5):
+            for reasoning_type in get_args(ReasoningType):
+                for abstractness in get_args(Abstractness):
+                    features = DifficultyFeatures(
+                        here_and_now=here_and_now,
+                        num_elements=num_elements,
+                        reasoning_type=reasoning_type,
+                        abstractness=abstractness,
+                    )
+                    if raw_difficulty(features) == safe_raw:
+                        profiles.append(features)
+    profiles.sort(
+        key=lambda item: (
+            item.abstractness == "abstract" and item.here_and_now,
+            # `mixed` không đổi được mức khó (chỉ `abstract` mới cộng 1) nên để sau -- nói
+            # "mixed" với người soạn câu là một chỉ dẫn mơ hồ không mua được gì.
+            item.abstractness == "mixed",
+        )
+    )
+    return profiles
 
 
 def difficulty_rank(

@@ -2,7 +2,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 from node.questionGenerationGraph.constants import (
     ALLOWED_SUB_ATTRIBUTES,
-    DUPLICATE_THRESHOLD,
     EMBEDDING_MODEL,
     FILTER_REASON_CODES,
 )
@@ -125,7 +124,12 @@ def candidate_filter_node(
         embedding, token_count = runtime.embed(
             question_embedding_text(topic_name, candidate.prompt_text)
         )
-        return candidate, embedding, token_count, runtime.max_similarity(embedding)
+        return (
+            candidate,
+            embedding,
+            token_count,
+            runtime.max_similarity(embedding, state.get("exclude_question_ids")),
+        )
 
     if passed_rules:
         with ThreadPoolExecutor(max_workers=len(passed_rules)) as pool:
@@ -146,21 +150,27 @@ def candidate_filter_node(
                 response_id="",
             )
         )
+        # KHONG con loai ung vien vi trung voi LICH SU kho nua (truoc: cosine >= 0,92 ->
+        # DUPLICATE_COSINE). Van tinh va giu `cosines` de theo doi, chi bo phan CHAN.
+        #
+        # Vi sao bo: cong nay khoa cung chinh cai no phuc vu. Trong MOT chu de, khi hoc sinh da
+        # luyen het cau co san thi cau moi TAT NHIEN se giong cau cu -- cung chu de, cung tieu
+        # chi, cung bac thi khong con bao nhieu cach hoi khac nhau. Chan lai nghia la:
+        #
+        #     doc kho: rong  ->  nho LLM soan  ->  soan ra cai giong cau cu  ->  vut
+        #     ->  survivors = []  ->  pool_exhausted, VINH VIEN
+        #
+        # Thu chan no lai la thu hoc sinh khong duoc phep dung nua. Do tren du lieu that
+        # 2026-08-05: 64 vector trong Chroma nhung chi 13 cau trong Postgres -- 51 vector mo coi
+        # tu lan xoa DB truoc, va cong nay dang so ban nhap moi voi ca nhung cau KHONG CON TON
+        # TAI. Khong co duong nao go duoc bang danh sach loai tru, vi chung khong nam trong
+        # bat ky bang nao cua Postgres.
+        #
+        # Danh doi da chap nhan (quyet dinh cua nguoi dung): kho SE co cau na na nhau. Doi lai,
+        # lop chan LAP trong MOT BUOI van con nguyen -- xem maxSimilarities o
+        # PracticeQuestionSelectionService.pickOne, nguong 0,85, so voi cau da phat trong chinh
+        # phien do. Do la lop hoc sinh cam nhan duoc; trung voi cau cua thang truoc thi khong.
         cosines.append(similarity)
-        if similarity >= DUPLICATE_THRESHOLD:
-            reasons.add("DUPLICATE_COSINE")
-            rejected.append(
-                {
-                    "candidate_id": candidate.candidate_id,
-                    "reason": "DUPLICATE_COSINE",
-                    "detail": (
-                        f"cosine {similarity:.6f} >= "
-                        f"{DUPLICATE_THRESHOLD:.2f}"
-                    ),
-                    "candidate": candidate.model_dump(),
-                }
-            )
-            continue
         survivors.append(candidate)
         embeddings[candidate.candidate_id] = embedding
     return {

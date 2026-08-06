@@ -46,6 +46,7 @@ def generate_questions(
         needed=request.count,
         band_count=request.band_count,
         band_ladder=request.band_ladder,
+        exclude_question_ids=request.exclude_question_ids,
     )
     records = []
     for candidate in state["refined"]:

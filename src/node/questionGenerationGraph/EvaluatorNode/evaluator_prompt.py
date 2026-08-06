@@ -28,9 +28,8 @@ Check topic fit, target construct, target sub-attribute, neutral access, interna
 all six evaluation-guide fields, and whether difficulty_features imply rank near {target_rank}.
 The target_sub_attribute taxonomy is closed. PRONUNCIATION and FLUENCY require null;
 null is correct for those two constructs and must never be reported as missing. GRAMMAR allows
-sv_agreement, tense_control, complex_clause_control, third_person_s_omission, article_use,
-word_form. VOCABULARY allows limited_range, repetition, weak_collocation. COHERENCE allows
-weak_progression, limited_support, connector_overuse, topic_drift.
+tense_control, complex_clause_control. VOCABULARY allows no sub-attribute. COHERENCE allows
+weak_progression, limited_support.
 {SAFETY_CONSTRAINTS}
 Do not assign a total quality score. Return concrete violation codes.
 

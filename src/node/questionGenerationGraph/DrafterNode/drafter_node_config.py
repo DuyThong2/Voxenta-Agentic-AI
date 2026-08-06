@@ -24,6 +24,10 @@ def drafter_node(
             state["topic"],
             state["criterion"],
             state["target_rank"],
+            # Cùng thang bậc mà EvaluatorNode nhận. Trước đây chỉ nút CHẤM biết thang, còn
+            # nút VIẾT chỉ nhận một con số trần -- bên viết không hiểu đích, bên chấm thì hiểu.
+            state.get("band_ladder"),
+            state.get("band_count", 6),
         ),
         schema=DraftBatch,
         tokens=state["token_calls"],

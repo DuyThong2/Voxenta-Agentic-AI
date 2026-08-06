@@ -17,6 +17,9 @@ class QuestionGenerationState(TypedDict, total=False):
     # de biet vi sao khong dung hang so 6 bac cua VSTEP nua.
     band_count: int
     band_ladder: list[Any]
+    # Id cau da CHET VINH VIEN voi hoc sinh dang cho -- CandidateFilterNode bo chung ra khoi
+    # phep so trung. Xem runtime.max_similarity de biet vi sao khong so voi ca kho.
+    exclude_question_ids: set[str]
     # Số câu thực sự cần -- fast mode dừng sửa/chấm ngay khi đã đủ.
     needed: int
     candidates: list[PracticeQuestionCandidate]

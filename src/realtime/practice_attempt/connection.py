@@ -19,6 +19,7 @@ import json
 import logging
 import tempfile
 import wave
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
@@ -35,6 +36,30 @@ logger = logging.getLogger(__name__)
 PRACTICE_FAREWELL_TEXT = "Cảm ơn bạn đã luyện tập hôm nay. Hẹn gặp lại!"
 
 _correction_graph = build_realtime_correction_graph()
+
+
+@dataclass(frozen=True)
+class TurnSubmitOutcome:
+    """Ket qua nop mot luot len Java: trang thai + cap so cho thanh tien do.
+
+    spoken/budget la None khi khong doc duoc tu Java (loi mang, hoac ban Java cu chua co 2
+    truong nay). Co y KHONG thay bang 0: 0 la mot con so co nghia ("chua noi giay nao"), con
+    None la "khong biet" -- client an thanh tien do thay vi ve mot thanh rong sai su that.
+    """
+
+    status: str
+    spoken_seconds: Optional[int]
+    budget_seconds: Optional[int]
+
+    @classmethod
+    def of(cls, status: str, body: Any) -> "TurnSubmitOutcome":
+        if not isinstance(body, dict):
+            return cls(status, None, None)
+        return cls(
+            status,
+            body.get("sessionSpokenSeconds"),
+            body.get("sessionBudgetSeconds"),
+        )
 
 
 def _write_turn_wav(pcm16_bytes: bytes) -> Optional[str]:
@@ -78,6 +103,49 @@ class PracticeAttemptConnection:
         # not a second capture path. Reset in _handle_turn_end once handed off to
         # _run_correction, so it never spans more than one turn.
         self._turn_audio_buffer = bytearray()
+        # Nap truoc cau MAIN ke tiep -- xem _prefetch_next_question.
+        self._prefetch_task: Optional[asyncio.Task] = None
+
+    def _prefetch_next_question(self) -> None:
+        """Bao Java sinh san cau MAIN ke tiep, chay nen, BO QUA ket qua.
+
+        Van de: khi kho cau cua chu de da can, resolveNextQuestion phai nho LLM soan cau moi --
+        10-40 giay. Truoc day loi goi do chi bat dau SAU khi chuoi follow-up ket thuc, nen hoc
+        sinh ngoi nhin man hinh trong tron ngan ay giay.
+
+        Cach lam: sau MOI luot noi, ban mot lan goi next-question chay nen. Chuoi follow-up con
+        tiep thi cau do nam cho; chuoi ket thuc thi _resolve_and_push_next_question goi lai va
+        nhan duoc ngay.
+
+        KHONG doan truoc "luot sau con follow-up khong". Da tinh: quyet dinh dung thuong den tu
+        LLM trong followup_decision_node, khong suy ra duoc tu dem luot (MAX_TURNS = 10, gan nhu
+        khong bao gio cham toi). Muon doan thi phai sua prompt do -- ma file do DUNG CHUNG voi
+        luong THI, nen khong dung toi.
+
+        Goi nhieu lan khong ton them: ResolveNextPracticeQuestionClaimService kiem
+        existsResponse, thay cau moi nhat chua duoc tra loi thi tra lai DUNG cau do (~50ms),
+        khong sinh cau moi. Nen ca chuoi follow-up chi ton dung MOT luot LLM.
+
+        Cau nap truoc ma phien dut giua chung se duoc tra ve kho luc dong phien -- xem
+        UndeliveredQuestionCleanupService ben Java. Khong tra thi student_question_exposure
+        danh dau "da gap" vinh vien va cau do bien mat khoi kho cua hoc sinh.
+        """
+        if self._prefetch_task is not None and not self._prefetch_task.done():
+            return
+
+        async def _run() -> None:
+            try:
+                await practice_session_client.request_next_question(self.practice_session_id)
+            except Exception:
+                # Nap truoc that bai KHONG duoc lam gi ca: duong chinh
+                # (_resolve_and_push_next_question) van se goi lai va tu xu ly loi cua no.
+                logger.debug(
+                    "[practice_connection] prefetch next-question failed practice_session_id=%s",
+                    self.practice_session_id,
+                    exc_info=True,
+                )
+
+        self._prefetch_task = asyncio.create_task(_run())
 
     async def start(self) -> None:
         await self.voice_live_client.start()
@@ -170,13 +238,13 @@ class PracticeAttemptConnection:
                 self._upload_turn_audio(audio_path, current_turn.get("turn_order"))
             )
 
-            corrections, pronunciation_result = await correction_task
+            corrections, pronunciation_result, wrong_language = await correction_task
             audio_url = await upload_task
             # Only resolve/push the next MAIN question -- which mutates the paper on Java's
             # side -- once the CURRENT turn is confirmed saved (recorded + quota-consumed).
             # Firing it concurrently with _submit_turn let the session silently advance past
             # a turn that was never recorded (network hiccup or quota exceeded).
-            submit_status = await self._submit_turn(
+            submit_outcome = await self._submit_turn(
                 session, corrections, pronunciation_result, audio_url,
                 question_complete=not should_continue,
             )
@@ -186,10 +254,14 @@ class PracticeAttemptConnection:
                     "answer_id": session.answer_id,
                     "corrections": corrections,
                     "pronunciation": pronunciation_result,
+                    "wrong_language": wrong_language,
                 }
             )
+            await self._send_session_budget(
+                submit_outcome.spoken_seconds, submit_outcome.budget_seconds
+            )
 
-            if submit_status in ("quota_exceeded", "failed"):
+            if submit_outcome.status in ("quota_exceeded", "failed"):
                 # Both are unrecoverable mid-conversation: Java's paper/quota state and the
                 # client's UI have now diverged (this turn is unsaved or rejected), so letting
                 # the student tap "Tiếp tục" as if nothing happened would silently continue past
@@ -197,17 +269,51 @@ class PracticeAttemptConnection:
                 # pool_exhausted (mục 2.9), just a different reason for the summary screen to
                 # explain.
                 await self.socket.send_json(
-                    {"type": "practice_session_ended", "reason": submit_status}
+                    {"type": "practice_session_ended", "reason": submit_outcome.status}
                 )
                 return
 
+            # CON follow-up -> nap truoc cau ke tiep ngay bay gio.
+            #
+            # Day la ca diem an tien: 10-40 giay sinh cau chay song song voi tron ven luot noi
+            # tiep theo cua hoc sinh, nen luc chuoi follow-up ket thuc that su thi cau da nam san
+            # trong DB va duong day ben duoi tra ve trong ~50ms.
+            #
+            # Ba dieu kien deu can:
+            #   - SAU _submit_turn: next-question lam THAY DOI paper, ban truoc luc luot hien tai
+            #     duoc xac nhan luu tung khien phien am tham di tiep qua mot luot khong duoc ghi.
+            #   - CHI khi should_continue: neu chuoi da ket thuc thi duong day chinh ngay ben duoi
+            #     goi that -- them mot lan nap truoc o day chi tao ra hai loi goi tranh nhau cung
+            #     mot ReentrantLock ben Java, lam cham chinh cai no dinh tang toc.
+            #   - KHONG khi last_question: phien sap dong vi het ngan sach, cau nap ra chac chan
+            #     thua va se phai tra ve kho.
+            if should_continue and not getattr(session, "last_question", False):
+                self._prefetch_next_question()
+
             if not should_continue:
+                # Cau CUOI da duoc Java may do vua dung ngan sach con lai -- tra loi xong
+                # la het gio, hoi tiep chi de nhan lai budget_exhausted, ton mot vong goi
+                # va bat hoc sinh cho them vai giay truoc man tong ket.
+                if getattr(session, "last_question", False):
+                    await self.socket.send_json(
+                        {"type": "practice_session_ended", "reason": "budget_exhausted"}
+                    )
+                    return
                 await self._resolve_and_push_next_question()
         finally:
             if audio_path:
                 Path(audio_path).unlink(missing_ok=True)
 
-    async def _run_correction(self, session, audio_path: Optional[str]) -> tuple[list, Optional[dict]]:
+    async def _run_correction(
+        self, session, audio_path: Optional[str]
+    ) -> tuple[list, Optional[dict], bool]:
+        """Tra ve (corrections, pronunciation_result, wrong_language).
+
+        `wrong_language` = luot noi khong phai tieng Anh nen da bo qua toan bo viec sua loi
+        (xem realtimeCorrectionGraph.language_guard). Chuyen ra client de noi cho hoc sinh
+        biet VI SAO luot vua roi khong co phan hoi -- khong noi thi man hinh chi hien mot the
+        trong, trong nhu he thong hong.
+        """
         current_turn = session.turns[-1]
         state = {
             "transcript": current_turn.get("transcript") or "",
@@ -221,8 +327,20 @@ class PracticeAttemptConnection:
                 "[practice_attempt_connection] correction graph failed practice_session_id=%s",
                 self.practice_session_id,
             )
-            return [], None
-        return result.get("corrections") or [], result.get("pronunciation_result")
+            return [], None, False
+        if result.get("wrong_language"):
+            logger.info(
+                "[practice_attempt_connection] luot noi khong phai tieng Anh -- bo qua sua loi "
+                "practice_session_id=%s answer_id=%s turn_order=%s",
+                self.practice_session_id,
+                session.answer_id,
+                current_turn.get("turn_order"),
+            )
+        return (
+            result.get("corrections") or [],
+            result.get("pronunciation_result"),
+            bool(result.get("wrong_language")),
+        )
 
     async def _upload_turn_audio(self, audio_path: Optional[str], turn_order: int) -> Optional[str]:
         """Permanent archival for teacher review (TeacherPracticeTurnView.audioUrl) -- separate
@@ -254,10 +372,12 @@ class PracticeAttemptConnection:
         audio_url: Optional[str],
         *,
         question_complete: bool,
-    ) -> str:
-        """Returns "ok", "quota_exceeded" (Java's ConsumeQuotaUseCase rejected it, HTTP 409),
-        or "failed" (anything else) -- caller (_after_turn) uses this to decide whether it's
-        safe to keep advancing the session."""
+    ) -> TurnSubmitOutcome:
+        """status la "ok", "quota_exceeded" (Java bao het han muc) hoac "failed" -- caller
+        (_after_turn) dua vao do de quyet co an toan di tiep khong.
+
+        Kem theo cap so "da noi / ngan sach" Java tra ve trong body 200, de client cap nhat
+        thanh tien do ngay sau moi luot. None khi khong nop duoc (khong bia so)."""
         current_turn = session.turns[-1]
         payload = {
             "questionId": session.question_id,
@@ -289,17 +409,30 @@ class PracticeAttemptConnection:
         attempts = 3
         for attempt in range(1, attempts + 1):
             try:
-                await practice_session_client.submit_turn(self.practice_session_id, payload)
-                return "ok"
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code == 409:
-                    logger.warning(
-                        "[practice_attempt_connection] quota exceeded practice_session_id=%s "
-                        "answer_id=%s",
+                result = await practice_session_client.submit_turn(
+                    self.practice_session_id, payload
+                )
+                # Hết hạn mức giờ báo bằng CỜ trong body 200, không phải 409 nữa: Java vẫn
+                # GHI lượt rồi mới báo hết quota, thay vì rollback cả lượt vừa nói. Nhánh 409
+                # bên dưới giữ lại để tương thích khi Java chưa kịp deploy bản mới.
+                if isinstance(result, dict) and result.get("quotaExhausted"):
+                    logger.info(
+                        "[practice_attempt_connection] quota exhausted -- luot da duoc ghi, "
+                        "dong phien practice_session_id=%s answer_id=%s",
                         self.practice_session_id,
                         session.answer_id,
                     )
-                    return "quota_exceeded"
+                    return TurnSubmitOutcome.of("quota_exceeded", result)
+                return TurnSubmitOutcome.of("ok", result)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code == 409:
+                    logger.warning(
+                        "[practice_attempt_connection] quota exceeded (409, ban Java cu -- "
+                        "luot NAY BI MAT) practice_session_id=%s answer_id=%s",
+                        self.practice_session_id,
+                        session.answer_id,
+                    )
+                    return TurnSubmitOutcome("quota_exceeded", None, None)
                 logger.exception(
                     "[practice_attempt_connection] submit_turn failed (attempt %d/%d) "
                     "practice_session_id=%s answer_id=%s",
@@ -319,10 +452,34 @@ class PracticeAttemptConnection:
                 )
             if attempt < attempts:
                 await asyncio.sleep(1.5 * attempt)
-        return "failed"
+        return TurnSubmitOutcome("failed", None, None)
+
+    async def _send_session_budget(
+        self, spoken_seconds: Optional[int], budget_seconds: Optional[int]
+    ) -> None:
+        """Cap nhat thanh tien do "da noi / ngan sach" tren may hoc sinh.
+
+        Im lang bo qua khi thieu so: xem TurnSubmitOutcome -- None nghia la khong biet,
+        gui xuong se lam client ve mot thanh sai su that. Client giu nguyen so cu.
+
+        Luu y day KHONG phai dong ho: quota chi tru dung khoang VAD nghe thay tieng, nen
+        luc AI noi / hoc sinh nghi / cho cham deu khong tinh vao day.
+        """
+        if spoken_seconds is None or budget_seconds is None:
+            return
+        await self.socket.send_json(
+            {
+                "type": "session_budget",
+                "spoken_seconds": spoken_seconds,
+                "budget_seconds": budget_seconds,
+            }
+        )
 
     async def _resolve_and_push_next_question(self) -> None:
         push_result = await self.questions.resolve_and_push_next_question()
+        await self._send_session_budget(
+            push_result.session_spoken_seconds, push_result.session_budget_seconds
+        )
         if push_result.ended:
             await self.socket.send_json(
                 {"type": "practice_session_ended", "reason": push_result.reason}

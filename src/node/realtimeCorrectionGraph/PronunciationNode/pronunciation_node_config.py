@@ -21,6 +21,9 @@ from typing import Any, Dict, List
 
 import azure.cognitiveservices.speech as speechsdk
 
+from node.evalGraph.PronunciationNode.pronunciation_eval_node_config import (
+    extract_word_feedback,
+)
 from utils.speech_client import build_speech_config, describe_no_match
 
 logger = logging.getLogger(__name__)
@@ -96,12 +99,26 @@ def pronunciation_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         nbest = segments_data[0].get("NBest", [{}])[0]
         assessment = nbest.get("PronunciationAssessment", {})
+        # Dữ liệu theo TỪNG TỪ và TỪNG ÂM VỊ, gộp qua mọi segment.
+        #
+        # Trước đây chỗ này chỉ giữ bốn điểm tổng rồi vứt nbest["Words"] đi, nên thẻ sửa lỗi
+        # không bao giờ chỉ ra được sai âm nào -- format_feedback_node tìm khoá "words" không
+        # thấy gì và luôn trả danh sách rỗng. Học sinh chỉ thấy điểm chung chung.
+        #
+        # Dùng lại extract_word_feedback của đường chấm bài chứ không viết bản thứ hai: nó đã
+        # xử sẵn trường hợp Azure trả âm vị lồng trong Syllables thay vì Phonemes.
+        words = [
+            word.model_dump()
+            for segment in segments_data
+            for word in extract_word_feedback(segment)
+        ]
         return {
             "pronunciation_result": {
                 "accuracy_score": assessment.get("AccuracyScore"),
                 "fluency_score": assessment.get("FluencyScore"),
                 "completeness_score": assessment.get("CompletenessScore"),
                 "pron_score": assessment.get("PronScore"),
+                "words": words,
             }
         }
     except Exception:

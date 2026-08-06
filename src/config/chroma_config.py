@@ -21,7 +21,6 @@ class ChromaSettings(BaseSettings):
     # ChromaDB Connection
     CHROMA_HOST: str = "localhost"
     CHROMA_PORT: int = 8001
-    CHROMA_COLLECTION: str = "product_details_openai"
 
     # OpenAI Embedding
     OPENAI_API_KEY: Optional[str] = None

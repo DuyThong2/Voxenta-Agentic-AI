@@ -7,8 +7,8 @@ from node.topicGenerationGraph.TopicProposalNode.topic_proposal_prompt import (
 )
 from schemas.topic_generation import (
     TopicProposal,
-    TopicProposalBatch,
     TopicProposalRequest,
+    build_topic_batch_model,
 )
 
 
@@ -33,13 +33,15 @@ def topic_proposal_node(
                 "content": build_topic_proposal_prompt(request),
             },
         ],
-        text_format=TopicProposalBatch,
+        # Schema dựng theo danh mục chiều Java gửi xuống -- model không thể trả về chiều
+        # không tồn tại trong hệ thống.
+        text_format=build_topic_batch_model(request.effective_dimensions()),
     )
     proposals = (
         []
         if response.output_parsed is None
         else enforce_evidence_caps(
-            response.output_parsed.proposals,
+            [_to_open_proposal(item) for item in response.output_parsed.proposals],
             request,
         )
     )
@@ -50,6 +52,24 @@ def topic_proposal_node(
     }
 
 
+def _to_open_proposal(item) -> TopicProposal:
+    """Model động dùng Enum cho interest_dimension -> đổi về str thuần để phần còn lại
+    (và Java) chỉ thấy chuỗi như trước."""
+    dimension = item.interest_dimension
+    return TopicProposal(
+        name=item.name,
+        interest_dimension=str(getattr(dimension, "value", dimension)),
+        curriculum_group=item.curriculum_group,
+        temporal_affordance=item.temporal_affordance,
+        confidence=item.confidence,
+        reason_text=item.reason_text,
+        distinct_from=item.distinct_from,
+        evidence_type=item.evidence_type,
+        evidence_keywords=list(item.evidence_keywords),
+        grounded_in_keyword=item.grounded_in_keyword,
+    )
+
+
 def enforce_evidence_caps(
     proposals: list[TopicProposal],
     request: TopicProposalRequest,
@@ -58,14 +78,34 @@ def enforce_evidence_caps(
         item.keyword.casefold(): item.session_count
         for item in request.keyword_evidence
     }
+    # Trần "tối đa MỘT đề xuất ungrounded" chỉ có nghĩa khi ĐANG CÓ từ khoá quan sát được: nó
+    # ngăn LLM bịa thêm chủ đề chẳng liên quan gì tới bằng chứng đang có. Khi danh sách từ khoá
+    # RỖNG (đường TopicSuggestionService.synchronousOffers -- đề xuất dựa hoàn toàn vào
+    # interest_scores) thì MỌI đề xuất đều nằm ngoài từ khoá, vì không có từ khoá nào cả; giữ
+    # nguyên trần ở đây là cắt còn đúng 1 chủ đề mỗi lượt.
+    #
+    # Trần này nằm SAU khâu sinh, nên tăng max_proposals không cứu được -- LLM trả về 8 rồi bị
+    # cắt còn 1 ở đây, im lặng, không log.
+    cap_ungrounded = bool(evidence_counts)
     ungrounded = 0
     filtered = []
     for proposal in proposals:
         if not proposal.grounded_in_keyword:
             ungrounded += 1
-            proposal.confidence = min(proposal.confidence, 0.4)
-            if ungrounded > 1:
-                continue
+            if cap_ungrounded:
+                proposal.confidence = min(proposal.confidence, 0.4)
+                if ungrounded > 1:
+                    continue
+            else:
+                # 0.4 là trần dành cho "bịa thêm ngoài bằng chứng đang có". Ở đây không phải
+                # vậy -- bằng chứng là interest_scores -- nên chấm trần theo evidence_type,
+                # đúng như luật 5 trong prompt.
+                proposal.confidence = min(
+                    proposal.confidence,
+                    0.6 if proposal.evidence_type == "INTEREST"
+                    else 0.7 if proposal.evidence_type == "EXHAUSTED"
+                    else 0.4,
+                )
         elif proposal.evidence_type in {"KEYWORD", "SEARCH"}:
             counts = [
                 evidence_counts[keyword.casefold()]

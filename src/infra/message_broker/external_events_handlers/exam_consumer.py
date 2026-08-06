@@ -28,6 +28,7 @@ from infra.message_broker.publishers.exam_publisher import (
     publish_practice_attempt_evaluation_failed,
 )
 from infra.storage.audio_storage import download_from_s3_async
+from schemas.framework import to_source_keys
 from schemas.scoring import CriterionScore
 from schemas.validity import RuleResult, ValidityResult
 from mappers.exam_event_builder import (
@@ -424,12 +425,44 @@ async def _evaluate_turn(
     turn: Any,
     conversation_transcript: str,
     raw_payload: Dict[str, Any],
+    practice_mode: bool = False,
 ) -> Dict[str, Any]:
     local_audio_path = await download_from_s3_async(turn.audio_ref)
     try:
         realtime_transcript, realtime_transcript_confidence = await archive_store.get_realtime_transcript(
             archive_graph, request_event.answer_id, turn.turn_order,
         )
+        if practice_mode and not realtime_transcript:
+            # CHI cho LUYEN TAP -- duong thi khong doi mot chut nao (xem tham so practice_mode).
+            #
+            # Van de: khoa answer_id lech nhau giua luc GHI va luc DOC, va chi lech o luyen tap.
+            #
+            #   ghi   realtime/turn/processor.py:109  persist_realtime_transcript(session.answer_id)
+            #         luyen: answer_id = f"{practice_session_id}:{question_id}"   (chuoi ghep)
+            #   doc   dong ngay tren                  get_realtime_transcript(request_event.answer_id)
+            #         Java gui: PracticeEvaluationRequestFactory  responseId.toString()  (UUID tran)
+            #
+            # Luyen phai tu bia answer_id vi cau MAIN chuyen tiep o phia server, khong co
+            # question_start tu client mang answer_id that -- khac han THI, noi client gui thang
+            # answer_id (realtime/question/coordinator.py:46) nen ghi va doc cung mot khoa.
+            #
+            # Hau qua khi khong co ban du phong nay: get_realtime_transcript luon rong -> start_node
+            # phien am LAI bang Azure Speech -> do duoc 2026-08-05 21:30 tra ve NoMatch/NotRecognized
+            # roi cho ra transcript rac ("Mai friend em y an a hehe zeusfly...") -> ValidityNode gan
+            # 'language.wrong_language_full' -> action=reject_or_zero -> Java dat marked_invalid=true
+            # -> findAverageItemScoreBySessionId loc bo -> diem phien = null. Hoc sinh thay 0 diem
+            # cho mot cau da tra loi tu te.
+            #
+            # turn.transcript la ban Voice Live da luu san trong practice_response_turn.transcript,
+            # Java van luon gui kem trong su kien -- khong phai them du lieu moi, chi la dung lai.
+            realtime_transcript = turn.transcript
+            logger.info(
+                "[exam-consumer] practice: dung transcript trong su kien lam realtime_transcript "
+                "answer_id=%s turn=%s chars=%d",
+                request_event.answer_id,
+                turn.turn_order,
+                len(realtime_transcript or ""),
+            )
 
         initial_state = _build_initial_state(
             request_event,
@@ -641,7 +674,12 @@ def _build_multi_turn_completed_event(
         question_id=request_event.question_id,
         payload=ExamAttemptEvaluationCompletedPayload(
             turns=completed_turns,
-            criteria=_merge_multi_turn_criteria(aggregate_result, per_turn_results),
+            # Trả về đúng từ vựng Java đã gửi (tc03...), không phải khoá chuẩn nội bộ
+            # (grammar...) -- xem to_source_keys.
+            criteria=to_source_keys(
+                _merge_multi_turn_criteria(aggregate_result, per_turn_results),
+                request_event.payload.criteria_frameworks,
+            ),
             signals=build_signals(
                 aggregate_result,
                 speaking_input,
@@ -704,7 +742,7 @@ def _build_no_answer_completed_event(
         question_id=request_event.question_id,
         payload=ExamAttemptEvaluationCompletedPayload(
             turns=[],
-            criteria=criteria,
+            criteria=to_source_keys(criteria, request_event.payload.criteria_frameworks),
             signals=signals,
             validity=validity,
             feedback_summary="Hoc sinh khong tra loi cau hoi nay.",
@@ -758,7 +796,7 @@ def _build_clarification_only_completed_event(
         question_id=request_event.question_id,
         payload=ExamAttemptEvaluationCompletedPayload(
             turns=completed_turns,
-            criteria=criteria,
+            criteria=to_source_keys(criteria, request_event.payload.criteria_frameworks),
             signals=EvaluationSignals(
                 duration_seconds=_total_duration_seconds(turns),
                 word_count=0,
@@ -863,6 +901,7 @@ async def start_exam_attempt_consumer(
                         turn,
                         "",
                         payload,
+                        practice_mode,
                     )
                     logger.info(
                         "[exam-consumer] turn %d done answer_id=%s",

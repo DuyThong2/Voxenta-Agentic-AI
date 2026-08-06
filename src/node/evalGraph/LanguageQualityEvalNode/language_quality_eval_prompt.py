@@ -39,8 +39,9 @@ Judge grammatical range and accuracy.
 - In scripted/read-aloud mode, grammar is diagnostic only.
 
 Allowed weakness_labels:
-`sv_agreement`, `tense_control`, `complex_clause_control`,
-`third_person_s_omission`, `article_use`, `word_form`.
+`tense_control`, `complex_clause_control`.
+Return an empty list when neither applies. Do NOT invent other labels: anything outside
+this list is discarded after scoring, so it is wasted output.
 
 ## Vocabulary
 
@@ -52,8 +53,9 @@ paraphrase.
 - Sustained Vietnamese code-switching reduces both available English range and accuracy.
 - In scripted/read-aloud mode, vocabulary is diagnostic only.
 
-Allowed weakness_labels:
-`limited_range`, `repetition`, `weak_collocation`.
+weakness_labels: always return an empty list for vocabulary. Vocabulary weakness is
+tracked at criterion level only -- no finer label can be targeted when generating a
+question, so a label here would be recorded and never acted on.
 
 ## Coherence
 
@@ -68,7 +70,8 @@ development, connector use, and task fulfillment.
 - In scripted/read-aloud mode, coherence is diagnostic only.
 
 Allowed weakness_labels:
-`weak_progression`, `limited_support`, `connector_overuse`, `topic_drift`.
+`weak_progression`, `limited_support`.
+Return an empty list when neither applies. Do NOT invent other labels.
 
 ## Evidence and future mastery metadata
 

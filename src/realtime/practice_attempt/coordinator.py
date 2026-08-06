@@ -46,6 +46,11 @@ class NextQuestionPushResult:
     answer_id: Optional[str]
     question: Optional[Dict[str, Any]]
     prompt_text: Optional[str]
+    # "Da noi / ngan sach" cho thanh tien do tren may hoc sinh. Java gui kem moi lan resolve
+    # cau hoi vi luot dau chua nop nen chua co ket qua nop luot nao de lay ngan sach tu do.
+    # None khi chinh cuoc goi Java that bai (khong bia so 0 -- client se an thanh tien do).
+    session_spoken_seconds: Optional[int] = None
+    session_budget_seconds: Optional[int] = None
 
 
 class PracticeQuestionSessionCoordinator:
@@ -231,6 +236,8 @@ class PracticeQuestionSessionCoordinator:
             return NextQuestionPushResult(
                 ended=True, reason=data.get("reason") or "no_more_questions",
                 answer_id=None, question=None, prompt_text=None,
+                session_spoken_seconds=data.get("sessionSpokenSeconds"),
+                session_budget_seconds=data.get("sessionBudgetSeconds"),
             )
 
         question_payload = data["question"]
@@ -238,9 +245,15 @@ class PracticeQuestionSessionCoordinator:
         answer_id = self._answer_id_for(question_id)
         prompt_text = question_payload.get("questionText")
 
+        # min_response_seconds la MOC de SignalNode biet tra loi da du chua. Truoc day khong
+        # gui, nen _resolve_target_response_seconds roi xuong lay TRAN lam moc: mot cau tra loi
+        # tron ven 18 giay tren tran 45 giay bi doc thanh "moi dat 0.4", va nguong
+        # followup_pressure=high (ratio >= 1.15) doi noi 52 giay khi tran la 45 -- khong bao gio
+        # voi toi. Tin hieu thoi gian vi the bi vo hieu, chi con so luot dieu khien viec dung.
         question_context_payload = {
             "question_text": question_payload.get("questionText"),
             "duration_seconds": question_payload.get("maxResponseSeconds"),
+            "min_response_seconds": question_payload.get("minResponseSeconds"),
             "max_response_seconds": question_payload.get("maxResponseSeconds"),
         }
         question = QuestionContext.model_validate(question_context_payload)
@@ -255,6 +268,7 @@ class PracticeQuestionSessionCoordinator:
             language="en-US",
             archive_graph=self.archive_graph,
             graph=self.text_followup_graph,
+            last_question=bool(question_payload.get("lastQuestion")),
         )
         await archive_store.persist_question_snapshot(
             self.archive_graph,
@@ -278,6 +292,8 @@ class PracticeQuestionSessionCoordinator:
         return NextQuestionPushResult(
             ended=False, reason=None,
             answer_id=answer_id, question=question_payload, prompt_text=prompt_text,
+            session_spoken_seconds=data.get("sessionSpokenSeconds"),
+            session_budget_seconds=data.get("sessionBudgetSeconds"),
         )
 
     def route_voice_event(self, event) -> bool:

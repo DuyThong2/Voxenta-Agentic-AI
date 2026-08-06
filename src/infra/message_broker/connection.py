@@ -67,27 +67,6 @@ async def get_producer() -> AIOKafkaProducer:
     return _producer
 
 
-async def get_consumer(topic: str) -> AIOKafkaConsumer:
-    """Return a started Kafka consumer singleton scoped by topic."""
-    consumer = _consumers.get(topic)
-    if consumer is None:
-        logger.info("Connecting Kafka consumer topic=%s", topic)
-        consumer = await _start_with_retry(
-            lambda: AIOKafkaConsumer(
-                topic,
-                bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
-                client_id=settings.KAFKA_CLIENT_ID,
-                group_id=settings.KAFKA_CONSUMER_GROUP,
-                enable_auto_commit=False,
-                auto_offset_reset=settings.KAFKA_AUTO_OFFSET_RESET,
-            ),
-            label=f"topic={topic}",
-        )
-        _consumers[topic] = consumer
-        logger.info("Kafka consumer established.")
-    return consumer
-
-
 async def get_topic_consumer(topic: str, *, group_id: str) -> AIOKafkaConsumer:
     cache_key = f"{group_id}:{topic}"
     consumer = _consumers.get(cache_key)

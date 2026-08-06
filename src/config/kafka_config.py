@@ -19,12 +19,8 @@ class KafkaSettings(BaseSettings):
 
     KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9092"
     KAFKA_CLIENT_ID: str = "vox-agents"
-    KAFKA_CONSUMER_GROUP: str = "vector-indexing"
     KAFKA_AUTO_OFFSET_RESET: str = "earliest"
 
-    KAFKA_COMPLETED_TOPIC: str = "paper-ingestion-completed"
-    KAFKA_INGEST_TOPIC: str = "paper-ingestion"
-    KAFKA_VECTOR_INDEX_TOPIC: str = "vector-indexing"
     # 2 topic cho cả luồng exam-evaluation — Failed dùng chung topic completed,
     # phân biệt bằng EventEnvelope.event_type (xem src/dtos/), không cần thêm topic DLQ riêng.
     KAFKA_EXAM_REQUEST_TOPIC: str = "exam-attempt-evaluation-requested"

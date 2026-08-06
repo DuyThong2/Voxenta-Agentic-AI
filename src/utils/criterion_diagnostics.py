@@ -3,25 +3,23 @@ from collections.abc import Iterable
 from typing import Any
 
 
+# Taxonomy dong, 4 nhan (truoc day 13). Day la chot LOC THAT SU: nhan nao LLM tra ve ma
+# khong nam trong tap nay se bi bo ngay sau khi cham.
+#
+# PHAI khop tung chu voi SubAttributePolicy.java va
+# node/questionGenerationGraph/constants.py::ALLOWED_SUB_ATTRIBUTES.
+#
+# vocabulary khong con nhan nao: 3 nhan cu (limited_range, repetition, weak_collocation) do
+# duoc nhung khong ra de nham trung duoc, nen chi luyen o muc tieu chi.
 ALLOWED_WEAKNESS_LABELS = {
     "grammar": {
-        "sv_agreement",
         "tense_control",
         "complex_clause_control",
-        "third_person_s_omission",
-        "article_use",
-        "word_form",
     },
-    "vocabulary": {
-        "limited_range",
-        "repetition",
-        "weak_collocation",
-    },
+    "vocabulary": set(),
     "coherence": {
         "weak_progression",
         "limited_support",
-        "connector_overuse",
-        "topic_drift",
     },
 }
 

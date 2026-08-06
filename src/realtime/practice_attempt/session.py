@@ -33,6 +33,7 @@ class PracticeQuestionSession:
         language: str,
         archive_graph: Any,
         graph=None,
+        last_question: bool = False,
     ) -> None:
         self.answer_id = answer_id
         self.practice_session_id = practice_session_id
@@ -50,6 +51,10 @@ class PracticeQuestionSession:
         self.turn_order = 1
         self.turns: List[Dict[str, Any]] = []
         self.speech_budget_elapsed_seconds = 0.0
+        # Java bao day la cau CUOI: ngan sach con lai khong du cho mot cau co binh
+        # thuong nen no da duoc may do vua dung phan con lai. Tra loi xong thi dong phien,
+        # khong hoi tiep -- hoi tiep chi de nhan lai budget_exhausted, ton mot vong goi.
+        self.last_question = last_question
         self.transcript = TranscriptAccumulator()
 
     @classmethod

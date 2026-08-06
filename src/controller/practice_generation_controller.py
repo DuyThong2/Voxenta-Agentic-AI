@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter
 
 from node.interestQuizGenerationGraph.service import generate_interest_quiz_items
@@ -26,7 +28,11 @@ router = APIRouter(prefix="/internal/practice-generation", tags=["Practice gener
 
 @router.post("/topics", response_model=TopicProposalBatch)
 async def generate_topics(request: TopicProposalRequest) -> TopicProposalBatch:
-    return propose_topics(request)
+    # propose_topics runs a sync LangGraph .invoke() (multi-step LLM calls) --
+    # calling it directly here would block the whole event loop for the
+    # duration, starving every Kafka consumer's heartbeat (confirmed: caused
+    # mass "coordinator dead" rebalancing across all consumer groups).
+    return await asyncio.to_thread(propose_topics, request)
 
 
 @router.post("/topics/index", status_code=204)
@@ -38,7 +44,8 @@ async def upsert_topic_index(request: TopicIndexRequest) -> None:
 async def generate_practice_questions(
     request: QuestionGenerationRequest,
 ) -> QuestionGenerationResponse:
-    return generate_questions(request)
+    # Same blocking-graph.invoke() issue as /topics above.
+    return await asyncio.to_thread(generate_questions, request)
 
 
 @router.post("/questions/index", status_code=204)
@@ -50,4 +57,6 @@ async def upsert_question_index(request: QuestionIndexRequest) -> None:
 async def generate_interest_quiz_items_endpoint(
     request: InterestQuizItemGenerationRequest,
 ) -> InterestQuizItemBatch:
-    return generate_interest_quiz_items(request)
+    # generate_interest_quiz_items uses the sync OpenAI client (not
+    # AsyncOpenAI) -- same blocking-event-loop issue as /topics above.
+    return await asyncio.to_thread(generate_interest_quiz_items, request)

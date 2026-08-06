@@ -40,8 +40,6 @@ _file_handler = logging.handlers.RotatingFileHandler(
 _file_handler.setFormatter(logging.Formatter(_LOG_FORMAT))
 logging.getLogger().addHandler(_file_handler)
 
-logging.getLogger("infra.message_broker.external_events_handlers.kafka_consumer").setLevel(logging.INFO)
-logging.getLogger("vector.indexer").setLevel(logging.INFO)
 
 from utils import load_root_dotenv
 
@@ -68,7 +66,6 @@ from node.followUpDecisionGraph.graphConfig import build_archive_graph, build_te
 from node.evalGraph.graphConfig import build_graph
 from config.kafka_config import settings
 from config.postgresDB_config import settings as pg_settings
-from infra.message_broker.external_events_handlers.kafka_consumer import start_outbox_consumer
 from infra.message_broker.external_events_handlers.question_asset_analysis_consumer import (
     start_question_asset_analysis_consumer,
 )
@@ -77,7 +74,6 @@ from infra.message_broker.external_events_handlers.exam_consumer import (
     start_exam_attempt_force_end_consumer,
 )
 from infra.message_broker import connection as mq_connection
-from vector.chroma_client import build_chroma_collection
 
 logger = logging.getLogger(__name__)
 
@@ -105,18 +101,7 @@ async def lifespan(app: FastAPI):
     app.state.archive_graph = build_archive_graph(checkpointer)
     app.state.text_followup_graph = build_text_followup_graph()
 
-    # 2) Setup Chroma collection
-    try:
-        app.state.chroma_collection = build_chroma_collection()
-    except Exception:
-        logger.exception("[chroma] failed to init chroma collection")
-        raise
-
-    # 3) Start outbox consumer
-    consumer_task = asyncio.create_task(start_outbox_consumer(app))
-    app.state.outbox_task = consumer_task
-
-    # 4) Start exam-attempt-evaluation-requested consumer (grading pipeline) -- defined in
+    # 2) Start exam-attempt-evaluation-requested consumer (grading pipeline) -- defined in
     # exam_consumer.py but was never actually started anywhere, so no grading requests from vox
     # were ever consumed despite the handler being fully implemented.
     exam_consumer_tasks = [
@@ -148,7 +133,6 @@ async def lifespan(app: FastAPI):
         await close_all_practice_attempt_connections()
         await close_all_connections()
         await close_all_avatar_connections()
-        consumer_task.cancel()
         for task in exam_consumer_tasks:
             task.cancel()
         for task in practice_consumer_tasks:
@@ -163,7 +147,7 @@ async def lifespan(app: FastAPI):
 # FastAPI App Initialization
 # -----------------------
 app = FastAPI(
-    title="Chat + Product Cards Demo (seed from JSON file)",
+    title="Vox Practice Agents",
     lifespan=lifespan,
 )
 

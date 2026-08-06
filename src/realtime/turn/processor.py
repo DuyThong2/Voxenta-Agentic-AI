@@ -91,9 +91,15 @@ class TurnProcessor:
         duration_seconds = _optional_float(message.get("duration_seconds"))
         policy = TurnLimitPolicy.from_mapping(message)
 
+        # TurnProcessor duoc dung chung cho CA hai loai phien, ma chung dat ten id khac nhau:
+        # phien thi co exam_attempt_id, phien luyen co practice_session_id. Truoc day dong log
+        # nay goi thang session.exam_attempt_id nen moi luot noi cua phien LUYEN deu chet bang
+        # AttributeError -- mot cau log lam hong ca lenh xu ly luot, du no khong tham gia gi
+        # vao nghiep vu. Lay id nao co, khong gia dinh loai phien.
         logger.info(
-            "[realtime_transcript] exam_attempt_id=%s answer_id=%s turn_order=%d text=%r",
-            session.exam_attempt_id,
+            "[realtime_transcript] session_id=%s answer_id=%s turn_order=%d text=%r",
+            getattr(session, "exam_attempt_id", None)
+            or getattr(session, "practice_session_id", None),
             session.answer_id,
             session.turn_order,
             transcript,
@@ -202,18 +208,26 @@ class TurnProcessor:
         decision = self._apply_turn_limit(decision, policy)
         completed_turn_order = session.complete_turn(current_turn, decision)
 
-        asyncio.create_task(
-            turn_publisher.publish_turn_if_new(
-                session.archive_graph,
-                session.answer_id,
-                completed_turn_order,
-                reason=decision.get("reason", ""),
-                exam_attempt_id=session.exam_attempt_id,
-                active_prompt_text=session.current_prompt_text,
-                should_continue=bool(decision.get("should_continue")),
-                next_prompt_text=decision.get("next_prompt_text"),
+        # CHỈ phiên thi mới publish. Sự kiện này là AnswerTurnsRecordedEvent -- lượt nói của
+        # BÀI THI; phiên luyện có đường riêng (`practice_session_client.submit_turn` gọi thẳng
+        # HTTP sang Java) nên bắn thêm vào topic thi là gửi rác cho consumer chấm thi.
+        #
+        # Truyền exam_attempt_id=None cũng KHÔNG đúng: sự kiện vẫn được publish, chỉ là thiếu
+        # session_id. Điều kiện phải là "có phải phiên thi không", không phải "id có null không".
+        exam_attempt_id = getattr(session, "exam_attempt_id", None)
+        if exam_attempt_id is not None:
+            asyncio.create_task(
+                turn_publisher.publish_turn_if_new(
+                    session.archive_graph,
+                    session.answer_id,
+                    completed_turn_order,
+                    reason=decision.get("reason", ""),
+                    exam_attempt_id=exam_attempt_id,
+                    active_prompt_text=session.current_prompt_text,
+                    should_continue=bool(decision.get("should_continue")),
+                    next_prompt_text=decision.get("next_prompt_text"),
+                )
             )
-        )
         return TurnProcessingResult(decision, completed_turn_order)
 
     @staticmethod

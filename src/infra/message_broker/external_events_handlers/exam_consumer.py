@@ -828,7 +828,10 @@ async def start_exam_attempt_consumer(
         group_id=consumer_group,
         instance_label=instance_label,
     )
-    graph = app.state.graph
+    # Chon do thi theo TOPIC, khong theo co trong payload: tach o muc ha tang thi khong co
+    # duong nao de ban tin thi lac sang do thi luyen. Hai do thi giong het nhau tru
+    # AzureScoreScaleNode -- xem node/practiceEvalGraph/graphConfig.py.
+    graph = app.state.practice_graph if practice_mode else app.state.graph
     archive_graph = app.state.archive_graph
 
     async for message in consumer:

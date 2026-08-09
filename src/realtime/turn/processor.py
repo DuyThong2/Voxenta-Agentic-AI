@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 from infra.database import archive_store
 from infra.message_broker.publishers import turn_publisher
 from realtime.question.session import QuestionSession
+from realtime.background import spawn
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,26 @@ _CLARIFICATION_REASONS = {
     "decline_repair",
     "remind_respectfully",
 }
+
+
+MAX_CONSECUTIVE_CLARIFICATIONS = 3
+"""Bao nhieu lan AI duoc hoi lai LIEN TIEP truoc khi bo cuoc va chuyen cau.
+
+3 la du de xu ly nhieu am thanh nhat thoi (mic tre, tieng on, hoc sinh ngap ngung) ma khong de
+mot phien im lang keo dai vo tan. Vuot tran thi ket thuc cau voi ly do
+`client_max_clarifications_reached` -- khac han `client_max_turns_reached` de con truy duoc
+nguyen nhan tu log.
+"""
+
+
+def _trailing_clarifications(session) -> int:
+    """Dem so luot HOI LAI o CUOI chuoi. Mot luot noi that o giua se reset ve 0."""
+    count = 0
+    for turn in reversed(getattr(session, "turns", None) or []):
+        if not is_clarification_reason(turn.get("decision_reason")):
+            break
+        count += 1
+    return count
 
 
 def is_clarification_reason(reason: Optional[str]) -> bool:
@@ -205,7 +226,9 @@ class TurnProcessor:
             "next_prompt_text": None,
             "reason": result.get("error") or "decision_failed",
         }
-        decision = self._apply_turn_limit(decision, policy)
+        decision = self._apply_turn_limit(
+            decision, policy, _trailing_clarifications(session)
+        )
         completed_turn_order = session.complete_turn(current_turn, decision)
 
         # CHỈ phiên thi mới publish. Sự kiện này là AnswerTurnsRecordedEvent -- lượt nói của
@@ -216,7 +239,7 @@ class TurnProcessor:
         # session_id. Điều kiện phải là "có phải phiên thi không", không phải "id có null không".
         exam_attempt_id = getattr(session, "exam_attempt_id", None)
         if exam_attempt_id is not None:
-            asyncio.create_task(
+            spawn(
                 turn_publisher.publish_turn_if_new(
                     session.archive_graph,
                     session.answer_id,
@@ -234,9 +257,31 @@ class TurnProcessor:
     def _apply_turn_limit(
         decision: Dict[str, Any],
         policy: TurnLimitPolicy,
+        trailing_clarifications: int = 0,
     ) -> Dict[str, Any]:
         if not decision.get("should_continue"):
             return decision
+
+        # Tran rieng cho luot HOI LAI lien tiep.
+        #
+        # Hai phanh ben duoi deu vo hieu khi hoc sinh im lang: luot hoi lai bi loai khoi
+        # max_assessment_turns (co y, de "em noi lai giup co" khong an mat mot luot cham), con
+        # speech_budget tinh theo GIAY NOI nen im lang khong lam no tang. Khong co tran nay thi
+        # im lang -> hoi lai -> im lang -> lap mai: phien khong tu ket thuc, quota khong tru duoc
+        # vi luot 0 giay, nhung moi vong van goi LLM that.
+        #
+        # Dem theo CHUOI CUOI chu khong phai tong: mot luot noi that o giua reset bo dem, dung
+        # y nghia "AI hoi lai lien tiep bao nhieu lan ma van khong nghe duoc gi".
+        if (
+            is_clarification_reason(decision.get("reason"))
+            and trailing_clarifications + 1 >= MAX_CONSECUTIVE_CLARIFICATIONS
+        ):
+            return {
+                **decision,
+                "should_continue": False,
+                "next_prompt_text": None,
+                "reason": "client_max_clarifications_reached",
+            }
 
         if policy.speech_budget_exceeded:
             return {

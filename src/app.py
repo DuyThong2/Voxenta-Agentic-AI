@@ -64,6 +64,7 @@ from realtime.attempt.registry import close_all_attempt_connections
 from realtime.practice_attempt.registry import close_all_practice_attempt_connections
 from node.followUpDecisionGraph.graphConfig import build_archive_graph, build_text_followup_graph
 from node.evalGraph.graphConfig import build_graph
+from node.practiceEvalGraph.graphConfig import build_practice_graph
 from config.kafka_config import settings
 from config.postgresDB_config import settings as pg_settings
 from infra.message_broker.external_events_handlers.question_asset_analysis_consumer import (
@@ -74,6 +75,7 @@ from infra.message_broker.external_events_handlers.exam_consumer import (
     start_exam_attempt_force_end_consumer,
 )
 from infra.message_broker import connection as mq_connection
+from realtime.background import drain as drain_background_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +100,10 @@ async def lifespan(app: FastAPI):
     # state. Persisting this graph reused the same turn thread_id across retries, so merged
     # metadata retained an old pronunciation_error even after Azure later returned a score.
     app.state.graph = build_graph()
+    # Do thi rieng cho LUYEN TAP: giong het ban thi tru AzureScoreScaleNode -- luyen tap cham
+    # thang 0-100 co dinh (thang goc Azure tra ve) nen khong con buoc anh xa sang dai rubric.
+    # Tach hai do thi de sua duong luyen khong the cham vao duong thi.
+    app.state.practice_graph = build_practice_graph()
     app.state.archive_graph = build_archive_graph(checkpointer)
     app.state.text_followup_graph = build_text_followup_graph()
 
@@ -133,6 +139,11 @@ async def lifespan(app: FastAPI):
         await close_all_practice_attempt_connections()
         await close_all_connections()
         await close_all_avatar_connections()
+        # Cho tac vu nen (day luot noi len Kafka, upload audio...) ket thuc TRUOC khi tat.
+        # Dat sau khi dong ket noi de khong con task moi sinh ra, va truoc khi huy consumer.
+        # Han 10s -- phai ngan hon terminationGracePeriodSeconds cua k8s (mac dinh 30s), khong
+        # thi SIGKILL cat giua chung va viec cho chi lam cham qua trinh tat pod.
+        await drain_background_tasks()
         for task in exam_consumer_tasks:
             task.cancel()
         for task in practice_consumer_tasks:

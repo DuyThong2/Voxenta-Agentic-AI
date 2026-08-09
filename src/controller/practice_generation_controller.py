@@ -7,7 +7,7 @@ from node.questionGenerationGraph.service import (
     generate_questions,
     index_generated_question,
 )
-from node.topicGenerationGraph.service import index_topic, propose_topics
+from node.topicGenerationGraph.service import index_topic, propose_topics, search_topics
 from schemas.interest_quiz_generation import (
     InterestQuizItemBatch,
     InterestQuizItemGenerationRequest,
@@ -18,6 +18,8 @@ from schemas.question_generation import (
     QuestionIndexRequest,
 )
 from schemas.topic_generation import (
+    TopicSearchRequest,
+    TopicSearchResponse,
     TopicIndexRequest,
     TopicProposalBatch,
     TopicProposalRequest,
@@ -33,6 +35,14 @@ async def generate_topics(request: TopicProposalRequest) -> TopicProposalBatch:
     # duration, starving every Kafka consumer's heartbeat (confirmed: caused
     # mass "coordinator dead" rebalancing across all consumer groups).
     return await asyncio.to_thread(propose_topics, request)
+
+
+@router.post("/topics/search", response_model=TopicSearchResponse)
+async def search_topics_endpoint(request: TopicSearchRequest) -> TopicSearchResponse:
+    # to_thread: ca nhung embedding lan query Chroma deu la I/O DONG BO. Goi thang trong handler
+    # async se khoa event loop, keo theo moi phien realtime dang chay -- dung loi da gap o
+    # /turns/archive.
+    return await asyncio.to_thread(search_topics, request)
 
 
 @router.post("/topics/index", status_code=204)

@@ -36,7 +36,30 @@ def _build_answer_turn_payload(
     exam_attempt_id: str | None = None,
     *,
     decision_reason: str | None = None,
+    realtime_transcript: str | None = None,
 ) -> AnswerTurnPayload:
+    """`turn` đến từ POST /turns/archive, nơi transcribe_turn_node phiên âm LẠI file WAV bằng
+    Azure Speech. Bản phiên âm lại đó có thể rỗng (đo được 2026-08-09: cả 3 lượt của một phiên
+    thi thật đều rỗng, trong khi Voice Live đã nghe đúng nguyên câu) -- và khi đó nó ghi đè lên
+    thứ duy nhất đọc được.
+
+    Bản Voice Live nằm ở kênh `realtime_transcripts`, và tầng CHẤM đã ưu tiên nó từ trước
+    (exam_consumer.get_realtime_transcript -> start_node_config). Nhưng tầng PUBLISH thì không,
+    nên Java lưu chuỗi rỗng vào exam_item_responses/turns: giáo viên mở bài ra không thấy chữ
+    nào, và mọi thứ đọc transcript từ DB đều tưởng thí sinh chưa nói gì.
+
+    Chỉ thay khi bản phiên âm lại RỖNG -- có chữ thì giữ nguyên, để không đổi hành vi ở những
+    lượt vốn đã chạy đúng.
+    """
+    transcript = turn.get("transcript") or ""
+    word_count = turn.get("word_count")
+    if not transcript.strip() and realtime_transcript and realtime_transcript.strip():
+        transcript = realtime_transcript
+        # word_count phải tính lại theo transcript MỚI. Giữ số 0 cũ sẽ đẩy một câu trả lời dài
+        # xuống nhánh "câu ngắn" (isShortAnswer = wordCount < 35) và làm lệch cả ngưỡng đánh giá
+        # độ ổn định lẫn các chỉ số độ dài câu trả lời.
+        word_count = len(transcript.split())
+
     return AnswerTurnPayload(
         answer_id=turn.get("answer_id") or answer_id,
         session_id=exam_attempt_id,
@@ -45,9 +68,9 @@ def _build_answer_turn_payload(
         turn_type=turn.get("turn_type"),
         prompt_text=turn.get("prompt_text"),
         audio_url=turn.get("audio_url"),
-        transcript=turn.get("transcript", ""),
+        transcript=transcript,
         duration_seconds=turn.get("duration_seconds"),
-        word_count=turn.get("word_count"),
+        word_count=word_count,
         answered_at=turn.get("answered_at"),
         decision_reason=decision_reason,
     )
@@ -129,10 +152,25 @@ async def publish_turn_if_new(
             )
             return
 
+        # Lấy từ state_now đã đọc ngay trên -- không tốn thêm một vòng Postgres nào.
+        realtime_entry = next(
+            (
+                entry
+                for entry in ((state_now.values or {}).get("realtime_transcripts") or [])
+                if entry.get("turn_order") == turn_order
+            ),
+            None,
+        )
         event = AnswerTurnsRecordedEvent(
             answer_id=answer_id,
             payload=AnswerTurnsRecordedPayload(
-                turns=[_build_answer_turn_payload(turn, answer_id, exam_attempt_id, decision_reason=reason)],
+                turns=[_build_answer_turn_payload(
+                    turn,
+                    answer_id,
+                    exam_attempt_id,
+                    decision_reason=reason,
+                    realtime_transcript=None if realtime_entry is None else realtime_entry.get("text"),
+                )],
                 reason=reason,
             ),
         )

@@ -97,3 +97,24 @@ class TopicIndexRequest(BaseModel):
     active: bool
     student_id: str | None = None
     status: Literal["ACTIVE", "REJECTED"] = "ACTIVE"
+
+
+class TopicSearchRequest(BaseModel):
+    """Tim chu de theo NGU NGHIA -- bo sung cho tim theo chuoi ben Java, khong thay the no."""
+
+    keyword: str = Field(min_length=1, max_length=200)
+    limit: int = Field(default=10, ge=1, le=50)
+    # Duoi nguong nay thi coi nhu khong lien quan. 0.55 la diem bat dau (do tren
+    # text-embedding-3-large); can chinh theo thuc te chu khong phai hang so thieng.
+    min_similarity: float = Field(default=0.55, ge=0.0, le=1.0)
+
+
+class TopicSearchHit(BaseModel):
+    topic_id: str
+    similarity: float
+
+
+class TopicSearchResponse(BaseModel):
+    """Chi tra ID. Ten/mo ta trong vector store co the da cu -- Java tu doc lai tu Postgres."""
+
+    hits: list[TopicSearchHit]

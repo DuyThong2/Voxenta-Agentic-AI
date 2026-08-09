@@ -30,6 +30,7 @@ from infra.realtime_socket import RealtimeSocket
 from infra.voice_live_client import EXPECTED_SAMPLE_RATE, VoiceLiveClient, VoiceLiveServerEvent
 from node.realtimeCorrectionGraph.graphConfig import build_realtime_correction_graph
 from realtime.practice_attempt.coordinator import PracticeQuestionSessionCoordinator
+from realtime.background import spawn
 
 logger = logging.getLogger(__name__)
 
@@ -221,7 +222,7 @@ class PracticeAttemptConnection:
         # Deliberately no self._speak(...) here -- see module docstring. The next prompt
         # (follow-up or new MAIN question) is only spoken when the client sends
         # present_question after the student taps "Tiếp tục".
-        asyncio.create_task(self._after_turn(session, decision, turn_audio))
+        spawn(self._after_turn(session, decision, turn_audio))
 
     async def _after_turn(self, session, decision: dict, turn_audio: bytes) -> None:
         if session is None or not session.turns:
@@ -233,8 +234,8 @@ class PracticeAttemptConnection:
         # Assessment) and the S3 upload below -- deleted only after both are done with it.
         audio_path = await asyncio.to_thread(_write_turn_wav, turn_audio)
         try:
-            correction_task = asyncio.create_task(self._run_correction(session, audio_path))
-            upload_task = asyncio.create_task(
+            correction_task = spawn(self._run_correction(session, audio_path))
+            upload_task = spawn(
                 self._upload_turn_audio(audio_path, current_turn.get("turn_order"))
             )
 
@@ -509,13 +510,13 @@ class PracticeAttemptConnection:
             # their own guards), but the turn still gets recorded/quota-consumed/graded from
             # its transcript, and the next MAIN question still gets resolved if needed --
             # rather than silently stalling the session forever.
-            asyncio.create_task(
+            spawn(
                 self._after_turn(self.questions.active_session, result.recovered_decision, b"")
             )
 
     def _speak(self, text: Optional[str], *, slow: bool = False) -> None:
         self._utterance_sequence += 1
-        asyncio.create_task(
+        spawn(
             self._send_speak(text or "", self._utterance_sequence, slow)
         )
 

@@ -75,6 +75,7 @@ from infra.message_broker.external_events_handlers.exam_consumer import (
     start_exam_attempt_force_end_consumer,
 )
 from infra.message_broker import connection as mq_connection
+from realtime.background import drain as drain_background_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +139,11 @@ async def lifespan(app: FastAPI):
         await close_all_practice_attempt_connections()
         await close_all_connections()
         await close_all_avatar_connections()
+        # Cho tac vu nen (day luot noi len Kafka, upload audio...) ket thuc TRUOC khi tat.
+        # Dat sau khi dong ket noi de khong con task moi sinh ra, va truoc khi huy consumer.
+        # Han 10s -- phai ngan hon terminationGracePeriodSeconds cua k8s (mac dinh 30s), khong
+        # thi SIGKILL cat giua chung va viec cho chi lam cham qua trinh tat pod.
+        await drain_background_tasks()
         for task in exam_consumer_tasks:
             task.cancel()
         for task in practice_consumer_tasks:

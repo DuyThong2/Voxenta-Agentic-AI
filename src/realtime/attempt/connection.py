@@ -1,6 +1,5 @@
 """One WebSocket and one Voice Live client for an entire exam attempt."""
 
-import asyncio
 import logging
 from typing import Any, Optional
 
@@ -8,6 +7,7 @@ from infra.realtime_socket import RealtimeSocket
 from infra.voice_live_client import VoiceLiveClient, VoiceLiveServerEvent
 from node.followUpDecisionGraph.constants import CLOSING_REPLY, EXAM_FAREWELL_TEXT
 from realtime.question.coordinator import QuestionSessionCoordinator
+from realtime.background import spawn
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ class AttemptConnection:
 
     def _speak(self, text: Optional[str], *, slow: bool = False) -> None:
         self._utterance_sequence += 1
-        asyncio.create_task(
+        spawn(
             self._send_speak(text or "", self._utterance_sequence, slow)
         )
 

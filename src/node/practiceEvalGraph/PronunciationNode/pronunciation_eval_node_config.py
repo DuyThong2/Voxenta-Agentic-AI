@@ -28,7 +28,8 @@ from node.practiceEvalGraph.PronunciationNode.pronunciation_reference_helper imp
     build_pronunciation_reference_consensus,
 )
 from utils import load_root_dotenv
-from utils.confidence_utils import compute_alignment_confidence
+# TẮT 2026-08-11 cùng case (4) -- xem khối chú thích ở utils/confidence_utils.py.
+# from utils.confidence_utils import compute_alignment_confidence
 from utils.speech_client import (
     _probe_audio_duration_seconds,
     build_speech_config,
@@ -367,7 +368,7 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             include_raw=False,
             criteria_frameworks=speaking_input.criteria_frameworks,
         )
-        alignment = compute_alignment_confidence(segments_data, reference_text)
+        # alignment = compute_alignment_confidence(segments_data, reference_text)
 
         logger.info(
             "[eval:pronunciation] done answer_id=%s turn=%s pron_score=%s",
@@ -378,10 +379,12 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
             "pronunciation_result": formatted_result,
             "metadata": {
                 "c_ref": c_ref,
-                "c_align": alignment.composite,
-                "c_align_accuracy": alignment.accuracy,
-                "c_align_coverage": alignment.coverage,
-                "c_align_timing": alignment.timing,
+                # TẮT 2026-08-11 -- case (4). Thiếu 4 khoá này thì exam_event_builder tự để
+                # c_align* = None, Java thấy null và bỏ qua nhóm D (đã có sẵn chốt null ở đó).
+                # "c_align": alignment.composite,
+                # "c_align_accuracy": alignment.accuracy,
+                # "c_align_coverage": alignment.coverage,
+                # "c_align_timing": alignment.timing,
             },
         }
 

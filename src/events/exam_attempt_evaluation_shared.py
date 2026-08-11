@@ -43,14 +43,20 @@ class ConfidenceCaseSignals(_CamelMessage):
     q_speech: Optional[float] = None
     clipping_ratio: Optional[float] = None
     c_ref: Optional[float] = None
-    c_align: Optional[float] = None
+    # TẮT 2026-08-11 -- case (4), xem khối chú thích ở utils/confidence_utils.py.
+    #
+    # Bỏ hẳn khỏi payload chứ không gửi null: 4 trường này của Java (ConfidenceCaseSignalsDto)
+    # là Double nên thiếu khoá cũng ra null, đúng thứ nhóm D cần để tự bỏ qua. Giữ lại mà luôn
+    # gửi null thì mỗi bản ghi signals lưu trong DB lại thêm 4 khoá rỗng vô nghĩa.
+    #
+    # c_align: Optional[float] = None
     # 3 thành phần RIÊNG của case (4) -- xem AlignmentConfidence trong confidence_utils.py.
     # Ngưỡng Vietnam-adjusted (m soft>0.20/hard>0.30, c soft<0.90/hard<0.80, j soft>0.15/hard>0.30)
     # áp RIÊNG cho từng cái, KHÔNG áp chung 1 ngưỡng lên c_align (composite) -- c_align ở trên chỉ
     # còn dùng để hiển thị/tính cPfBranch, không dùng để quyết định review nữa.
-    c_align_accuracy: Optional[float] = None
-    c_align_coverage: Optional[float] = None
-    c_align_timing: Optional[float] = None
+    # c_align_accuracy: Optional[float] = None
+    # c_align_coverage: Optional[float] = None
+    # c_align_timing: Optional[float] = None
     c_pf_branch: Optional[float] = None
     c_grammar: Optional[float] = None
     c_vocabulary: Optional[float] = None

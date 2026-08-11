@@ -689,7 +689,9 @@ def _build_multi_turn_completed_event(
             validity=aggregate_result.get("validity"),
             feedback_summary=feedback_summary,
             suggestions=suggestions,
-            model_version="gpt-5.4+claude-sonnet-4-6",
+            # ĐỔI 2026-08-11: cả 3 lượt chấm ngôn ngữ đều là OpenAI -- xem _CONSENSUS_PROVIDERS
+            # trong utils/confidence_utils.py.
+            model_version="gpt-5.4",
             prompt_version="language-quality-v2",
             evaluated_at=build_completed_event(
                 aggregate_result,

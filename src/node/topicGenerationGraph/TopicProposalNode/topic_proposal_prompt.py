@@ -1,7 +1,32 @@
 from schemas.topic_generation import TopicProposalRequest
 
 
-def build_topic_proposal_prompt(request: TopicProposalRequest) -> str:
+def build_topic_proposal_prompt(
+    request: TopicProposalRequest,
+    collisions: list[str] | None = None,
+    remaining: int | None = None,
+) -> str:
+    # `collisions` rong o vong 1 (de xuat tu do), co du lieu tu vong 2 tro di -- ten chinh xac
+    # cua nhung chu de ma de xuat vua truoc da dam vao.
+    #
+    # Thay cho `existing_topics` cu von liet ke TOAN BO kho vao prompt. Bo di vi hai le:
+    #   1. Kich thuoc khong co tran -- kho la cua CHUNG moi hoc sinh, lon dan mai mai, nen token
+    #      vao tang tuyen tinh theo so hoc sinh nhan so chu de moi nguoi sinh ra.
+    #   2. Du lieu te de chong trung -- hang tram cai ten xep theo bang chu cai, model phai tu
+    #      nho. Vai cai ten NO VUA DAM VAO thi cu the hon han, va dung luc.
+    #
+    # Lop chan cung khong doi: TopicDedupeNode van so cosine 0.90 voi Chroma, va Java van loc
+    # lai bang findNearExistingTopic.
+    collision_block = (
+        ""
+        if not collisions
+        else (
+            "\nYour previous attempt produced topics too close to these existing ones:\n"
+            + "\n".join(f"- {name}" for name in collisions)
+            + "\nPropose genuinely different topics. Do not restate the same idea in other words.\n"
+        )
+    )
+    max_this_round = request.max_proposals if remaining is None else remaining
     # Không có từ khoá nào thì luật "tối đa MỘT chủ đề được vượt ra ngoài từ khoá quan sát
     # được" tự mâu thuẫn: mọi chủ đề đều nằm ngoài. Nói thẳng cho model biết bằng chứng lúc
     # này là interest_scores, thay vì để nó tự đoán cách dung hoà một luật bất khả thi.
@@ -18,12 +43,11 @@ Keyword evidence (counts are distinct sessions): {[
     item.model_dump() for item in request.keyword_evidence
 ]}
 Interest scores: {request.interest_scores}
-Topics already in the pool: {request.existing_topics}
 Rejected topics: {request.rejected_topics}
 Exhausted topics: {request.exhausted_topics}
 This is a direct search keyword: {request.search_keyword}
-
-Propose at most {request.max_proposals} new topics. Rules:
+{collision_block}
+Propose at most {max_this_round} new topics. Rules:
 1. A topic must sustain a 10-15 minute spoken discussion for a B1-B2 learner.
 2. Group related keywords into ONE topic. Do not echo a keyword as the topic.
 {grounding_rule}
@@ -31,8 +55,8 @@ Propose at most {request.max_proposals} new topics. Rules:
    SEARCH, list only supporting input keywords in evidence_keywords.
 5. Confidence must follow evidence: one session <=0.5, two <=0.7, three or more
    <=0.85; INTEREST <=0.6; EXHAUSTED <=0.7; ungrounded <=0.4; SEARCH <=0.95.
-6. Every topic must differ meaningfully from pool and rejected topics. Explain in
-   distinct_from.
+6. Every topic must differ meaningfully from the rejected topics, and from any topic
+   listed above as too close to a previous attempt. Explain in distinct_from.
 7. Keep topics inclusive and answerable without money, travel, or specialist knowledge.
 8. For direct search, return one proposal only, evidence_type=SEARCH, and confidence
    must be >=0.9 or return none.

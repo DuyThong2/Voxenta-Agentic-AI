@@ -22,7 +22,10 @@ class TopicProposalRequest(BaseModel):
     student_id: str
     keyword_evidence: list[KeywordEvidence]
     interest_scores: dict[str, float] = Field(default_factory=dict)
-    existing_topics: list[str] = Field(default_factory=list)
+    # GO 2026-08-11: existing_topics -- Java gui TOAN BO ten chu de dang hoat dong vao day, roi
+    # prompt liet ke het ra. Kho la cua CHUNG moi hoc sinh nen no lon dan mai mai, khien token
+    # vao tang tuyen tinh theo (so hoc sinh x so chu de moi nguoi sinh). Thay bang vong de xuat
+    # lai co phan hoi -- xem MAX_PROPOSAL_ROUNDS va build_topic_proposal_prompt.
     rejected_topics: list[str] = Field(default_factory=list)
     exhausted_topics: list[str] = Field(default_factory=list)
     search_keyword: bool = False

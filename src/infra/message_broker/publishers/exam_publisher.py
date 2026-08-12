@@ -3,6 +3,7 @@ import logging
 
 from config.kafka_config import settings
 from events import (
+    AiUsageRecordedEvent,
     AnswerTurnsRecordedEvent,
     ExamAttemptEvaluationCompletedEvent,
     ExamAttemptEvaluationFailedEvent,
@@ -98,6 +99,18 @@ async def publish_answer_turns_recorded(
         event,
         answer_id=event.answer_id,
         topic=settings.KAFKA_ANSWER_TURN_TOPIC,
+    )
+
+
+async def publish_ai_usage_recorded(
+    event: AiUsageRecordedEvent,
+) -> None:
+    # key=turn_id (không phải answer_id thật) -- cùng cách publish_question_asset_analysis_completed
+    # tái dùng tham số answer_id của _publish() làm khoá partition chung cho mọi loại id.
+    await _publish(
+        event,
+        answer_id=event.turn_id,
+        topic=settings.KAFKA_AI_USAGE_TOPIC,
     )
 
 

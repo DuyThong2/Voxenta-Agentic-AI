@@ -19,10 +19,12 @@ published, since that's the whole point of making this durable.
 """
 
 import logging
+import uuid
 
-from events import AnswerTurnPayload, AnswerTurnsRecordedEvent, AnswerTurnsRecordedPayload
+from events import AiUsageRecordedEvent, AnswerTurnPayload, AnswerTurnsRecordedEvent, AnswerTurnsRecordedPayload
 from infra.database.archive_store import aget_state, aupdate_state, archive_config, wait_for_turn
-from infra.message_broker.publishers.exam_publisher import publish_answer_turns_recorded
+from infra.message_broker import ai_usage_tracker
+from infra.message_broker.publishers.exam_publisher import publish_ai_usage_recorded, publish_answer_turns_recorded
 from utils.jsonl_logger import append_jsonl
 
 logger = logging.getLogger(__name__)
@@ -180,6 +182,27 @@ async def publish_turn_if_new(
             "event": event.model_dump(by_alias=True),
         })
         await publish_answer_turns_recorded(event)
+
+        # Xả buffer chi phí AI (LLM token + STT) tích luỹ trong lúc xử lý turn này (xem
+        # infra/message_broker/ai_usage_tracker.py) và publish thành 1 message riêng, cùng lúc
+        # với AnswerTurnsRecordedEvent -- best-effort, không chặn/làm hỏng luồng publish turn
+        # chính nếu lỗi (buffer usage KHÔNG durable, khác published_turn_orders bên dưới).
+        try:
+            usage_events = ai_usage_tracker.pop_usage(answer_id)
+            if usage_events and exam_attempt_id:
+                # turn_id là UUID xác định (uuid5) từ answer_id+turn_order, không phải id thật
+                # trong DB -- phía Java chỉ dùng để nhóm/audit (index), không có ràng buộc FK.
+                turn_id = str(uuid.uuid5(uuid.NAMESPACE_OID, f"{answer_id}:{turn_order}"))
+                await publish_ai_usage_recorded(AiUsageRecordedEvent(
+                    exam_session_id=exam_attempt_id,
+                    turn_id=turn_id,
+                    usage_events=usage_events,
+                ))
+        except Exception:
+            logger.exception(
+                "[turn_publisher] failed to publish AI usage: answer_id=%s turn_order=%d",
+                answer_id, turn_order,
+            )
 
         # Persist the "published" marker durably via the same checkpointer
         # archive_graph already uses, through the add reducer on

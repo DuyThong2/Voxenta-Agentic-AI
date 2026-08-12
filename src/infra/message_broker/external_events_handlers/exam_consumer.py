@@ -2,11 +2,12 @@ import asyncio
 import json
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 
 from config.kafka_config import settings
-from events import ExamAttemptEvaluationRequestedEvent
+from events import AiUsageRecordedEvent, ExamAttemptEvaluationRequestedEvent
 from events.exam_attempt_evaluation_completed import (
     ExamAttemptEvaluationCompletedEvent,
     ExamAttemptEvaluationCompletedPayload,
@@ -17,11 +18,13 @@ from events.exam_attempt_evaluation_failed import (
 )
 from events.exam_attempt_evaluation_shared import EvaluationSignals
 from events.exam_attempt_force_end_requested import ExamAttemptForceEndRequestedEvent
+from infra.message_broker import ai_usage_tracker
 from infra.message_broker.connection import (
     get_topic_consumer,
     get_topic_consumer_instance,
 )
 from infra.message_broker.publishers.exam_publisher import (
+    publish_ai_usage_recorded,
     publish_exam_attempt_evaluation_completed,
     publish_exam_attempt_evaluation_failed,
     publish_practice_attempt_evaluation_completed,
@@ -813,6 +816,42 @@ def _build_clarification_only_completed_event(
     )
 
 
+async def _flush_ai_usage(answer_id: str, exam_attempt_id: str) -> None:
+    """Xả buffer chi phí AI (xem infra/message_broker/ai_usage_tracker.py) tích luỹ qua toàn bộ
+    evalGraph của answer này -- PronunciationNode chạy per-turn trong _evaluate_turn, cộng
+    ValidityNode/AnswerLengthNode/LanguageQualityEvalNode chạy 1 lần tổng hợp trong
+    _run_aggregate_text_evaluation -- rồi publish sang cùng topic Kafka mà turn_publisher.py
+    dùng cho pipeline realtime.
+
+    Thiếu bước này thì buffer (khoá theo answer_id, không durable) không bao giờ được ai xả:
+    pipeline offline chấm bài (start_exam_attempt_consumer) không có sẵn một điểm "publish 1
+    lần/turn" như publish_turn_if_new bên realtime để tự động gọi ai_usage_tracker.pop_usage
+    -- usage của mọi model gọi trong evalGraph (vd gpt-5.4 ở ValidityNode) coi như mất, quota
+    bị trừ THIẾU so với chi phí AI thật.
+
+    Best-effort như turn_publisher.py: lỗi ở đây không được làm hỏng luồng chấm/publish kết
+    quả chính, vì đây chỉ là dữ liệu audit/COGS, không phải nguồn trừ quota tuyệt đối.
+    """
+    try:
+        usage_events = ai_usage_tracker.pop_usage(answer_id)
+        if not usage_events:
+            return
+        # turn_id ở đây gộp chung mọi turn của answer (khác turn_publisher.py, nơi mỗi turn có
+        # turn_id riêng) vì evalGraph offline chấm cả answer cùng lúc, không tách theo turn --
+        # phía Java chỉ dùng turn_id để nhóm/audit, không có ràng buộc FK nên không sao.
+        turn_id = str(uuid.uuid5(uuid.NAMESPACE_OID, f"{answer_id}:aggregate"))
+        await publish_ai_usage_recorded(AiUsageRecordedEvent(
+            exam_session_id=exam_attempt_id,
+            turn_id=turn_id,
+            usage_events=usage_events,
+        ))
+    except Exception:
+        logger.exception(
+            "[exam-consumer] failed to publish AI usage: answer_id=%s exam_attempt_id=%s",
+            answer_id, exam_attempt_id,
+        )
+
+
 async def start_exam_attempt_consumer(
     app,
     instance_label: str = "0",
@@ -952,6 +991,7 @@ async def start_exam_attempt_consumer(
                     _total_duration_seconds(turns),
                 )
                 await publish_completed(completed_event)
+                await _flush_ai_usage(request_event.answer_id, request_event.exam_attempt_id)
                 await consumer.commit()
                 logger.info("[exam-consumer] completed and published answer_id=%s", request_event.answer_id)
                 break
@@ -966,6 +1006,11 @@ async def start_exam_attempt_consumer(
                 )
                 terminal_failure = isinstance(exc, TurnEvaluationRetriesExhausted)
                 if terminal_failure or retries > settings.KAFKA_MAX_RETRY:
+                    # Cố ý KHÔNG flush usage đã tích luỹ cho answer_id này ở đây: câu chấm
+                    # thất bại (GRADING_FAILED) thì trường không bị tính tiền cho câu đó, dù
+                    # một vài lệnh gọi LLM đã lỡ chạy trước khi lỗi xảy ra -- quyết định
+                    # nghiệp vụ, không phải bug. Usage này coi như mất trong buffer (không
+                    # durable, xem ai_usage_tracker.py), chấp nhận được.
                     await publish_failed(
                         ExamAttemptEvaluationFailedEvent(
                             exam_attempt_id=normalized_payload.get("examAttemptId", "unknown"),

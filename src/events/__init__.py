@@ -1,3 +1,8 @@
+from events.ai_usage_recorded import (
+    AiUsageEventItem,
+    AiUsageRecordedEvent,
+    AiUsageTokens,
+)
 from events.answer_turns_recorded import (
     AnswerTurnPayload,
     AnswerTurnsRecordedEvent,
@@ -32,6 +37,9 @@ from events.exam_attempt_evaluation_shared import (
 )
 
 __all__ = [
+    "AiUsageEventItem",
+    "AiUsageRecordedEvent",
+    "AiUsageTokens",
     "AnswerTurnPayload",
     "AnswerTurnsRecordedEvent",
     "AnswerTurnsRecordedPayload",

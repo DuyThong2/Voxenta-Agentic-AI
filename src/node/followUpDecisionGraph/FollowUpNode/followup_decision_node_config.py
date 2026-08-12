@@ -1,10 +1,12 @@
 import json
+import logging
 import random
 from typing import Any, Dict, List
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
+from infra.message_broker import ai_usage_tracker
 from node.followUpDecisionGraph.constants import MAX_TURNS
 from node.followUpDecisionGraph.followup_graph_helper import (
     count_assessment_turns,
@@ -13,6 +15,10 @@ from node.followUpDecisionGraph.followup_graph_helper import (
 from node.followUpDecisionGraph.FollowUpNode.followup_decision_prompt import SYSTEM_PROMPT
 from schemas.evaluation_event import EvaluationGuideInput
 from node.state_models import QuestionContext
+
+logger = logging.getLogger(__name__)
+
+_FOLLOWUP_MODEL = "gpt-4o"
 
 _HESITATION_TOKENS = {
     "uh", "um", "erm", "hmm", "ah", "eh", "like",
@@ -332,7 +338,7 @@ def followup_decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
     if edge_case_decision is not None:
         return edge_case_decision
 
-    llm = ChatOpenAI(model="gpt-4o", temperature=0)
+    llm = ChatOpenAI(model=_FOLLOWUP_MODEL, temperature=0)
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(content=_build_prompt(state)),
@@ -340,6 +346,10 @@ def followup_decision_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         response = llm.invoke(messages)
+        try:
+            ai_usage_tracker.record_llm_usage(state.get("answer_id"), "openai", _FOLLOWUP_MODEL, response)
+        except Exception:
+            logger.exception("[ai_usage_tracker] failed to record LLM usage, ignoring")
         content = response.content.strip()
         if content.startswith("```"):
             lines = [line for line in content.splitlines() if not line.strip().startswith("```")]

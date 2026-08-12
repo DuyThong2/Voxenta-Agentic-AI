@@ -427,6 +427,7 @@ def language_quality_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 "vocabulary": _score_range(speaking_input, "vocabulary"),
                 "coherence": _score_range(speaking_input, "coherence"),
             },
+            answer_id=answer_id,
             debug_context={
                 "exam_attempt_id": speaking_input.exam_attempt_id,
                 "answer_id": answer_id,

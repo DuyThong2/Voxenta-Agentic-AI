@@ -91,7 +91,7 @@ class ConfidenceLayerTests(unittest.TestCase):
         ]
         lock = threading.Lock()
 
-        def fake_call(_system: str, _user: str):
+        def fake_call(_system: str, _user: str, **_kwargs):
             with lock:
                 return responses.pop()
 
@@ -110,11 +110,11 @@ class ConfidenceLayerTests(unittest.TestCase):
     def test_llm_consensus_uses_valid_runs_when_one_fails(self) -> None:
         # 1 lượt hỏng hoàn toàn (primary + fallback đều raise) KHÔNG còn ép cả tiêu chí về 0 --
         # 2 lượt còn lại đồng thuận -> confidence cao, tính trên các lượt hợp lệ.
-        def raiser(_system: str, _user: str):
+        def raiser(_system: str, _user: str, **_kwargs):
             raise RuntimeError("both providers down for this pass")
 
         def scorer(score: int, note: str):
-            def _call(_system: str, _user: str):
+            def _call(_system: str, _user: str, **_kwargs):
                 return {"score": score, "note": note}
             return _call
 

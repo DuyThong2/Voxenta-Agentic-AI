@@ -35,6 +35,9 @@ from utils.length_utils import get_expected_min_words
 from utils.confidence_utils import llm_call_slot
 from utils.speech_client import compute_code_switching_ratio
 from utils.text_utils import word_count
+from infra.message_broker import ai_usage_tracker
+
+_VALIDITY_MODEL = "gpt-5.4"
 
 logger = logging.getLogger(__name__)
 
@@ -144,8 +147,9 @@ def _call_llm(text: str, question_text: Optional[str], question_type: Optional[s
               asset_context: Optional[str], mode: Optional[str], difficulty_level: Optional[str], word_count: int,
               actual_response_seconds: Optional[float] = None,
               expected_min_response_seconds: Optional[float] = None,
-              off_topic_examples: Optional[str] = None) -> Dict[str, Any]:
-    llm = ChatOpenAI(model="gpt-5.4", reasoning_effort="medium")
+              off_topic_examples: Optional[str] = None,
+              answer_id: Optional[str] = None) -> Dict[str, Any]:
+    llm = ChatOpenAI(model=_VALIDITY_MODEL, reasoning_effort="medium")
 
     user_prompt = _build_llm_prompt(
         text, question_text, asset_context, question_type, mode, difficulty_level, word_count,
@@ -161,6 +165,10 @@ def _call_llm(text: str, question_text: Optional[str], question_type: Optional[s
 
     with llm_call_slot():
         response = llm.invoke(messages)
+    try:
+        ai_usage_tracker.record_llm_usage(answer_id, "openai", _VALIDITY_MODEL, response)
+    except Exception:
+        logger.exception("[ai_usage_tracker] failed to record LLM usage, ignoring")
     content = response.content.strip()
 
     if content.startswith("```"):
@@ -413,6 +421,7 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 actual_response_seconds=actual_response_seconds,
                 expected_min_response_seconds=expected_min_response_seconds,
                 off_topic_examples=off_topic_examples,
+                answer_id=answer_id,
             )
 
             # Merge LLM-triggered rules

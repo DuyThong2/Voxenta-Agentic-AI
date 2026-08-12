@@ -19,6 +19,7 @@ from openai import RateLimitError as OpenAIRateLimitError
 
 _RateLimitErrors = (OpenAIRateLimitError, AnthropicRateLimitError)
 
+from infra.message_broker import ai_usage_tracker
 from utils.speech_client import normalize_for_wer, word_error_rate
 from utils.jsonl_logger import append_jsonl
 
@@ -52,10 +53,24 @@ def llm_call_slot():
         _llm_call_semaphore.release()
 
 
-def _invoke_llm_json(llm: Any, system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+def _invoke_llm_json(
+    llm: Any,
+    system_prompt: str,
+    user_prompt: str,
+    *,
+    answer_id: Optional[str] = None,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+) -> Dict[str, Any]:
     messages = [SystemMessage(content=system_prompt), HumanMessage(content=user_prompt)]
     with llm_call_slot():
         response = llm.invoke(messages)
+    # Ghi usage để báo cáo chi phí AI (xem infra/message_broker/ai_usage_tracker.py) -- best-effort,
+    # không được làm hỏng lượt chấm nếu ghi lỗi (vd usage_metadata thiếu ở 1 provider nào đó).
+    try:
+        ai_usage_tracker.record_llm_usage(answer_id, provider, model, response)
+    except Exception:
+        logger.exception("[ai_usage_tracker] failed to record LLM usage, ignoring")
     content = response.content.strip()
     if content.startswith("```"):
         lines = [line for line in content.split("\n") if not line.strip().startswith("```")]
@@ -63,19 +78,29 @@ def _invoke_llm_json(llm: Any, system_prompt: str, user_prompt: str) -> Dict[str
     return json.loads(content)
 
 
-def call_llm_openai(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+def call_llm_openai(system_prompt: str, user_prompt: str, *, answer_id: Optional[str] = None) -> Dict[str, Any]:
     """Gọi GPT-5.4, parse JSON response."""
     return _invoke_llm_json(
         ChatOpenAI(model=_OPENAI_MODEL, reasoning_effort="medium"),
         system_prompt,
         user_prompt,
+        answer_id=answer_id,
+        provider="openai",
+        model=_OPENAI_MODEL,
     )
 
 
-def call_llm_claude(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+def call_llm_claude(system_prompt: str, user_prompt: str, *, answer_id: Optional[str] = None) -> Dict[str, Any]:
     """Gọi Claude Sonnet, parse JSON response -- cần biến môi trường ANTHROPIC_API_KEY (đọc tự
     động qua langchain-anthropic, giống cách ChatOpenAI đọc OPENAI_API_KEY)."""
-    return _invoke_llm_json(ChatAnthropic(model=CLAUDE_MODEL, temperature=0), system_prompt, user_prompt)
+    return _invoke_llm_json(
+        ChatAnthropic(model=CLAUDE_MODEL, temperature=0),
+        system_prompt,
+        user_prompt,
+        answer_id=answer_id,
+        provider="anthropic",
+        model=CLAUDE_MODEL,
+    )
 
 
 def call_with_retry_and_fallback(primary: Callable[[], _T], fallback: Callable[[], _T]) -> _T:
@@ -353,6 +378,7 @@ def run_consensus_judgment(
     *,
     score_min: float = 0.0,
     score_max: float = 100.0,
+    answer_id: Optional[str] = None,
 ) -> ConsensusJudgment:
     """Chạy ba lượt độc lập song song (xen OpenAI/Claude, mỗi lượt tự retry+fallback) và lấy
     median score cùng C_LLM,c."""
@@ -370,8 +396,8 @@ def run_consensus_judgment(
         primary, fallback = _CONSENSUS_PROVIDERS[index]
         prompt = user_prompt + variation
         return call_with_retry_and_fallback(
-            lambda: primary(system_prompt, prompt),
-            lambda: fallback(system_prompt, prompt),
+            lambda: primary(system_prompt, prompt, answer_id=answer_id),
+            lambda: fallback(system_prompt, prompt, answer_id=answer_id),
         )
 
     # Mỗi lượt lưu (response, score, grounded). Lượt PARSE ĐƯỢC + score trong range = "có điểm",
@@ -424,6 +450,7 @@ def run_multi_criterion_consensus_judgment(
     score_ranges: Dict[str, Tuple[float, float]],
     *,
     debug_context: Optional[Dict[str, Any]] = None,
+    answer_id: Optional[str] = None,
 ) -> Dict[str, ConsensusJudgment]:
     """Chạy đúng ba request O-C-O song song, mỗi request chấm toàn bộ tiêu chí.
 
@@ -449,8 +476,8 @@ def run_multi_criterion_consensus_judgment(
         primary, fallback = _CONSENSUS_PROVIDERS[index]
         prompt = user_prompt + variation
         provider, response = call_with_retry_and_fallback(
-            lambda: (primary.__name__, primary(system_prompt, prompt)),
-            lambda: (fallback.__name__, fallback(system_prompt, prompt)),
+            lambda: (primary.__name__, primary(system_prompt, prompt, answer_id=answer_id)),
+            lambda: (fallback.__name__, fallback(system_prompt, prompt, answer_id=answer_id)),
         )
         return index, provider.removeprefix("call_llm_"), response
 

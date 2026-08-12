@@ -18,6 +18,7 @@ from node.followUpDecisionGraph.SignalNode.signal_node_config import (
 from node.followUpDecisionGraph.GraphState import FollowUpGraphState
 from utils.text_utils import word_count
 from utils.speech_client import transcribe
+from infra.message_broker import ai_usage_tracker
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,8 @@ def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
 
     transcript = _transcribe_pool.submit(transcribe, audio_path, state.get("language", "en-US")).result() or ""
 
+    audio_duration_seconds = state.get("duration_seconds") or _wav_duration_seconds(audio_path)
+
     # Log CA khi thanh cong. Moi duong that bai ben trong _transcribe_impl deu da tu ghi log
     # (Azure NoMatch / no speech segments / canceled / timed out), nhung khong co duong nao ghi
     # log khi no chay TRON VEN -- nen khi transcript ve rong ma khong co canh bao nao, khong
@@ -90,9 +93,20 @@ def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
         "audio_url": state.get("audio_ref"),
         "transcript": transcript,
         "word_count": word_count(transcript),
-        "duration_seconds": state.get("duration_seconds") or _wav_duration_seconds(audio_path),
+        "duration_seconds": audio_duration_seconds,
         "answered_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    # Chi phí STT tính theo giây audio ĐÃ xử lý (đúng cơ sở tính tiền của Azure Speech), không
+    # phải wall-clock thời gian gọi -- xem infra/message_broker/ai_usage_tracker.py.
+    try:
+        ai_usage_tracker.record_duration_usage(
+            state.get("answer_id"),
+            "azure_stt",
+            None if audio_duration_seconds is None else audio_duration_seconds * 1000,
+        )
+    except Exception:
+        logger.exception("[ai_usage_tracker] failed to record STT usage, ignoring")
 
     return {
         **_state_without_turns(state),

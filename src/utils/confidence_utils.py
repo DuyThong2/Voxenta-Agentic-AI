@@ -8,7 +8,7 @@ import time
 from contextlib import contextmanager
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from statistics import median
+# from statistics import median  # chỉ compute_alignment_confidence dùng -- tắt cùng case (4)
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, TypeVar
 
 from langchain_anthropic import ChatAnthropic
@@ -215,74 +215,92 @@ def compute_reference_confidence(
     return medoid, clip_unit(min(stability, 1.0 - drift)), stability, drift
 
 
-@dataclass(frozen=True)
-class AlignmentConfidence:
-    """3 thành phần RIÊNG của case (4), không gộp sẵn -- ngưỡng Vietnam-adjusted trong spec
-    (m soft>0.20/hard>0.30, c soft<0.90/hard<0.80, j soft>0.15/hard>0.30) áp RIÊNG cho từng
-    thành phần, không phải 1 ngưỡng chung cho composite min(). Gộp sớm thành 1 số duy nhất (bản
-    trước) làm ngưỡng nới cho (1-m) -- đúng phần điều chỉnh Vietnam quan trọng nhất (rụng phụ âm
-    cuối) -- bị vô hiệu hoá, vì mọi thành phần khi đó buộc phải đạt ngưỡng của c (0.90) mới qua
-    được composite, xoá mất biên nới 0.80 dành riêng cho (1-m)."""
-
-    accuracy: Optional[float]  # 1 - m
-    coverage: Optional[float]  # c
-    timing: Optional[float]  # 1 - j
-    composite: Optional[float]  # min(accuracy, coverage, timing) -- CHỈ để hiển thị/cPfBranch
-
-
-def compute_alignment_confidence(
-    segments_data: Sequence[Dict[str, Any]],
-    reference_text: str,
-) -> AlignmentConfidence:
-    """Tính riêng accuracy (1-m), coverage (c), timing (1-j) từ forced-alignment của Azure."""
-    reference_count = len(normalize_for_wer(reference_text).split())
-    if reference_count == 0:
-        return AlignmentConfidence(None, None, None, None)
-
-    words: List[Dict[str, Any]] = []
-    for segment in segments_data:
-        nbest = segment.get("NBest") or []
-        if nbest:
-            words.extend(nbest[0].get("Words") or [])
-
-    insertions = 0
-    omissions = 0
-    aligned_durations: List[float] = []
-    aligned_count = 0
-    for word in words:
-        assessment = word.get("PronunciationAssessment") or {}
-        error_type = str(assessment.get("ErrorType") or "").lower()
-        if error_type == "insertion":
-            insertions += 1
-            continue
-        if error_type == "omission":
-            omissions += 1
-            continue
-
-        aligned_count += 1
-        duration = word.get("Duration")
-        if isinstance(duration, (int, float)) and duration > 0:
-            aligned_durations.append(float(duration))
-
-    miscue_ratio = (insertions + omissions) / max(reference_count, 1)
-    coverage = min(1.0, aligned_count / reference_count)
-
-    timing_anomalies = 0
-    if len(aligned_durations) >= 3:
-        median_duration = median(aligned_durations)
-        absolute_deviations = [abs(value - median_duration) for value in aligned_durations]
-        mad = median(absolute_deviations)
-        if mad > 0:
-            timing_anomalies = sum(
-                1 for value in aligned_durations if abs(value - median_duration) > 3.0 * mad
-            )
-    timing_anomaly_ratio = timing_anomalies / max(aligned_count, 1)
-
-    accuracy = clip_unit(1.0 - miscue_ratio)
-    coverage = clip_unit(coverage)
-    timing = clip_unit(1.0 - timing_anomaly_ratio)
-    composite = min(accuracy, coverage, timing)
-    return AlignmentConfidence(accuracy, coverage, timing, composite)
+# ==============================================================================================
+# TẮT 2026-08-11 -- toàn bộ case (4): độ tin cậy suy từ forced-alignment của Azure.
+#
+# Lưu ý phạm vi: chỗ này chỉ tính ĐỘ TIN CẬY từ kết quả alignment. Bản thân forced-alignment của
+# Azure VẪN CHẠY và vẫn cho điểm phát âm như cũ -- không đụng gì tới nó.
+#
+# Vì sao tắt: ba số này (accuracy/coverage/timing) chỉ đi vào đúng một chỗ là ConfidenceReview-
+# Calculator nhóm D bên Java, và trên dữ liệu production chúng chỉ sinh ra lý do MỀM -- đo được
+# ALIGNMENT_COVERAGE_LOW (0.84) và ALIGNMENT_TIMING_ANOMALY (0.80) trong cả hai bài đã chấm,
+# không cái nào chạm ngưỡng hard, tức không cái nào tự đẩy được bài sang giáo viên. Từ khi
+# reviewSoftSignals = false thì chúng chỉ còn làm dài chuỗi review_reason_code: giáo viên đọc
+# "4 lý do" trong khi thủ phạm bắt buộc chỉ có 1.
+#
+# Giữ nguyên dạng chú thích chứ không xoá: công thức bám theo spec Vietnam-adjusted
+# (m soft>0.20/hard>0.30, c soft<0.90/hard<0.80, j soft>0.15/hard>0.30) và phần lập luận vì sao
+# KHÔNG gộp sớm thành composite -- dựng lại từ đầu sẽ tốn đúng phần nghiên cứu đó.
+#
+# @dataclass(frozen=True)
+# class AlignmentConfidence:
+#     """3 thành phần RIÊNG của case (4), không gộp sẵn -- ngưỡng Vietnam-adjusted trong spec
+#     (m soft>0.20/hard>0.30, c soft<0.90/hard<0.80, j soft>0.15/hard>0.30) áp RIÊNG cho từng
+#     thành phần, không phải 1 ngưỡng chung cho composite min(). Gộp sớm thành 1 số duy nhất (bản
+#     trước) làm ngưỡng nới cho (1-m) -- đúng phần điều chỉnh Vietnam quan trọng nhất (rụng phụ âm
+#     cuối) -- bị vô hiệu hoá, vì mọi thành phần khi đó buộc phải đạt ngưỡng của c (0.90) mới qua
+#     được composite, xoá mất biên nới 0.80 dành riêng cho (1-m)."""
+#
+#     accuracy: Optional[float]  # 1 - m
+#     coverage: Optional[float]  # c
+#     timing: Optional[float]  # 1 - j
+#     composite: Optional[float]  # min(accuracy, coverage, timing) -- CHỈ để hiển thị/cPfBranch
+#
+#
+# def compute_alignment_confidence(
+#     segments_data: Sequence[Dict[str, Any]],
+#     reference_text: str,
+# ) -> AlignmentConfidence:
+#     """Tính riêng accuracy (1-m), coverage (c), timing (1-j) từ forced-alignment của Azure."""
+#     reference_count = len(normalize_for_wer(reference_text).split())
+#     if reference_count == 0:
+#         return AlignmentConfidence(None, None, None, None)
+#
+#     words: List[Dict[str, Any]] = []
+#     for segment in segments_data:
+#         nbest = segment.get("NBest") or []
+#         if nbest:
+#             words.extend(nbest[0].get("Words") or [])
+#
+#     insertions = 0
+#     omissions = 0
+#     aligned_durations: List[float] = []
+#     aligned_count = 0
+#     for word in words:
+#         assessment = word.get("PronunciationAssessment") or {}
+#         error_type = str(assessment.get("ErrorType") or "").lower()
+#         if error_type == "insertion":
+#             insertions += 1
+#             continue
+#         if error_type == "omission":
+#             omissions += 1
+#             continue
+#
+#         aligned_count += 1
+#         duration = word.get("Duration")
+#         if isinstance(duration, (int, float)) and duration > 0:
+#             aligned_durations.append(float(duration))
+#
+#     miscue_ratio = (insertions + omissions) / max(reference_count, 1)
+#     coverage = min(1.0, aligned_count / reference_count)
+#
+#     timing_anomalies = 0
+#     if len(aligned_durations) >= 3:
+#         median_duration = median(aligned_durations)
+#         absolute_deviations = [abs(value - median_duration) for value in aligned_durations]
+#         mad = median(absolute_deviations)
+#         if mad > 0:
+#             timing_anomalies = sum(
+#                 1 for value in aligned_durations if abs(value - median_duration) > 3.0 * mad
+#             )
+#     timing_anomaly_ratio = timing_anomalies / max(aligned_count, 1)
+#
+#     accuracy = clip_unit(1.0 - miscue_ratio)
+#     coverage = clip_unit(coverage)
+#     timing = clip_unit(1.0 - timing_anomaly_ratio)
+#     composite = min(accuracy, coverage, timing)
+#     return AlignmentConfidence(accuracy, coverage, timing, composite)
+# ==============================================================================================
 
 
 _CONSENSUS_ORDERS = (
@@ -312,16 +330,39 @@ def _rationale_is_grounded(note: Any, transcript: str) -> bool:
     return not transcript_tokens or bool(transcript_tokens & note_tokens)
 
 
-# (primary, fallback) cho mỗi lượt trong 3 lượt case (5) -- xen O/C/O thay vì 3 lần cùng 1
-# model/weights: nếu GPT-5.4 có 1 điểm mù/bias hệ thống nào đó, cả 3 lượt cùng model sẽ dính
-# GIỐNG NHAU (Δc thấp giả tạo, trông "tự tin" dù sai đều) -- đổi 1 lượt sang model khác hẳn
-# kiến trúc/dữ liệu train tăng tính độc lập thật của 3 "judge", đúng tinh thần ROVER/cross-
-# system agreement đã dùng cho case (2). Đồng thời giảm tải OpenAI mỗi turn (đỡ 429).
+# (primary, fallback) cho mỗi lượt trong 3 lượt case (5).
+#
+# ĐỔI 2026-08-11: cả 3 lượt (kể cả fallback) đều là OpenAI. Bản O/C/O cũ giữ nguyên ngay bên
+# dưới để đối chiếu.
+#
+# Vì sao đổi: đo trên production, cả hai bài thi đã chấm đều bị đẩy sang giáo viên vì đúng MỘT
+# lý do bắt buộc -- LLM_UNSTABLE_VOCABULARY, với vocabulary_score_delta = 1.60 (ngưỡng hard
+# HIGH_STAKES là 1.50). Chênh lệch đó là chênh lệch GIỮA HAI NHÀ CUNG CẤP, không phải dấu hiệu
+# bài làm khó chấm: hai model khác kiến trúc đọc cùng một rubric ra hai thang điểm hơi khác
+# nhau, và bộ đo Δ không phân biệt được "rubric mơ hồ" với "hai judge vốn hiệu chỉnh khác nhau".
+# Kết quả là gần như bài nào cũng bị gắn cờ, tức tín hiệu mất hết giá trị phân loại.
+#
+# Cái mất khi đổi -- ghi rõ để sau này còn cân nhắc lại: 3 lượt cùng model thì điểm mù hệ thống
+# của model đó (nếu có) sẽ dính GIỐNG NHAU ở cả ba, cho ra Δ thấp giả tạo -- trông "tự tin" dù
+# sai đều. Δ từ nay chỉ còn đo được độ ổn định NỘI TẠI của một model, không còn là cross-system
+# agreement kiểu ROVER nữa. Đây là đánh đổi có chủ đích, không phải sơ suất.
+#
+# Fallback cũng là OpenAI: để Claude làm fallback thì mỗi lần OpenAI dính 429, một điểm của
+# Claude lại lọt vào giữa hai điểm của OpenAI -- tái lập đúng chênh lệch vừa bỏ, mà lại ngẫu
+# nhiên nên không tra ngược được. Hệ quả: OpenAI chết hẳn thì lượt chấm hỏng thay vì đổi nhà
+# cung cấp; call_with_retry_and_fallback vẫn cho 3 lần thử (primary, retry sau 1s, fallback).
 _CONSENSUS_PROVIDERS: Tuple[Tuple[Callable[[str, str], Dict[str, Any]], Callable[[str, str], Dict[str, Any]]], ...] = (
-    (call_llm_openai, call_llm_claude),
-    (call_llm_claude, call_llm_openai),
-    (call_llm_openai, call_llm_claude),
+    (call_llm_openai, call_llm_openai),
+    (call_llm_openai, call_llm_openai),
+    (call_llm_openai, call_llm_openai),
 )
+# Bản O/C/O trước 2026-08-11 -- xen 1 lượt Claude để 3 "judge" độc lập thật về kiến trúc/dữ
+# liệu train, đồng thời giảm tải OpenAI mỗi turn (đỡ 429):
+# _CONSENSUS_PROVIDERS = (
+#     (call_llm_openai, call_llm_claude),
+#     (call_llm_claude, call_llm_openai),
+#     (call_llm_openai, call_llm_claude),
+# )
 
 _MULTI_CRITERION_ORDERS = (
     "grammar, vocabulary, then coherence",

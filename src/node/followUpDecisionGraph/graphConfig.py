@@ -62,11 +62,28 @@ def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
     itself inside asyncio.to_thread(...), not by making this node async."""
     audio_path = state.get("audio_path")
     if not audio_path:
+        logger.warning(
+            "[archive] thieu audio_path -- bo qua phien am answer_id=%s turn=%s",
+            state.get("answer_id"), state.get("turn_order"),
+        )
         return {**_state_without_turns(state), "status": "error", "error": "audio_path is required"}
 
     transcript = _transcribe_pool.submit(transcribe, audio_path, state.get("language", "en-US")).result() or ""
 
     audio_duration_seconds = state.get("duration_seconds") or _wav_duration_seconds(audio_path)
+
+    # Log CA khi thanh cong. Moi duong that bai ben trong _transcribe_impl deu da tu ghi log
+    # (Azure NoMatch / no speech segments / canceled / timed out), nhung khong co duong nao ghi
+    # log khi no chay TRON VEN -- nen khi transcript ve rong ma khong co canh bao nao, khong
+    # phan biet duoc "Azure tra ve rong" voi "node nay chua tung chay".
+    #
+    # Do chinh la be tac gap ngay 2026-08-09: turns[].transcript rong o ca checkpoint lan Kafka,
+    # trong khi ca ngay khong co mot dong [transcribe] nao. Mot dong log o day tra loi dut diem.
+    logger.info(
+        "[archive] phien am xong answer_id=%s turn=%s chars=%d audio_path=%s",
+        state.get("answer_id"), state.get("turn_order"), len(transcript), audio_path,
+    )
+
     current_turn = {
         "answer_id": state.get("answer_id"),
         "paper_item_id": state.get("paper_item_id"),

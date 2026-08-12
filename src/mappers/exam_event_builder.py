@@ -168,10 +168,12 @@ def _build_turn_confidence_case(result: Dict[str, Any]) -> ConfidenceCaseSignals
     q_snr = _clamp_unit(metrics.get("q_snr"))
     q_speech = _clamp_unit(metrics.get("q_speech"))
     c_ref = _clamp_unit(metadata.get("c_ref"))
-    c_align = _clamp_unit(metadata.get("c_align"))
-    c_align_accuracy = _clamp_unit(metadata.get("c_align_accuracy"))
-    c_align_coverage = _clamp_unit(metadata.get("c_align_coverage"))
-    c_align_timing = _clamp_unit(metadata.get("c_align_timing"))
+    # TẮT 2026-08-11 -- case (4), xem utils/confidence_utils.py. Node phát âm không còn phát ra
+    # 4 khoá này nữa nên chúng luôn None; đọc tiếp cũng chỉ ra None.
+    # c_align = _clamp_unit(metadata.get("c_align"))
+    # c_align_accuracy = _clamp_unit(metadata.get("c_align_accuracy"))
+    # c_align_coverage = _clamp_unit(metadata.get("c_align_coverage"))
+    # c_align_timing = _clamp_unit(metadata.get("c_align_timing"))
 
     # c_pf_branch = min(c_ref, c_align), theo ĐÚNG giả mã cuối của research
     # (02-ket-qua.md, requires_human_review): KHÔNG ép về 0 khi ASR thấp. Việc "ASR hỏng ->
@@ -179,8 +181,11 @@ def _build_turn_confidence_case(result: Dict[str, Any]) -> ConfidenceCaseSignals
     # riêng (nó không hề đọc c_pf_branch). Bản cũ ép c_pf_branch=0 ngay ở ngưỡng SOFT 0.80 (nhánh
     # nolog) -- vừa sai ngưỡng (hard đúng ra là 0.60), vừa sai cơ chế -- khiến overallConfidence
     # (min mọi c-value phía Java) LUÔN = 0 dù cRef/cAlign rất tốt.
-    pf_components = [value for value in (c_ref, c_align) if value is not None]
-    c_pf_branch = min(pf_components) if pf_components else None
+    #
+    # Từ 2026-08-11 vế c_align biến mất, nên min(c_ref, c_align) rút gọn còn chính c_ref.
+    # pf_components = [value for value in (c_ref, c_align) if value is not None]
+    # c_pf_branch = min(pf_components) if pf_components else None
+    c_pf_branch = c_ref
 
     return ConfidenceCaseSignals(
         c_asr_log=realtime_confidence,
@@ -188,10 +193,10 @@ def _build_turn_confidence_case(result: Dict[str, Any]) -> ConfidenceCaseSignals
         q_speech=q_speech,
         clipping_ratio=_clamp_unit(metrics.get("clipping_ratio")),
         c_ref=c_ref,
-        c_align=c_align,
-        c_align_accuracy=c_align_accuracy,
-        c_align_coverage=c_align_coverage,
-        c_align_timing=c_align_timing,
+        # c_align=c_align,
+        # c_align_accuracy=c_align_accuracy,
+        # c_align_coverage=c_align_coverage,
+        # c_align_timing=c_align_timing,
         c_pf_branch=c_pf_branch,
     )
 
@@ -218,10 +223,12 @@ def _aggregate_confidence_cases(
         q_speech=minimum("q_speech"),
         clipping_ratio=max(clipping_values) if clipping_values else None,
         c_ref=minimum("c_ref"),
-        c_align=minimum("c_align"),
-        c_align_accuracy=minimum("c_align_accuracy"),
-        c_align_coverage=minimum("c_align_coverage"),
-        c_align_timing=minimum("c_align_timing"),
+        # TẮT 2026-08-11 -- case (4). minimum() đọc qua getattr nên phải tắt cùng lúc với 4
+        # trường trong ConfidenceCaseSignals, không thì AttributeError.
+        # c_align=minimum("c_align"),
+        # c_align_accuracy=minimum("c_align_accuracy"),
+        # c_align_coverage=minimum("c_align_coverage"),
+        # c_align_timing=minimum("c_align_timing"),
         c_pf_branch=minimum("c_pf_branch"),
         c_grammar=_clamp_unit(metadata.get("grammar_confidence")),
         c_vocabulary=_clamp_unit(metadata.get("vocabulary_confidence")),
@@ -375,7 +382,10 @@ def build_completed_event(
             validity=result.get("validity") or ValidityResult(),
             feedback_summary=feedback_summary,
             suggestions=suggestions,
-            model_version="gpt-5.4+claude-sonnet-4-6",
+            # ĐỔI 2026-08-11: cả 3 lượt chấm ngôn ngữ đều là OpenAI, không còn lượt Claude nào
+            # -- xem _CONSENSUS_PROVIDERS. Chuỗi này ghi thẳng vào exam_item_evaluations
+            # .graded_by_model, nên để nguyên "+claude-sonnet-4-6" là ghi sai lịch sử chấm.
+            model_version="gpt-5.4",
             prompt_version="language-quality-v2",
             evaluated_at=datetime.now(timezone.utc).isoformat(),
         ),

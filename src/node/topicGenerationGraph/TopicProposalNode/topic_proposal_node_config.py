@@ -17,6 +17,11 @@ def topic_proposal_node(
     client: OpenAI,
 ) -> dict:
     request = state["request"]
+    collisions = state.get("collisions") or []
+    already_accepted = len(state.get("accepted") or [])
+    # Chi xin phan CON THIEU. Vong 1 xin du; cac vong sau chi bu dung so bi bo loc cat mat, thay
+    # vi xin lai tu dau roi vut them mot lan nua.
+    remaining = max(1, request.max_proposals - already_accepted)
     response = client.responses.parse(
         model=MODEL,
         reasoning={"effort": "low"},
@@ -30,7 +35,7 @@ def topic_proposal_node(
             },
             {
                 "role": "user",
-                "content": build_topic_proposal_prompt(request),
+                "content": build_topic_proposal_prompt(request, collisions, remaining),
             },
         ],
         # Schema dựng theo danh mục chiều Java gửi xuống -- model không thể trả về chiều
@@ -46,9 +51,8 @@ def topic_proposal_node(
         )
     )
     return {
-        "proposals": _deduplicate_evidence_clusters(
-            proposals[: request.max_proposals]
-        )
+        "proposals": _deduplicate_evidence_clusters(proposals[:remaining]),
+        "round": (state.get("round") or 0) + 1,
     }
 
 

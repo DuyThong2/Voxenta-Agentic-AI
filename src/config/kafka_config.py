@@ -31,6 +31,11 @@ class KafkaSettings(BaseSettings):
     KAFKA_QUESTION_ASSET_ANALYSIS_REQUEST_TOPIC: str = "question-asset-analysis-requested"
     KAFKA_QUESTION_ASSET_ANALYSIS_COMPLETED_TOPIC: str = "question-asset-analysis-completed"
     KAFKA_EXAM_FORCE_END_TOPIC: str = "exam-attempt-force-end-requested"
+    # Chi phí AI (LLM token + STT/TTS theo duration) báo cáo sau mỗi turn -- xem
+    # AiUsageRecordedEvent / infra/message_broker/ai_usage_tracker.py. Mặc định khớp
+    # với topic BE đang lắng nghe (application.yaml: app.external-event.kafka
+    # .consumer-groups.ai-usage.topic.ai-usage-recorded).
+    KAFKA_AI_USAGE_TOPIC: str = "exam-ai-usage-recorded"
     KAFKA_EXAM_CONSUMER_GROUP: str = "exam-attempt-evaluation"
     KAFKA_PRACTICE_CONSUMER_GROUP: str = "practice-attempt-evaluation"
     KAFKA_EXAM_CONSUMER_CONCURRENCY: int = 4

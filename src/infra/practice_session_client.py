@@ -25,6 +25,8 @@ _NEXT_QUESTION_TIMEOUT_SECONDS = 30.0
 _SUBMIT_TURN_TIMEOUT_SECONDS = 8.0
 _UPLOAD_URL_TIMEOUT_SECONDS = 5.0
 _S3_PUT_TIMEOUT_SECONDS = 15.0
+# Nhip tim phai NGAN: no chay dinh ky, treo lau chi lam nghen vong lap.
+_HEARTBEAT_TIMEOUT_SECONDS = 5.0
 
 
 def _headers() -> dict:
@@ -79,6 +81,28 @@ async def get_turn_upload_url(practice_session_id: str, turn_order: int) -> dict
         response = await client.get(url, headers=_headers())
         response.raise_for_status()
         return response.json()["data"]
+
+
+async def send_heartbeat(practice_session_id: str) -> None:
+    """POST /internal/practice-sessions/{id}/heartbeat -- bao Java rang phien VAN CON SONG.
+
+    Vi sao agents gui chu khong phai app: app da giu WebSocket toi day va bom audio lien tuc, nen
+    o day biet tung giay phien con song hay khong. Timer trong app thi van chay du mang da rot,
+    va Android bop timer khi app xuong nen -- ca hai deu cho tin hieu sai.
+
+    NUOT MOI LOI co chu dich. Day la tin hieu song, khong phai lenh nghiep vu: nem ra se giet
+    vong lap nhip (roi phien chet dung vi thu le ra phai giu no song), con phien vua ket thuc
+    binh thuong ma nhip cuoi con dang bay thi khong co gi de xu ly ca.
+    """
+    url = f"{_JAVA_BASE_URL}/internal/practice-sessions/{practice_session_id}/heartbeat"
+    try:
+        async with httpx.AsyncClient(timeout=_HEARTBEAT_TIMEOUT_SECONDS) as client:
+            await client.post(url, headers=_headers())
+    except Exception as exc:
+        logger.warning(
+            "[practice_session_client] heartbeat that bai practice_session_id=%s: %s",
+            practice_session_id, exc,
+        )
 
 
 async def upload_turn_wav(upload_url: str, wav_bytes: bytes) -> None:

@@ -6,6 +6,10 @@ class RealtimeCorrectionGraphState(TypedDict, total=False):
     transcript: str
     audio_path: Optional[str]
     language: str
+    # Khoá buffer cho ai_usage_tracker (xem infra/message_broker/ai_usage_tracker.py) -- các
+    # node gọi LLM/Azure thật (LightCorrection/WordChoice/EnglishRendering/Pronunciation) ghi
+    # usage vào đây để connection.py pop lại ngay sau khi graph chạy xong, tính turn_cost_usd.
+    answer_id: Optional[str]
 
     # Written by pronunciation_node -- None if audio_path wasn't available (see node
     # docstring: turn-level PCM buffering-to-WAV isn't wired up yet, known gap).

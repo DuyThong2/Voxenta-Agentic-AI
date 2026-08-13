@@ -18,6 +18,7 @@ import asyncio
 import json
 import logging
 import tempfile
+import uuid
 import wave
 from dataclasses import dataclass
 from pathlib import Path
@@ -25,7 +26,10 @@ from typing import Any, Optional
 
 import httpx
 
+from events import AiUsageRecordedEvent
 from infra import practice_session_client
+from infra.message_broker import ai_usage_tracker
+from infra.message_broker.publishers.exam_publisher import publish_ai_usage_recorded
 from infra.realtime_socket import RealtimeSocket
 from infra.voice_live_client import EXPECTED_SAMPLE_RATE, VoiceLiveClient, VoiceLiveServerEvent
 from node.realtimeCorrectionGraph.graphConfig import build_realtime_correction_graph
@@ -268,14 +272,14 @@ class PracticeAttemptConnection:
                 self._upload_turn_audio(audio_path, current_turn.get("turn_order"))
             )
 
-            corrections, pronunciation_result, wrong_language = await correction_task
+            corrections, pronunciation_result, wrong_language, turn_cost_usd = await correction_task
             audio_url = await upload_task
             # Only resolve/push the next MAIN question -- which mutates the paper on Java's
             # side -- once the CURRENT turn is confirmed saved (recorded + quota-consumed).
             # Firing it concurrently with _submit_turn let the session silently advance past
             # a turn that was never recorded (network hiccup or quota exceeded).
             submit_outcome = await self._submit_turn(
-                session, corrections, pronunciation_result, audio_url,
+                session, corrections, pronunciation_result, audio_url, turn_cost_usd,
                 question_complete=not should_continue,
             )
             await self.socket.send_json(
@@ -336,19 +340,27 @@ class PracticeAttemptConnection:
 
     async def _run_correction(
         self, session, audio_path: Optional[str]
-    ) -> tuple[list, Optional[dict], bool]:
-        """Tra ve (corrections, pronunciation_result, wrong_language).
+    ) -> tuple[list, Optional[dict], bool, float]:
+        """Tra ve (corrections, pronunciation_result, wrong_language, turn_cost_usd).
 
         `wrong_language` = luot noi khong phai tieng Anh nen da bo qua toan bo viec sua loi
         (xem realtimeCorrectionGraph.language_guard). Chuyen ra client de noi cho hoc sinh
         biet VI SAO luot vua roi khong co phan hoi -- khong noi thi man hinh chi hien mot the
         trong, trong nhu he thong hong.
+
+        `turn_cost_usd` = tong chi phi AI THAT (3 loi goi LLM + 1 loi goi Azure trong graph nay)
+        -- tinh DONG BO ngay tai day (khac exam, tru quota TRE qua /complete-grading) vi
+        SubmitPracticeTurnUseCase tru quota NGAY trong request nop turn, khong doi duoc Kafka
+        round-trip. Xem AI_USAGE_QUOTA_USD_MIGRATION.md.
         """
         current_turn = session.turns[-1]
+        answer_id = session.answer_id
+        turn_order = current_turn.get("turn_order")
         state = {
             "transcript": current_turn.get("transcript") or "",
             "audio_path": audio_path,
             "language": session.language,
+            "answer_id": answer_id,
         }
         try:
             result = await asyncio.to_thread(_correction_graph.invoke, state)
@@ -357,20 +369,51 @@ class PracticeAttemptConnection:
                 "[practice_attempt_connection] correction graph failed practice_session_id=%s",
                 self.practice_session_id,
             )
-            return [], None, False
+            result = {}
+        turn_cost_usd = await self._flush_turn_usage(answer_id, turn_order)
         if result.get("wrong_language"):
             logger.info(
                 "[practice_attempt_connection] luot noi khong phai tieng Anh -- bo qua sua loi "
                 "practice_session_id=%s answer_id=%s turn_order=%s",
                 self.practice_session_id,
-                session.answer_id,
-                current_turn.get("turn_order"),
+                answer_id,
+                turn_order,
             )
         return (
             result.get("corrections") or [],
             result.get("pronunciation_result"),
             bool(result.get("wrong_language")),
+            turn_cost_usd,
         )
+
+    async def _flush_turn_usage(self, answer_id: Optional[str], turn_order: Optional[int]) -> float:
+        """Xa buffer chi phi AI (ai_usage_tracker, xem GraphState.answer_id) tich luy trong luc
+        4 node cua realtimeCorrectionGraph chay cho turn nay, tra ve TONG cost_usd de
+        _submit_turn dung tru quota dong bo -- va, best-effort (mirror turn_publisher.py, KHONG
+        chan/lam hong luong chinh neu loi), publish cung du lieu do thanh AiUsageRecordedEvent
+        de co audit ledger (ai_usage_record ben Java) giong het exam."""
+        if not answer_id:
+            return 0.0
+        usage_events = ai_usage_tracker.pop_usage(answer_id)
+        if not usage_events:
+            return 0.0
+        turn_cost_usd = sum(item.cost_usd for item in usage_events)
+        try:
+            # turn_id la UUID xac dinh (uuid5) tu answer_id+turn_order, mirror dung cong thuc
+            # turn_publisher.py dang dung cho exam -- Java chi dung de nhom/audit, khong FK.
+            turn_id = str(uuid.uuid5(uuid.NAMESPACE_OID, f"{answer_id}:{turn_order}"))
+            await publish_ai_usage_recorded(AiUsageRecordedEvent(
+                exam_session_id=self.practice_session_id,
+                turn_id=turn_id,
+                usage_events=usage_events,
+            ))
+        except Exception:
+            logger.exception(
+                "[practice_attempt_connection] failed to publish AI usage: "
+                "practice_session_id=%s answer_id=%s turn_order=%s",
+                self.practice_session_id, answer_id, turn_order,
+            )
+        return turn_cost_usd
 
     async def _upload_turn_audio(self, audio_path: Optional[str], turn_order: int) -> Optional[str]:
         """Permanent archival for teacher review (TeacherPracticeTurnView.audioUrl) -- separate
@@ -400,6 +443,7 @@ class PracticeAttemptConnection:
         corrections: list,
         pronunciation_result: Optional[dict],
         audio_url: Optional[str],
+        turn_cost_usd: float,
         *,
         question_complete: bool,
     ) -> TurnSubmitOutcome:
@@ -417,6 +461,9 @@ class PracticeAttemptConnection:
             "audioUrl": audio_url,
             "transcript": current_turn.get("transcript") or "",
             "durationSeconds": int(current_turn.get("duration_seconds") or 0),
+            # Chi phi AI THAT cua turn nay (xem _flush_turn_usage) -- Java dung so nay de tru
+            # SubscriptionQuota(PRACTICE), KHONG con dung durationSeconds nhu USD gia lap.
+            "turnCostUsd": turn_cost_usd,
             "wordFeedbackJson": json.dumps(pronunciation_result) if pronunciation_result else None,
             "turnScore": None,
             "questionComplete": question_complete,

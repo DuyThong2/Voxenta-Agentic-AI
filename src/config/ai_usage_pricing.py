@@ -19,6 +19,7 @@ class LlmUnitPrice(NamedTuple):
 LLM_PRICING: Dict[str, LlmUnitPrice] = {
     "gpt-5.4": LlmUnitPrice(input_per_mtok=1.00, output_per_mtok=5.00),
     "gpt-4o": LlmUnitPrice(input_per_mtok=1.00, output_per_mtok=5.00),
+    "gpt-4o-mini": LlmUnitPrice(input_per_mtok=0.15, output_per_mtok=0.60),
     "claude-sonnet-4-6": LlmUnitPrice(input_per_mtok=3.00, output_per_mtok=15.00),
 }
 DEFAULT_LLM_PRICE = LlmUnitPrice(input_per_mtok=1.00, output_per_mtok=5.00)

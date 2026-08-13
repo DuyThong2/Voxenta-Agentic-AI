@@ -43,7 +43,16 @@ class FollowUpGraphState(TypedDict, total=False):
     remaining_graded_seconds: Optional[int]
     current_turn: Dict[str, Any]
     turns: Annotated[List[Dict[str, Any]], add]
+    # Lượt đã publish bản ĐẦY ĐỦ (có audio_url + transcript từ bản ghi âm). Xem
+    # turn_publisher.publish_turn_if_new: pha 2.
     published_turn_orders: Annotated[List[int], add]
+    # Lượt đã publish bản SƠ BỘ -- pha 1, dựng từ realtime_transcripts ngay khi quyết định
+    # follow-up xong, chưa có audio_url.
+    #
+    # Phải tách khỏi published_turn_orders chứ không dùng chung một danh sách: pha 2 bắt buộc
+    # phải được phép chạy SAU pha 1 để bổ sung bản ghi âm, nên nếu pha 1 đánh dấu vào
+    # published_turn_orders thì chính nó sẽ chặn mất pha 2.
+    preliminary_turn_orders: Annotated[List[int], add]
     # [{"turn_order": int, "reason": str}, ...] -- turns archived via POST
     # /turns/archive never carry decision_reason (that's only known in-memory
     # by RealtimeExamSession after decide_next_step runs), so it's persisted

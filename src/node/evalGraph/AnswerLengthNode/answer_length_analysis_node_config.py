@@ -186,9 +186,20 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
         except Exception as exc:
             length_judgment_error = str(exc)
 
-    silence_ratio = compute_silence_ratio(speaking_input.audio_path) if speaking_input.audio_path else None
-    snr_db = compute_snr_db(speaking_input.audio_path) if speaking_input.audio_path else None
-    clipping_ratio = compute_clipping_ratio(speaking_input.audio_path) if speaking_input.audio_path else None
+    silence_ratio = speaking_input.silence_ratio
+    if silence_ratio is None and speaking_input.audio_path:
+        silence_ratio = compute_silence_ratio(speaking_input.audio_path)
+    # Ưu tiên giá trị ĐÃ ĐO SẴN ở pha per-turn (xem SpeakingInput.snr_db).
+    #
+    # Node này chỉ chạy ở pha tổng hợp, sau khi file audio tạm của từng lượt đã bị xoá. Gọi
+    # compute_snr_db lúc này thì audio_path vẫn là chuỗi hợp lệ nhưng file không còn, hàm nuốt
+    # OSError và trả None -- nên q_snr/q_speech null ở mọi bài mà không báo lỗi gì.
+    snr_db = speaking_input.snr_db
+    if snr_db is None and speaking_input.audio_path:
+        snr_db = compute_snr_db(speaking_input.audio_path)
+    clipping_ratio = speaking_input.clipping_ratio
+    if clipping_ratio is None and speaking_input.audio_path:
+        clipping_ratio = compute_clipping_ratio(speaking_input.audio_path)
 
     metrics = {
         "word_count": word_count,

@@ -100,6 +100,20 @@ class SpeakingInput(BaseModel):
     # C_ASR-log = sqrt(G*T20); see voice_live_client._confidence_from_logprobs / session.py).
     # None if realtime_transcript is missing or its model never reported logprobs.
     realtime_transcript_confidence: Optional[float] = None
+    # SNR do được từ chính file audio của lượt này, tính NGAY khi file còn tồn tại.
+    #
+    # answer_length_analysis_node chỉ chạy ở pha TỔNG HỢP, sau khi mọi lượt đã chấm xong -- mà
+    # file tạm của từng lượt bị os.unlink ngay trong finally của pha per-turn. Pha tổng hợp copy
+    # lại speaking_input của lượt đầu nên audio_path vẫn là một chuỗi hợp lệ, chỉ có điều file ở
+    # đó đã biến mất; compute_snr_db nuốt OSError và trả None, nên q_snr/q_speech/audioQuality
+    # null ở MỌI bài và cổng audio chưa từng chạy -- không một dòng log lỗi nào.
+    #
+    # Đo sẵn ở pha per-turn rồi mang theo là cách giữ đúng ngữ nghĩa: mỗi lượt có audio riêng.
+    snr_db: Optional[float] = None
+    # Cùng lý do với snr_db: đo ở pha per-turn rồi mang theo, vì tới pha tổng hợp thì file đã bị
+    # xoá. silence_ratio là nguồn của q_speech, clipping_ratio là tín hiệu cổng audio riêng.
+    silence_ratio: Optional[float] = None
+    clipping_ratio: Optional[float] = None
 
 
 QuestionContext.model_rebuild()

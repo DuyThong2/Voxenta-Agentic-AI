@@ -16,6 +16,7 @@ from typing import Any, Dict
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
+from infra.message_broker import ai_usage_tracker
 from node.realtimeCorrectionGraph.WordChoiceNode.word_choice_prompt import (
     SYSTEM_PROMPT,
 )
@@ -53,6 +54,7 @@ def word_choice_node(state: Dict[str, Any]) -> Dict[str, Any]:
     ]
     try:
         response = llm.invoke(messages)
+        ai_usage_tracker.record_llm_usage(state.get("answer_id"), "openai", "gpt-4o-mini", response)
         suggestions = _parse_json_array(response.content)
     except Exception:
         # Nuốt lỗi có chủ đích: đây là phần "có thì tốt". Hỏng nhánh này không được kéo theo

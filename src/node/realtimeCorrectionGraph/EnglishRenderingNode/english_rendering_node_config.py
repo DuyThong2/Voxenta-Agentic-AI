@@ -23,6 +23,8 @@ from typing import Any, Dict
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
+from infra.message_broker import ai_usage_tracker
+
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """The learner is practising spoken English but answered in Vietnamese,
@@ -54,6 +56,7 @@ def english_rendering_node(state: Dict[str, Any]) -> Dict[str, Any]:
             SystemMessage(content=SYSTEM_PROMPT),
             HumanMessage(content=f"Vietnamese:\n{transcript}"),
         ])
+        ai_usage_tracker.record_llm_usage(state.get("answer_id"), "openai", "gpt-4o-mini", response)
         content = response.content.strip()
         if content.startswith("```"):
             content = "\n".join(

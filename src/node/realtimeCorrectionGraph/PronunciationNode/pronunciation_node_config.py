@@ -17,16 +17,33 @@ import json
 import logging
 import os
 import threading
-from typing import Any, Dict, List
+import wave
+from typing import Any, Dict, List, Optional
 
 import azure.cognitiveservices.speech as speechsdk
 
+from infra.message_broker import ai_usage_tracker
 from node.evalGraph.PronunciationNode.pronunciation_eval_node_config import (
     extract_word_feedback,
 )
 from utils.speech_client import build_speech_config, describe_no_match
 
 logger = logging.getLogger(__name__)
+
+
+def _wav_duration_seconds(audio_path: str) -> Optional[float]:
+    """WPF/mobile clients produce 16kHz mono PCM16 WAV files, so stdlib `wave` is enough --
+    mirror node/followUpDecisionGraph/graphConfig.py's `_wav_duration_seconds` (not shared,
+    same reasoning: tiny, single-use, not worth a cross-module util)."""
+    try:
+        with wave.open(audio_path, "rb") as f:
+            return f.getnframes() / f.getframerate()
+    except Exception:
+        logger.warning(
+            "[realtime_correction:pronunciation] failed to read WAV duration for %s",
+            audio_path, exc_info=True,
+        )
+        return None
 
 
 def pronunciation_node(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -112,6 +129,17 @@ def pronunciation_node(state: Dict[str, Any]) -> Dict[str, Any]:
             for segment in segments_data
             for word in extract_word_feedback(segment)
         ]
+        # Chi phí tính theo giây audio ĐÃ xử lý (đúng cơ sở tính tiền của Azure Speech), không
+        # phải wall-clock thời gian gọi -- xem infra/message_broker/ai_usage_tracker.py.
+        audio_duration_seconds = _wav_duration_seconds(audio_path)
+        try:
+            ai_usage_tracker.record_duration_usage(
+                state.get("answer_id"),
+                "azure_stt",
+                None if audio_duration_seconds is None else audio_duration_seconds * 1000,
+            )
+        except Exception:
+            logger.exception("[ai_usage_tracker] failed to record pronunciation STT usage, ignoring")
         return {
             "pronunciation_result": {
                 "accuracy_score": assessment.get("AccuracyScore"),

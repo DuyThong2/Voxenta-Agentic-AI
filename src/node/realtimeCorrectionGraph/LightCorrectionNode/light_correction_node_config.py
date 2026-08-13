@@ -10,6 +10,7 @@ from typing import Any, Dict
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
+from infra.message_broker import ai_usage_tracker
 from node.realtimeCorrectionGraph.LightCorrectionNode.light_correction_prompt import SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ def light_correction_node(state: Dict[str, Any]) -> Dict[str, Any]:
     ]
     try:
         response = llm.invoke(messages)
+        ai_usage_tracker.record_llm_usage(state.get("answer_id"), "openai", "gpt-4o-mini", response)
         corrections = _parse_json_array(response.content)
     except Exception:
         logger.exception("[realtime_correction:light_correction] failed")

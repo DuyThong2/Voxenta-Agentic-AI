@@ -57,6 +57,9 @@ from infra.database import archive_store
 from realtime.attempt.registry import get_attempt_connection
 from schemas.enums import SpeakingMode
 from utils.speech_client import (
+    compute_clipping_ratio,
+    compute_silence_ratio,
+    compute_snr_db,
     unwrap_language_tags,
 )
 
@@ -396,6 +399,11 @@ def _build_initial_state(
             answer_id=request_event.answer_id,
             question_id=request_event.question_id,
             audio_path=local_audio_path,
+            # Đo SNR NGAY tại đây, lúc file tạm còn tồn tại. Pha tổng hợp chạy sau khi finally
+            # của pha này đã os.unlink file, nên nếu để nó tự đo thì luôn ra None.
+            snr_db=compute_snr_db(local_audio_path) if local_audio_path else None,
+            silence_ratio=compute_silence_ratio(local_audio_path) if local_audio_path else None,
+            clipping_ratio=compute_clipping_ratio(local_audio_path) if local_audio_path else None,
             reference_text=request_payload.reference_text,
             transcribed_text=turn.transcript,
             conversation_transcript=conversation_transcript or turn.transcript,

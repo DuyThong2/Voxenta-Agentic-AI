@@ -105,6 +105,25 @@ async def send_heartbeat(practice_session_id: str) -> None:
         )
 
 
+async def get_exam_turn_upload_url(attempt_answer_id: str, turn_order: int) -> dict:
+    """GET /internal/exam-turns/{answerId}/turns/{turnOrder}/upload-url -- bản NỘI BỘ của
+    /api/v1/exam-turns/upload-url, dùng chung GetTurnUploadUrlUseCase nên khoá S3 và TTL không
+    thể lệch giữa hai đường.
+
+    Vì sao đường thi cũng cần: audio lượt thi chuyển sang do Python upload, thôi phụ thuộc
+    đường mạng của học sinh -- đúng lý do mô hình WPF-tự-upload đã bị bác khi làm luyện tập
+    (xem docstring đầu file). Route công khai kia gắn hasRole('STUDENT') nên Python không gọi
+    được.
+
+    Trả {"uploadUrl": ..., "audioRef": ...}, y hệt get_turn_upload_url bên luyện.
+    """
+    url = f"{_JAVA_BASE_URL}/internal/exam-turns/{attempt_answer_id}/turns/{turn_order}/upload-url"
+    async with httpx.AsyncClient(timeout=_UPLOAD_URL_TIMEOUT_SECONDS) as client:
+        response = await client.get(url, headers=_headers())
+        response.raise_for_status()
+        return response.json()["data"]
+
+
 async def upload_turn_wav(upload_url: str, wav_bytes: bytes) -> None:
     """PUT the WAV directly to S3 via the presigned URL from get_turn_upload_url. Content-Type
     must be exactly "audio/wav" -- it's baked into the presigned signature

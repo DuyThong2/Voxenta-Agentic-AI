@@ -21,6 +21,7 @@ from infra.database import archive_store
 from infra.realtime_socket import RealtimeSocket
 from realtime.attempt.connection import AttemptConnection
 from realtime.attempt.registry import (
+    get_attempt_connection,
     register_attempt_connection,
     unregister_attempt_connection,
 )
@@ -68,6 +69,22 @@ async def get_current_answer(request: Request, exam_attempt_id: str):
     answer-turns-recorded topic)."""
     answer_id = await archive_store.get_current_answer_id(request.app.state.archive_graph, exam_attempt_id)
     return {"answer_id": answer_id}
+
+
+@router.get("/attempts/{exam_attempt_id}/pending-archives")
+async def get_pending_archives(exam_attempt_id: str):
+    """Còn bao nhiêu lượt đang được lưu (upload S3 + phiên âm Azure) cho bài thi này.
+
+    Client gọi TRƯỚC khi nộp bài, thay cho cửa chờ cũ nằm bên trong nó
+    (TurnArchiveQueue.DrainAsync). Từ khi audio do Python lưu, hàng đợi bên client luôn rỗng --
+    chờ ở đó là chờ hư không, vì việc thật chạy ở tiến trình này.
+
+    Đếm theo tiến trình, cố ý: nếu pod đã restart thì chẳng còn task nào đang chạy, và trả 0 là
+    ĐÚNG -- không còn gì để chờ nữa. Không tìm thấy phiên cũng trả 0 vì cùng lý do: client
+    không được kẹt ở màn nộp bài chỉ vì WebSocket đã đóng trước đó.
+    """
+    connection = get_attempt_connection(exam_attempt_id)
+    return {"pending": 0 if connection is None else connection.pending_archive_count}
 
 
 @router.get("/attempts/{exam_attempt_id}/resume-state")

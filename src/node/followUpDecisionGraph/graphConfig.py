@@ -68,7 +68,39 @@ def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
         )
         return {**_state_without_turns(state), "status": "error", "error": "audio_path is required"}
 
-    transcript = _transcribe_pool.submit(transcribe, audio_path, state.get("language", "en-US")).result() or ""
+    # Ưu tiên bản Voice Live đã nghe được trong lúc thi, chỉ gọi Azure khi KHÔNG có.
+    #
+    # Tầng CHẤM đã ưu tiên bản này từ trước (evalGraph/StartNode/start_node_config.py), kèm
+    # nhận định đo được tại chỗ: Voice Live xử lý câu lẫn tiếng Việt tốt hơn hẳn, còn Speech SDK
+    # có lúc bẻ thành tiếng Anh vô nghĩa ("banh MI" thay vì "bánh mì"). Riêng tầng LƯU thì vẫn
+    # phiên âm lại -- và bản phiên âm lại đó có khi rỗng hoàn toàn (đo 2026-08-09: cả 3 lượt của
+    # một phiên thi thật), ghi đè lên thứ duy nhất đọc được.
+    #
+    # Bỏ được lời gọi này còn rút thẳng độ trễ của việc lưu lượt -- đúng chỗ từng làm request
+    # archive chạy quá 100 giây rồi bị cắt -- và cắt luôn chi phí STT cho mỗi lượt.
+    #
+    # realtime_transcripts nằm sẵn trong checkpoint của chính thread_id=answer_id này, nên không
+    # phải truyền thêm gì từ nơi gọi.
+    turn_order = state["turn_order"]
+    realtime_transcript = next(
+        (
+            (entry or {}).get("text")
+            for entry in (state.get("realtime_transcripts") or [])
+            if (entry or {}).get("turn_order") == turn_order
+        ),
+        None,
+    )
+
+    if realtime_transcript and realtime_transcript.strip():
+        transcript = realtime_transcript
+        transcribed_by_azure = False
+        logger.info(
+            "[archive] dung transcript realtime answer_id=%s turn=%s chars=%d",
+            state.get("answer_id"), turn_order, len(transcript),
+        )
+    else:
+        transcript = _transcribe_pool.submit(transcribe, audio_path, state.get("language", "en-US")).result() or ""
+        transcribed_by_azure = True
 
     audio_duration_seconds = state.get("duration_seconds") or _wav_duration_seconds(audio_path)
 
@@ -80,8 +112,9 @@ def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
     # Do chinh la be tac gap ngay 2026-08-09: turns[].transcript rong o ca checkpoint lan Kafka,
     # trong khi ca ngay khong co mot dong [transcribe] nao. Mot dong log o day tra loi dut diem.
     logger.info(
-        "[archive] phien am xong answer_id=%s turn=%s chars=%d audio_path=%s",
-        state.get("answer_id"), state.get("turn_order"), len(transcript), audio_path,
+        "[archive] phien am xong answer_id=%s turn=%s chars=%d nguon=%s audio_path=%s",
+        state.get("answer_id"), state.get("turn_order"), len(transcript),
+        "azure" if transcribed_by_azure else "voicelive", audio_path,
     )
 
     current_turn = {
@@ -99,14 +132,18 @@ def transcribe_turn_node(state: FollowUpGraphState) -> Dict[str, Any]:
 
     # Chi phí STT tính theo giây audio ĐÃ xử lý (đúng cơ sở tính tiền của Azure Speech), không
     # phải wall-clock thời gian gọi -- xem infra/message_broker/ai_usage_tracker.py.
-    try:
-        ai_usage_tracker.record_duration_usage(
-            state.get("answer_id"),
-            "azure_stt",
-            None if audio_duration_seconds is None else audio_duration_seconds * 1000,
-        )
-    except Exception:
-        logger.exception("[ai_usage_tracker] failed to record STT usage, ignoring")
+    #
+    # Chỉ ghi khi Azure THỰC SỰ chạy: dùng lại transcript realtime thì không có lời gọi nào,
+    # ghi vào là bịa ra một khoản chi không tồn tại.
+    if transcribed_by_azure:
+        try:
+            ai_usage_tracker.record_duration_usage(
+                state.get("answer_id"),
+                "azure_stt",
+                None if audio_duration_seconds is None else audio_duration_seconds * 1000,
+            )
+        except Exception:
+            logger.exception("[ai_usage_tracker] failed to record STT usage, ignoring")
 
     return {
         **_state_without_turns(state),

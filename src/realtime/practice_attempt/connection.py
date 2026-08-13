@@ -82,6 +82,11 @@ def _write_turn_wav(pcm16_bytes: bytes) -> Optional[str]:
     return tmp_file.name
 
 
+# Nhip 60 giay so voi nguong stale 10 phut ben Java: phai truot 10 nhip lien tiep phien moi bi
+# dong, nen mot lan mang chap chon khong giet phien dang chay.
+_HEARTBEAT_INTERVAL_SECONDS = 60.0
+
+
 class PracticeAttemptConnection:
     def __init__(
         self,
@@ -106,6 +111,8 @@ class PracticeAttemptConnection:
         self._turn_audio_buffer = bytearray()
         # Nap truoc cau MAIN ke tiep -- xem _prefetch_next_question.
         self._prefetch_task: Optional[asyncio.Task] = None
+        # Nhip tim bao Java phien con song -- xem _heartbeat_loop.
+        self._heartbeat_task: Optional[asyncio.Task] = None
 
     def _prefetch_next_question(self) -> None:
         """Bao Java sinh san cau MAIN ke tiep, chay nen, BO QUA ket qua.
@@ -150,6 +157,28 @@ class PracticeAttemptConnection:
 
     async def start(self) -> None:
         await self.voice_live_client.start()
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+
+    async def _heartbeat_loop(self) -> None:
+        """Bao Java moi 60 giay rang phien van con song, suot lúc ket noi con mo.
+
+        Truoc 2026-08-12 KHONG AI gui nhip: last_heartbeat_at chi duoc ghi mot lan luc tao phien,
+        con PracticeSessionHeartbeatCleanupJob thi dong moi phien co nhip cu hon nguong. Ket qua
+        la moi phien luyen deu bi dong o phut thu 3 va tu do moi luot nop tra 404 -- do duoc tren
+        production: phien 681cdd72 mo 09:46:48, nop luot 09:52:11 thi 404 ba lan lien tiep.
+
+        60 giay so voi nguong 10 phut: phai truot 10 nhip lien tiep phien moi bi dong, nen mot lan
+        mang chap chon khong giet phien.
+
+        CancelledError phai de nguyen cho no bay len -- nuot vao la task khong bao gio dung duoc
+        khi close() huy no.
+        """
+        try:
+            while True:
+                await asyncio.sleep(_HEARTBEAT_INTERVAL_SECONDS)
+                await practice_session_client.send_heartbeat(self.practice_session_id)
+        except asyncio.CancelledError:
+            raise
 
     async def handle_audio_frame(self, data: bytes) -> None:
         self._turn_audio_buffer.extend(data)
@@ -563,5 +592,9 @@ class PracticeAttemptConnection:
         await self.socket.close(code=1000)
 
     async def close(self) -> None:
+        # Huy nhip TRUOC khi dong Voice Live: de lai thi no cu goi Java cho mot phien da ket thuc.
+        if self._heartbeat_task is not None:
+            self._heartbeat_task.cancel()
+            self._heartbeat_task = None
         self.questions.clear()
         await self.voice_live_client.close()

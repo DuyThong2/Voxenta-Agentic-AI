@@ -78,6 +78,75 @@ def _build_answer_turn_payload(
     )
 
 
+def _find_realtime_entry(values: dict, turn_order: int) -> dict | None:
+    return next(
+        (
+            entry
+            for entry in (values.get("realtime_transcripts") or [])
+            if entry.get("turn_order") == turn_order
+        ),
+        None,
+    )
+
+
+def _build_preliminary_turn(
+    values: dict,
+    answer_id: str,
+    turn_order: int,
+    active_prompt_text: str | None,
+) -> dict | None:
+    """Dựng một bản ghi lượt CHỈ từ những gì đã về qua WebSocket, không cần bản ghi âm.
+
+    Đây là thứ cho phép pha 1 tồn tại. Mọi trường đều đã nằm sẵn trong checkpoint từ trước lời
+    gọi LLM: transcript realtime do persist_realtime_transcript ghi ngay tại turn_end, còn
+    paper_item_id do persist_question_snapshot ghi từ lúc question_start.
+
+    Trả None nếu chưa có bản ghi realtime nào cho lượt này -- khi đó không có gì để gửi, và
+    pha 2 vẫn là đường duy nhất.
+    """
+    entry = _find_realtime_entry(values, turn_order)
+    if entry is None:
+        return None
+
+    transcript = entry.get("text") or ""
+    return {
+        "answer_id": answer_id,
+        "paper_item_id": values.get("paper_item_id"),
+        "turn_order": turn_order,
+        # Cùng quy tắc với graphConfig.py:91 -- lượt đầu của một câu là MAIN, còn lại là
+        # FOLLOWUP. Suy ra ở đây thay vì để trống, vì bỏ trống thì Java mặc định về MAIN
+        # (normalizeTurnType) và một lượt hỏi thêm sẽ bị đếm nhầm thành lượt chính.
+        "turn_type": "MAIN" if turn_order == 1 else "FOLLOWUP",
+        "prompt_text": active_prompt_text or values.get("prompt_text"),
+        # Chưa có bản ghi âm -- đó là toàn bộ điểm khác biệt giữa pha 1 và pha 2.
+        "audio_url": None,
+        "transcript": transcript,
+        "duration_seconds": entry.get("duration_seconds"),
+        "word_count": len(transcript.split()),
+        "answered_at": None,
+    }
+
+
+async def _publish_turn_payload(
+    payload: AnswerTurnPayload,
+    answer_id: str,
+    turn_order: int,
+    reason: str,
+    phase: str,
+) -> None:
+    event = AnswerTurnsRecordedEvent(
+        answer_id=answer_id,
+        payload=AnswerTurnsRecordedPayload(turns=[payload], reason=reason),
+    )
+    append_jsonl(FOLLOWUP_KAFKA_LOG_FILE, {
+        "answer_id": answer_id,
+        "turn_order": turn_order,
+        "phase": phase,
+        "event": event.model_dump(by_alias=True),
+    })
+    await publish_answer_turns_recorded(event)
+
+
 async def publish_turn_if_new(
     archive_graph,
     answer_id: str,
@@ -127,7 +196,8 @@ async def publish_turn_if_new(
 
     try:
         state_before = await aget_state(archive_graph, config)
-        published_already = set((state_before.values or {}).get("published_turn_orders") or [])
+        values_before = state_before.values or {}
+        published_already = set(values_before.get("published_turn_orders") or [])
         if turn_order in published_already:
             logger.debug(
                 "[turn_publisher] turn already published, skipping: answer_id=%s turn_order=%d",
@@ -135,10 +205,39 @@ async def publish_turn_if_new(
             )
             return
 
+        # ---- PHA 1: gửi lượt đi NGAY, không chờ bản ghi âm ----
+        #
+        # Trước đây chỗ này đi thẳng vào wait_for_turn, và nếu POST /turns/archive của WPF không
+        # tới trong ~90 giây thì hàm `return` -- lượt nói KHÔNG BAO GIỜ vào Kafka, không có dòng
+        # nào bên Java, dù transcript vẫn nằm nguyên trong checkpoint ngay bên cạnh. Đo được
+        # 2026-08-13 trên log WPF thật: 7 lượt gửi đi, chỉ 5 lượt archive về đích; hai lượt còn
+        # lại thoát nạn thuần do may (request đã sang tới Python trước khi kết nối đứt).
+        #
+        # Bản ghi âm không được phép quyết định lượt nói có tồn tại hay không. Nó là phần làm
+        # giàu -- gửi sau, ở pha 2, và Java upsert đè lên đúng dòng này.
+        if turn_order not in set(values_before.get("preliminary_turn_orders") or []):
+            preliminary = _build_preliminary_turn(
+                values_before, answer_id, turn_order, active_prompt_text
+            )
+            if preliminary is not None:
+                await _publish_turn_payload(
+                    _build_answer_turn_payload(
+                        preliminary, answer_id, exam_attempt_id, decision_reason=reason
+                    ),
+                    answer_id, turn_order, reason, phase="preliminary",
+                )
+                await aupdate_state(
+                    archive_graph, config, {"preliminary_turn_orders": [turn_order]}
+                )
+
+        # ---- PHA 2: bản ghi âm về thì gửi lại bản đầy đủ ----
         turn = await wait_for_turn(archive_graph, answer_id, turn_order)
         if turn is None:
+            # Không còn là mất lượt: pha 1 đã đưa nó sang Java rồi. Cái mất ở đây là bản ghi âm
+            # và thẻ code-switch của Azure -- đáng báo, nhưng bài thi vẫn chấm được.
             logger.error(
-                "[turn_publisher] giving up waiting for archived turn: answer_id=%s turn_order=%d",
+                "[turn_publisher] archive never landed; turn kept from preliminary publish: "
+                "answer_id=%s turn_order=%d",
                 answer_id, turn_order,
             )
             return
@@ -155,33 +254,17 @@ async def publish_turn_if_new(
             return
 
         # Lấy từ state_now đã đọc ngay trên -- không tốn thêm một vòng Postgres nào.
-        realtime_entry = next(
-            (
-                entry
-                for entry in ((state_now.values or {}).get("realtime_transcripts") or [])
-                if entry.get("turn_order") == turn_order
+        realtime_entry = _find_realtime_entry(state_now.values or {}, turn_order)
+        await _publish_turn_payload(
+            _build_answer_turn_payload(
+                turn,
+                answer_id,
+                exam_attempt_id,
+                decision_reason=reason,
+                realtime_transcript=None if realtime_entry is None else realtime_entry.get("text"),
             ),
-            None,
+            answer_id, turn_order, reason, phase="full",
         )
-        event = AnswerTurnsRecordedEvent(
-            answer_id=answer_id,
-            payload=AnswerTurnsRecordedPayload(
-                turns=[_build_answer_turn_payload(
-                    turn,
-                    answer_id,
-                    exam_attempt_id,
-                    decision_reason=reason,
-                    realtime_transcript=None if realtime_entry is None else realtime_entry.get("text"),
-                )],
-                reason=reason,
-            ),
-        )
-        append_jsonl(FOLLOWUP_KAFKA_LOG_FILE, {
-            "answer_id": answer_id,
-            "turn_order": turn_order,
-            "event": event.model_dump(by_alias=True),
-        })
-        await publish_answer_turns_recorded(event)
 
         # Xả buffer chi phí AI (LLM token + STT) tích luỹ trong lúc xử lý turn này (xem
         # infra/message_broker/ai_usage_tracker.py) và publish thành 1 message riêng, cùng lúc

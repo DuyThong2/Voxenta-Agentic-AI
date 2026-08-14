@@ -1,11 +1,15 @@
 """Pricing dùng để tính `cost_usd` báo cáo trong AiUsageRecordedEvent.
 
 Trạng thái từng phần (không còn all-PLACEHOLDER):
-- `LLM_PRICING` gpt-5.4/gpt-4o: giá THẬT, đã calibrate từ OpenAI Costs API thật (xem
-  spikes/derive_openai_unit_price.py và comment tại chỗ khai báo). gpt-4o-mini/claude-sonnet-4-6:
-  vẫn list-price công bố, chưa calibrate (thiếu mẫu / thiếu Admin key tương ứng).
-- `LlmUnitPrice.cached_input_per_mtok`: THẬT cho gpt-5.4/gpt-4o (cùng nguồn calibrate ở trên); các
-  model còn lại suy từ tỷ lệ discount ~90% các nhà cung cấp công bố cho cache-read, chưa calibrate.
+- `LLM_PRICING` gpt-5.4/gpt-4o/gpt-4o-mini input+output: giá THẬT, calibrate từ OpenAI Costs API
+  thật (xem spikes/derive_openai_unit_price.py và comment tại chỗ khai báo).
+- `claude-sonnet-4-6`: KHÔNG calibrate được từ spend thật (không tạo được Admin key -- không phải
+  Owner/không có org) -- nhưng đã đối chiếu khớp với trang giá chính thức của Anthropic (xem comment
+  tại chỗ khai báo). Đáng tin hơn hẳn placeholder tự đoán, nhưng vẫn là giá NIÊM YẾT chứ không phải
+  giá đã thật sự chi tiêu.
+- `LlmUnitPrice.cached_input_per_mtok`: THẬT cho gpt-5.4/gpt-4o (cùng nguồn calibrate ở trên);
+  gpt-4o-mini/claude-sonnet-4-6 suy từ tỷ lệ discount ~90% các nhà cung cấp công bố cho cache-read
+  (0 dữ liệu cache thật cho gpt-4o-mini, không tạo được Admin key cho claude) -- xem comment.
 - `DURATION_PRICING_PER_SECOND["azure_stt"]`: giá THẬT, lấy từ Azure Retail Prices API (public,
   không cần key) -- xem comment tại chỗ khai báo bên dưới.
 - `DURATION_PRICING_PER_SECOND["azure_tts"]`: vẫn PLACEHOLDER, và chưa từng được dùng (không có
@@ -32,18 +36,26 @@ class LlmUnitPrice(NamedTuple):
 # KHÔNG phải dated snapshot ("gpt-5.4-2026-03-05") mà OpenAI Usage/Costs API trả về, xem
 # spikes/derive_openai_unit_price.py.
 #
-# gpt-5.4/gpt-4o: giá THẬT, calibrate từ OPENAI_ADMIN_KEY đã có sẵn trong .env, chạy
-#   `uv run python spikes/derive_openai_unit_price.py --model <tên> --days 30` (30 ngày gần nhất,
-#   chạy lúc 2026-08-14) -- input/output KHÁC ĐÁNG KỂ so với số PLACEHOLDER cũ (gpt-5.4 input
-#   1.00->2.50, output 5.00->15.00; gpt-4o input 1.00->2.4471, output 5.00->10.00). Re-run định kỳ,
-#   giá có thể đổi.
-# gpt-4o-mini: input THẬT (đủ mẫu, khớp luôn với PLACEHOLDER cũ = 0.15); output/cached_input_per_mtok
-#   CHƯA đủ mẫu (<10k token/ngày mọi ngày trong 30 ngày qua) -- giữ PLACEHOLDER cũ cho 2 số này.
-# claude-sonnet-4-6: vẫn PLACEHOLDER toàn bộ -- chưa có ANTHROPIC_ADMIN_API_KEY trong .env, xem
-#   spikes/check_claude_cost.py.
+# gpt-5.4/gpt-4o/gpt-4o-mini input+output: giá THẬT, calibrate từ OPENAI_ADMIN_KEY đã có sẵn trong
+#   .env, chạy `uv run python spikes/derive_openai_unit_price.py --model <tên> --days <N>` (chạy
+#   lúc 2026-08-14, gpt-5.4/gpt-4o dùng 30 ngày, gpt-4o-mini dùng 90 ngày -- traffic thấp hơn nên
+#   cần cửa sổ rộng hơn để đủ mẫu, xem MIN_TOKENS_TOTAL trong script). gpt-4o-mini output khớp
+#   chính xác PLACEHOLDER cũ ($0.60) -- input cũng khớp ($0.15), chỉ gpt-5.4/gpt-4o lệch đáng kể so
+#   với PLACEHOLDER cũ (gpt-5.4 input 1.00->2.50, output 5.00->15.00; gpt-4o input 1.00->2.4472,
+#   output 5.00->9.3945). Re-run định kỳ, giá có thể đổi.
+# gpt-4o-mini cached_input_per_mtok: KHÔNG derive được -- 0 token cache thật nào ghi nhận trong 90
+#   ngày qua (không phải do thiếu mẫu, mà do model này chưa từng thật sự dùng prompt caching trong
+#   traffic hiện tại). Giữ nguyên số suy theo tỷ lệ chuẩn (input*0.10) làm nền, phòng khi phát sinh.
+# claude-sonnet-4-6: KHÔNG calibrate được từ spend thật -- không tạo được Admin key (không phải
+#   Owner/không có org, xem spikes/check_claude_cost.py để dùng sau nếu có key). Đã đối chiếu số
+#   dưới đây khớp CHÍNH XÁC với trang giá chính thức platform.claude.com/docs/en/about-claude/pricing
+#   (fetch 2026-08-14: Sonnet 4.6 = $3 input / $15 output / $0.30 cache-hit = input*0.1) -- là giá
+#   niêm yết Anthropic đang áp dụng, KHÔNG phải giá đã thật sự chi tiêu, nhưng đáng tin hơn hẳn số
+#   tự đoán trước đó. Trang này không có JSON API ổn định để tự động hoá (khác Azure Retail Prices)
+#   -- re-check thủ công định kỳ nếu Anthropic đổi giá.
 LLM_PRICING: Dict[str, LlmUnitPrice] = {
     "gpt-5.4": LlmUnitPrice(input_per_mtok=2.50, output_per_mtok=15.00, cached_input_per_mtok=0.25),
-    "gpt-4o": LlmUnitPrice(input_per_mtok=2.4471, output_per_mtok=10.00, cached_input_per_mtok=1.25),
+    "gpt-4o": LlmUnitPrice(input_per_mtok=2.4472, output_per_mtok=9.3945, cached_input_per_mtok=1.25),
     "gpt-4o-mini": LlmUnitPrice(input_per_mtok=0.15, output_per_mtok=0.60, cached_input_per_mtok=0.015),
     "claude-sonnet-4-6": LlmUnitPrice(input_per_mtok=3.00, output_per_mtok=15.00, cached_input_per_mtok=0.30),
 }

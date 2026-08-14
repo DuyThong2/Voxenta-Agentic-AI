@@ -183,6 +183,7 @@ def pronunciation_eval_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 reference_text, c_ref = build_pronunciation_reference_consensus(
                     raw_transcript,
                     speaking_input.question,
+                    answer_id=answer_id,
                 )
                 logger.info(
                     "[eval:pronunciation] built reference from raw transcript answer_id=%s turn=%s changed=%s c_ref=%s",

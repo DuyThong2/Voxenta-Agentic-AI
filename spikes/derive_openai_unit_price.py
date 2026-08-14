@@ -25,9 +25,15 @@ organization-wide financial data, different risk/blast-radius than an inference 
     OPENAI_ADMIN_KEY=sk-admin-...
 
 Two guards applied before trusting a derived price (both requested explicitly, see plan doc):
-1. Any (model, token-category, day) with fewer than MIN_TOKENS_PER_DAY tokens is EXCLUDED from the
-   sum entirely -- a slow day would otherwise divide a real dollar amount by a tiny token count and
-   produce a wildly wrong price.
+1. A (model, token-category) is only trusted if its TOTAL tokens across the whole period reach
+   MIN_TOKENS_TOTAL -- otherwise kept as "not enough data". This is a period-level guard, not a
+   per-day one: the price is computed by summing $ and tokens across every day first and dividing
+   ONCE at the end (not by averaging a separate price computed per day), so a single low-volume day
+   can't skew the result any more than its actual share of the total warrants -- the risk that
+   needed guarding against was always "total sample too small", not "any one day too small". A
+   per-day threshold was tried first and it discarded real signal for low-but-steady-traffic models
+   (e.g. gpt-4o-mini: 9 real days, none individually reaching 10k tokens/day, but 16,751 tokens
+   total -- a per-day gate reported "no data" for a model that in fact had plenty of it).
 2. Cached input tokens are tracked and divided SEPARATELY from uncached input tokens (the API
    already gives them as separate line_items, "input" vs "cached input") -- summing them together
    would understate the real input price (cached tokens are ~90% cheaper, so a model with a high
@@ -55,7 +61,7 @@ REPO_ROOT = SPIKES_DIR.parent
 
 COSTS_URL = "https://api.openai.com/v1/organization/costs"
 
-MIN_TOKENS_PER_DAY = 10_000  # bỏ qua (model, category, ngày) nào ít hơn mức này -- xem docstring
+MIN_TOKENS_TOTAL = 10_000  # bỏ qua (model, category) nào có TỔNG token cả period ít hơn mức này -- xem docstring
 
 
 def fetch_cost_buckets(api_key: str, start_time: int, end_time: int) -> list[dict]:
@@ -134,27 +140,29 @@ def derive_price_per_mtok(
     usd_by_day: dict[str, dict[str, float]],
     tokens_by_day: dict[str, dict[str, int]],
 ) -> dict[str, float | None]:
+    # Cộng dồn $ và token qua TOÀN BỘ ngày trước, ngưỡng đủ-mẫu chỉ áp dụng ở dòng cuối trên tổng
+    # đã cộng dồn -- không lọc/bỏ ngày nào giữa chừng, vì phép chia chỉ xảy ra MỘT LẦN ở cuối
+    # (xem docstring: đây là weighted average theo khối lượng, không phải trung bình của các giá
+    # tính riêng từng ngày, nên ngưỡng "đủ mẫu" phải đo trên tổng, không phải từng ngày).
     totals_usd = {"input": 0.0, "output": 0.0, "cached": 0.0}
     totals_tokens = {"input": 0, "output": 0, "cached": 0}
-    skipped_days: dict[str, int] = defaultdict(int)
 
-    for date, tokens in tokens_by_day.items():
-        usd = usd_by_day[date]
+    for tokens in tokens_by_day.values():
         for category in ("input", "output", "cached"):
-            if tokens[category] < MIN_TOKENS_PER_DAY:
-                skipped_days[category] += 1
-                continue
-            totals_usd[category] += usd[category]
             totals_tokens[category] += tokens[category]
+    for usd in usd_by_day.values():
+        for category in ("input", "output", "cached"):
+            totals_usd[category] += usd[category]
 
-    if skipped_days:
-        print("Bỏ qua (mẫu quá nhỏ, < %d token/ngày):" % MIN_TOKENS_PER_DAY)
-        for category, count in skipped_days.items():
-            print(f"  {category}: {count} ngày")
+    not_enough_data = [c for c in ("input", "output", "cached") if totals_tokens[c] < MIN_TOKENS_TOTAL]
+    if not_enough_data:
+        print("Không đủ dữ liệu (tổng < %d token cả period):" % MIN_TOKENS_TOTAL)
+        for category in not_enough_data:
+            print(f"  {category}: tổng {totals_tokens[category]} token")
 
     derived: dict[str, float | None] = {}
     for category in ("input", "output", "cached"):
-        if totals_tokens[category] == 0:
+        if category in not_enough_data:
             derived[category] = None
         else:
             derived[category] = (totals_usd[category] / totals_tokens[category]) * 1_000_000

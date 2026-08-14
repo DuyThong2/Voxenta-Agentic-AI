@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from infra import practice_session_client
+from infra.alert_client import push_alert
 from infra.realtime_socket import RealtimeSocket
 from infra.voice_live_client import EXPECTED_SAMPLE_RATE, VoiceLiveClient, VoiceLiveServerEvent
 from node.followUpDecisionGraph.constants import CLOSING_REPLY, EXAM_FAREWELL_TEXT
@@ -90,6 +91,8 @@ class AttemptConnection:
             await self.questions.checkpoint_speech_budget(message)
         elif message_type == "resume":
             await self._handle_resume(message)
+        elif message_type == "focus_lost":
+            await self._handle_focus_lost(message)
         elif message_type == "exam_end":
             self._speak(EXAM_FAREWELL_TEXT)
             await self.socket.send_json({"type": "exam_end_ack"})
@@ -235,6 +238,40 @@ class AttemptConnection:
             )
         finally:
             Path(audio_path).unlink(missing_ok=True)
+
+    async def _handle_focus_lost(self, message: dict) -> None:
+        """Thí sinh rời khỏi cửa sổ thi (WPF WindowFocusGuard bắt Window.Deactivated).
+
+        Đi nhờ WS sẵn có thay vì mở endpoint REST mới: kết nối này vốn đã mở suốt buổi thi và
+        đã xác thực theo exam_attempt_id, nên không phải thêm đường vào nào cũng không phải
+        phát token thứ hai. Java hoàn toàn không có client AlertService -- Python là nơi DUY
+        NHẤT trong hệ đã nối được tới AlertService của vox-streaming.
+
+        `capturedAt` do client gửi lên chỉ để ghi log: đồng hồ máy học sinh không đáng tin và
+        có thể bị chỉnh, nên mốc thời gian đi vào cảnh báo là mốc do alert_client tự đóng dấu
+        phía server.
+
+        KHÔNG đi qua should_emit_alert/cooldown của proctoring_alert_policy: cái đó gộp theo
+        điều kiện KÉO DÀI (khuôn mặt khuất suốt 10 giây), còn đây là sự kiện RỜI RẠC -- rời đi
+        ba lần là ba lần đáng ghi, gộp lại thì mất đúng thứ có giá trị kỷ luật. Việc chống spam
+        đã làm ở đầu WPF (gộp trong 3 giây).
+        """
+        logger.warning(
+            "[attempt_connection] focus_lost exam_attempt_id=%s captured_at=%s",
+            self.exam_attempt_id,
+            message.get("capturedAt"),
+        )
+        # spawn thay vì await: đẩy cảnh báo là việc phụ, không được để một lời gọi gRPC chậm
+        # chặn vòng lặp đọc WS đang phục vụ âm thanh của bài thi.
+        spawn(
+            push_alert(
+                room_id=self.exam_attempt_id,
+                participant_id=self.exam_attempt_id,
+                stream_id=self.exam_attempt_id,
+                alert_type="WINDOW_FOCUS_LOST",
+                confidence=1.0,
+            )
+        )
 
     async def _handle_resume(self, message: dict) -> None:
         result = await self.questions.resume(message)

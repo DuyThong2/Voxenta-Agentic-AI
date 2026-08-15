@@ -50,8 +50,25 @@ def record_llm_usage(answer_id: Optional[str], provider: str, model: str, respon
     output_tokens = usage_metadata.get("output_tokens") or 0
     input_token_details = usage_metadata.get("input_token_details") or {}
     price = pricing.llm_price_for(model)
+
+    # input_tokens tính TOÀN BỘ input (bao gồm cả phần cache-read VÀ cache-creation), nên phải trừ
+    # cả 2 ra khỏi input_tokens trước khi nhân giá full, không thì cost_usd bị tính sai theo 2 hướng
+    # ngược nhau: cache-read rẻ hơn ~90% (thổi phồng nếu gộp chung), cache-creation ĐẮT hơn với
+    # Anthropic -- 1.25x/2x tuỳ TTL (hụt giá nếu gộp chung), dù OpenAI thì cache-creation không tính
+    # phí thêm nên gộp chung với OpenAI vô hại (xem cache_creation_per_mtok=None fallback trong
+    # ai_usage_pricing.py).
+    cache_read_tokens = input_token_details.get("cache_read") or 0
+    cache_creation_tokens = input_token_details.get("cache_creation") or 0
+    uncached_input_tokens = max(input_tokens - cache_read_tokens - cache_creation_tokens, 0)
+    cached_input_price = price.cached_input_per_mtok if price.cached_input_per_mtok is not None else price.input_per_mtok
+    cache_creation_price = (
+        price.cache_creation_per_mtok if price.cache_creation_per_mtok is not None else price.input_per_mtok
+    )
+
     cost_usd = (
-        (input_tokens / 1_000_000) * price.input_per_mtok
+        (uncached_input_tokens / 1_000_000) * price.input_per_mtok
+        + (cache_read_tokens / 1_000_000) * cached_input_price
+        + (cache_creation_tokens / 1_000_000) * cache_creation_price
         + (output_tokens / 1_000_000) * price.output_per_mtok
     )
 

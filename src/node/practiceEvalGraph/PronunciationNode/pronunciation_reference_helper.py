@@ -13,6 +13,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
+from infra.message_broker import ai_usage_tracker
 from node.practiceEvalGraph.PronunciationNode.pronunciation_reference_prompt import SYSTEM_PROMPT
 from node.state_models.speaking_input import QuestionContext
 from utils.confidence_utils import (
@@ -61,14 +62,16 @@ def build_pronunciation_reference(
     question: Optional[QuestionContext] = None,
     *,
     provider: str = "openai",
+    answer_id: Optional[str] = None,
 ) -> str:
     if not transcript or not transcript.strip():
         return transcript
 
+    model = CLAUDE_MODEL if provider == "claude" else "gpt-5.4"
     llm = (
-        ChatAnthropic(model=CLAUDE_MODEL, temperature=0.7)
+        ChatAnthropic(model=model, temperature=0.7)
         if provider == "claude"
-        else ChatOpenAI(model="gpt-5.4", reasoning_effort="medium")
+        else ChatOpenAI(model=model, reasoning_effort="medium")
     )
 
     context_block = _build_context_block(question)
@@ -85,6 +88,12 @@ def build_pronunciation_reference(
 
     with llm_call_slot():
         response = llm.invoke(messages)
+    try:
+        ai_usage_tracker.record_llm_usage(
+            answer_id, "anthropic" if provider == "claude" else "openai", model, response
+        )
+    except Exception:
+        logger.exception("[pronunciation_reference] failed to record ai usage")
     return response.content.strip()
 
 
@@ -99,17 +108,21 @@ _REFERENCE_PROVIDERS: tuple[tuple[str, str], ...] = (
 )
 
 
-def _build_reference_round(transcript: str, question: Optional[QuestionContext], index: int) -> str:
+def _build_reference_round(
+    transcript: str, question: Optional[QuestionContext], index: int, answer_id: Optional[str]
+) -> str:
     primary, fallback = _REFERENCE_PROVIDERS[index]
     return call_with_retry_and_fallback(
-        lambda: build_pronunciation_reference(transcript, question, provider=primary),
-        lambda: build_pronunciation_reference(transcript, question, provider=fallback),
+        lambda: build_pronunciation_reference(transcript, question, provider=primary, answer_id=answer_id),
+        lambda: build_pronunciation_reference(transcript, question, provider=fallback, answer_id=answer_id),
     )
 
 
 def build_pronunciation_reference_consensus(
     transcript: str,
     question: Optional[QuestionContext] = None,
+    *,
+    answer_id: Optional[str] = None,
 ) -> tuple[str, Optional[float]]:
     """Sinh ba reference độc lập song song (xen Claude/OpenAI, mỗi lượt tự retry+fallback) rồi
     chọn medoid và tính C_ref."""
@@ -118,7 +131,7 @@ def build_pronunciation_reference_consensus(
 
     with ThreadPoolExecutor(max_workers=3) as pool:
         futures = [
-            pool.submit(_build_reference_round, transcript, question, index)
+            pool.submit(_build_reference_round, transcript, question, index, answer_id)
             for index in range(3)
         ]
         references = [future.result() for future in futures]

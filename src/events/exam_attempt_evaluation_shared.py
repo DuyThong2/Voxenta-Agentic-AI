@@ -10,7 +10,7 @@ class TurnInput(_CamelMessage):
     turn_order: int
     turn_type: str
     prompt_text: Optional[str] = None
-    audio_ref: str
+    audio_ref: Optional[str] = None
     transcript: Optional[str] = None
     duration_seconds: Optional[float] = None
 
@@ -28,7 +28,7 @@ class TurnDetail(_CamelMessage):
     turn_order: int
     turn_type: str
     prompt_text: Optional[str] = None
-    audio_url: str
+    audio_url: Optional[str] = None
     transcript: str
     word_count: int
     duration_seconds: Optional[float] = None

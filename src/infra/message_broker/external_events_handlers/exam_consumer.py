@@ -438,7 +438,27 @@ async def _evaluate_turn(
     raw_payload: Dict[str, Any],
     practice_mode: bool = False,
 ) -> Dict[str, Any]:
-    local_audio_path = await download_from_s3_async(turn.audio_ref)
+    # Không có audio thì bỏ hẳn bước tải, KHÔNG bỏ cả lượt.
+    #
+    # audio_ref null là chuyện có thật: bên thi giữ lại lượt nói dù bản ghi âm không tới
+    # (vox ab7bc04), nên cột exam_item_response_turns.audio_url có thể rỗng. Gọi
+    # download_from_s3_async(None) sẽ ném, và vì payload không đổi nên mọi retry hỏng y hệt
+    # -- message độc chặn cả hàng đợi (đã xảy ra 2026-08-15, kẹt 7 tiếng ở offset 4).
+    #
+    # Lượt vẫn được chấm bình thường phần NGỮ LIỆU (ngữ pháp, từ vựng, mạch lạc, độ dài)
+    # dựa trên transcript; chỉ riêng phát âm là không có cơ sở để chấm.
+    # pronunciation_eval_node vốn đã trả pronunciation_error thay vì làm hỏng graph khi
+    # thiếu audio_path, nên nhánh này không cần thêm gì ở đó.
+    local_audio_path = (
+        await download_from_s3_async(turn.audio_ref) if turn.audio_ref else None
+    )
+    if local_audio_path is None:
+        logger.warning(
+            "[exam-consumer] luot khong co audio, cham theo transcript va bo qua phat am "
+            "answer_id=%s turn=%s",
+            request_event.answer_id,
+            turn.turn_order,
+        )
     try:
         realtime_transcript, realtime_transcript_confidence = await archive_store.get_realtime_transcript(
             archive_graph, request_event.answer_id, turn.turn_order,
@@ -499,7 +519,11 @@ async def _evaluate_turn(
 
         return result
     finally:
-        if local_audio_path != turn.audio_ref and os.path.exists(local_audio_path):
+        if (
+            local_audio_path is not None
+            and local_audio_path != turn.audio_ref
+            and os.path.exists(local_audio_path)
+        ):
             os.unlink(local_audio_path)
 
 

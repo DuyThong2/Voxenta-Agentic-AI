@@ -22,19 +22,18 @@ def start_node(state: GraphState) -> dict:
     turn_order = (state.get("metadata") or {}).get("turn_order")
 
     audio_path = speaking_input.audio_path
-    if not audio_path:
-        return {
-            **state,
-            "status": "error",
-            "error": "speaking_input.audio_path is required",
-        }
-
-    if not os.path.exists(audio_path):
-        return {
-            **state,
-            "status": "error",
-            "error": f"Audio file not found: {audio_path}",
-        }
+    # Cùng luật với evalGraph/StartNode -- xem khối chú thích ở đó. Hai đường thi/luyện chạy
+    # độc lập nhưng dùng chung _evaluate_turn, nên thiếu audio ập vào cả hai như nhau.
+    audio_missing = not audio_path or not os.path.exists(audio_path)
+    if audio_missing:
+        logger.warning(
+            "[eval:start] khong co audio, cham theo transcript va bo qua phat am "
+            "answer_id=%s turn=%s audio_path=%s co_transcript=%s",
+            answer_id, turn_order, audio_path,
+            bool(speaking_input.realtime_transcript),
+        )
+        speaking_input.audio_path = None
+        audio_path = None
 
     try:
         if speaking_input.realtime_transcript:
@@ -53,6 +52,16 @@ def start_node(state: GraphState) -> dict:
             logger.info(
                 "[eval:start] using realtime transcript answer_id=%s turn=%s chars=%d",
                 answer_id, turn_order, len(transcript),
+            )
+        elif audio_path is None:
+            # Im lặng thật: không audio, không transcript. Trả rỗng để validity_node xử lý
+            # bằng luật "audio.no_speech" (chấm 0 nhưng vẫn là một lượt hoàn chỉnh) -- xem
+            # khối chú thích cùng chỗ ở evalGraph/StartNode.
+            transcript, asr_confidence = "", None
+            logger.info(
+                "[eval:start] khong audio va khong transcript -- coi nhu im lang, cham 0 "
+                "answer_id=%s turn=%s",
+                answer_id, turn_order,
             )
         else:
             logger.info("[eval:start] transcribing answer_id=%s turn=%s audio_path=%s", answer_id, turn_order, audio_path)

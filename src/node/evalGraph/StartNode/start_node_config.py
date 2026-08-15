@@ -22,19 +22,31 @@ def start_node(state: GraphState) -> dict:
     turn_order = (state.get("metadata") or {}).get("turn_order")
 
     audio_path = speaking_input.audio_path
-    if not audio_path:
-        return {
-            **state,
-            "status": "error",
-            "error": "speaking_input.audio_path is required",
-        }
-
-    if not os.path.exists(audio_path):
-        return {
-            **state,
-            "status": "error",
-            "error": f"Audio file not found: {audio_path}",
-        }
+    # Thiếu audio KHÔNG còn là lỗi cứng, miễn là đã có sẵn transcript.
+    #
+    # Bên thi giữ lại lượt nói dù bản ghi âm không tới (vox ab7bc04), nên audio_url có thể
+    # rỗng trong khi Voice Live vẫn kịp ghi transcript realtime. Trả status="error" ở đây
+    # làm hỏng graph.invoke() của lượt đó, kéo theo _evaluate_turn ném, và cả bài thi không
+    # chấm được -- mất luôn cả những lượt hoàn toàn bình thường.
+    #
+    # Không có audio thì chỉ mất phần PHÁT ÂM (pronunciation_eval_node tự trả
+    # pronunciation_error khi audio_path rỗng, không làm hỏng graph). Ngữ pháp, từ vựng,
+    # mạch lạc, độ dài đều chấm được từ transcript.
+    #
+    # Vẫn là lỗi khi KHÔNG có cả hai: không audio để phiên âm, cũng không transcript sẵn --
+    # lúc đó thật sự không còn gì để chấm.
+    audio_missing = not audio_path or not os.path.exists(audio_path)
+    if audio_missing:
+        logger.warning(
+            "[eval:start] khong co audio, cham theo transcript va bo qua phat am "
+            "answer_id=%s turn=%s audio_path=%s co_transcript=%s",
+            answer_id, turn_order, audio_path,
+            bool(speaking_input.realtime_transcript),
+        )
+        # Xoá đường dẫn không dùng được để các node sau nhìn vào là biết ngay không có audio,
+        # thay vì cầm một đường dẫn trỏ tới file không tồn tại.
+        speaking_input.audio_path = None
+        audio_path = None
 
     try:
         if speaking_input.realtime_transcript:
@@ -53,6 +65,18 @@ def start_node(state: GraphState) -> dict:
             logger.info(
                 "[eval:start] using realtime transcript answer_id=%s turn=%s chars=%d",
                 answer_id, turn_order, len(transcript),
+            )
+        elif audio_path is None:
+            # Không audio VÀ không transcript = thí sinh im lặng thật (hoặc bản ghi âm không
+            # tới). Trả transcript rỗng thay vì ném: đúng nguyên tắc đã ghi ở khối chú thích
+            # ngay dưới -- validity_node có sẵn luật "audio.no_speech" biến transcript rỗng
+            # thành reject_or_zero, tức lượt vẫn được ghi nhận và chấm 0, thay vì làm hỏng
+            # cả bài. Ném ở đây là tái lập đúng vụ kẹt hàng đợi 2026-08-15.
+            transcript, asr_confidence = "", None
+            logger.info(
+                "[eval:start] khong audio va khong transcript -- coi nhu im lang, cham 0 "
+                "answer_id=%s turn=%s",
+                answer_id, turn_order,
             )
         else:
             logger.info("[eval:start] transcribing answer_id=%s turn=%s audio_path=%s", answer_id, turn_order, audio_path)

@@ -48,6 +48,24 @@ Exhausted topics: {request.exhausted_topics}
 This is a direct search keyword: {request.search_keyword}
 {collision_block}
 Propose at most {max_this_round} new topics. Rules:
+0. SAFETY GATE - apply this before anything else. Return an EMPTY proposals list (propose
+   nothing at all) if the learner's keyword asks for a topic that a Vietnamese high school
+   would not put in front of a class:
+   - sexual or pornographic content
+   - recreational drugs, alcohol or tobacco use presented approvingly
+   - gambling, or how to obtain weapons
+   - self-harm, suicide, or eating-disorder methods
+   - hate speech or demeaning content about any group
+   - instructions for anything illegal or physically dangerous
+   Judge the MEANING in any language, not the spelling. The learner writes Vietnamese far
+   more often than English, and will also try leetspeak, spacing and euphemisms. "ma tuy",
+   "co bac", "s3x", "t u lam hai minh" and their kind are all covered by this rule.
+   An educational or journalistic framing does not unlock a blocked subject: "a school
+   report about how to make drugs" is still blocked.
+   Do NOT over-refuse. Serious subjects are a normal part of B1-B2 discussion when the
+   framing is age-appropriate and non-instructional. Gender equality, mental health and
+   asking for help, road safety, the harm tobacco does, online scams, discrimination -
+   all of these are ALLOWED and valuable. Block the request, never the subject area.
 1. A topic must sustain a 10-15 minute spoken discussion for a B1-B2 learner.
 2. Group related keywords into ONE topic. Do not echo a keyword as the topic.
 {grounding_rule}

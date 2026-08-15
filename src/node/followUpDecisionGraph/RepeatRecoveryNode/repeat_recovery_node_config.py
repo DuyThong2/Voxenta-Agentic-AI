@@ -206,20 +206,22 @@ def _clean_text(value: Any) -> str | None:
 
 
 def _schedule_alert(state: Dict[str, Any], *, alert_type: str) -> None:
-    room_id = str(state.get("exam_attempt_id") or "").strip()
-    if not room_id:
+    session_id = str(state.get("exam_attempt_id") or "").strip()
+    if not session_id:
         logger.warning("[repeat_recovery] exam_attempt_id missing, skipping alert %s", alert_type)
         return
 
-    participant_id = str(state.get("candidate_id") or room_id).strip() or room_id
-    stream_id = str(state.get("answer_id") or room_id).strip() or room_id
+    # Thiếu thì để RỖNG, không rơi về exam_attempt_id như trước. Một participant_id sai sẽ gắn cảnh
+    # báo này vào ô của người khác trên lưới giám sát, còn để rỗng thì vox-streaming tự tra lại được
+    # từ session registry của nó. answer_id cũng không phải stream_id nên thôi điền vào đó.
+    participant_id = str(state.get("candidate_id") or "").strip()
 
     try:
         asyncio.get_running_loop().create_task(
             push_alert(
-                room_id=room_id,
+                session_id=session_id,
                 participant_id=participant_id,
-                stream_id=stream_id,
+                stream_id="",
                 alert_type=alert_type,
             )
         )

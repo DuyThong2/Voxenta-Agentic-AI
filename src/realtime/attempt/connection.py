@@ -272,9 +272,13 @@ class AttemptConnection:
         # chặn vòng lặp đọc WS đang phục vụ âm thanh của bài thi.
         spawn(
             push_alert(
-                room_id=self.exam_attempt_id,
-                participant_id=self.exam_attempt_id,
-                stream_id=self.exam_attempt_id,
+                session_id=self.exam_attempt_id,
+                # Đường WS này chỉ biết mỗi exam_attempt_id: nó không hề tham gia bắt tay WebRTC
+                # nên không cầm candidate id lẫn stream id. Để RỖNG chứ không nhét exam_attempt_id
+                # vào -- vox-streaming tra bù được từ session registry của nó, còn một id sai thì nó
+                # không phân biệt nổi với id thật (xem docstring của push_alert).
+                participant_id="",
+                stream_id="",
                 alert_type="WINDOW_FOCUS_LOST",
                 confidence=1.0,
             )

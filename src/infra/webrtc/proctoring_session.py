@@ -39,22 +39,29 @@ def utc_now() -> str:
 def register_identity(
     session_id: str,
     *,
+    exam_session_id: str = "",
     participant_id: str = "",
     stream_id: str = "",
     stream_type: str = "",
     schedule_id: str = "",
 ) -> None:
-    """Ghi nhớ phiên này thuộc về THÍ SINH nào và LUỒNG nào.
+    """Ghi nhớ phiên này thuộc về PHIÊN THI nào, THÍ SINH nào và LUỒNG nào.
 
     Toàn bộ đường xử lý khung hình chỉ mang theo đúng ``session_id`` - hợp lý, vì đó là khoá của mọi
     trạng thái per-session. Nhưng khi bắn cảnh báo ra ngoài thì chỉ mình nó là không đủ: giám thị cần
     biết ĐÂY LÀ AI, và câu trả lời đó chỉ có ở lúc bắt tay WebRTC. Sổ này giữ nó lại từ lúc đó.
+
+    ``exam_session_id`` ở đây KHÁC ``session_id``: cái sau là khoá cục bộ của một kết nối (đường
+    relay tự sinh uuid4 cho mỗi luồng, xem controller/webrtc.py), còn cái này là id phiên thi mà cả
+    vox-streaming lẫn Java đều tra được. Cảnh báo phải mang cái sau, nếu không nó chạy dưới một id
+    không ai tra ra và biến mất ở cả hai đầu đọc.
 
     Bên gọi không phải lúc nào cũng biết - client WPF nối thẳng vào đây chỉ cầm mỗi exam attempt id -
     nên các trường đều có mặc định rỗng. Rỗng là câu trả lời hợp lệ và đúng đắn: vox-streaming tra
     lại được, còn một id bịa thì nó không phát hiện được.
     """
     session_identity[session_id] = {
+        "exam_session_id": str(exam_session_id or "").strip(),
         "participant_id": str(participant_id or "").strip(),
         "schedule_id": str(schedule_id or "").strip(),
         "stream_id": str(stream_id or "").strip(),

@@ -22,6 +22,11 @@ YOLO_CONFIDENCE = settings.YOLO_CONFIDENCE
 
 yolo_model = YOLO(YOLO_MODEL)
 
+# YOLO nhận ra 80 lớp COCO; đây là những lớp buổi thi thật sự quan tâm. Danh sách này CỐ Ý hẹp:
+# ghế, chai nước, màn hình... đều có mặt hợp lệ trên bàn thi, và báo về chúng chỉ làm ngập lưới giám
+# sát. proctoring_alert_policy.object_alert_type quyết định trong số này cái nào thành cảnh báo gì.
+_WATCHED_OBJECTS = ("cell phone", "book", "laptop", "keyboard", "mouse")
+
 
 async def process_video_track(track, session_id: str):
     """
@@ -68,6 +73,10 @@ async def process_video_track(track, session_id: str):
 
         events = []
         person_count = 0
+        # alert_type -> (nhãn, độ tin cậy) của vật thể tiêu biểu nhất cho loại đó trong khung này.
+        # Gom theo LOẠI chứ không theo nhãn: sách và laptop cùng là PROHIBITED_OBJECT, và giám thị
+        # cần biết "có tài liệu cấm trong khung", không cần hai dòng riêng cho hai vật.
+        object_candidates: dict[str, tuple[str, float]] = {}
 
         try:
             # Shares the GPU with realtime/avatar_renderer.py's LivePortrait/MuseTalk inference --
@@ -92,22 +101,50 @@ async def process_video_track(track, session_id: str):
 
                 if label == "person":
                     person_count += 1
+                    continue
 
-                if label in ("cell phone", "book", "laptop", "keyboard", "mouse"):
-                    events.append(
-                        webrtc_session.build_event(
-                            event_type="OBJECT_DETECTED",
-                            object=label,
-                            confidence=confidence,
-                            message=f"Phát hiện vật thể nghi vấn: {label}",
-                        )
-                    )
+                if label not in _WATCHED_OBJECTS:
+                    continue
+
+                alert_type = proctoring_alert_policy.object_alert_type(label)
+                if not alert_type:
+                    continue
+
+                current = object_candidates.get(alert_type)
+                if current is None or confidence > current[1]:
+                    object_candidates[alert_type] = (label, confidence)
 
         if frame_count % (FRAME_SKIP * 5) == 0:
             logger.info(
                 "[YOLO_DEBUG] session=%s detections=%s person_count=%d",
                 session_id, raw_detections or "none", person_count,
             )
+
+        # Vật thể đi qua ĐÚNG hai cổng như hai điều kiện về người ở dưới. Trước đây chúng không qua
+        # cổng nào: mỗi khung hình có điện thoại đẻ ra một sự kiện, nên một chiếc điện thoại nằm yên
+        # trên bàn 30 giây thành hàng chục cảnh báo giống hệt nhau -- vừa làm ngập sổ bằng chứng,
+        # vừa dạy giám thị bỏ qua đúng loại cảnh báo nặng nhất. Hysteresis còn loại được nhấp nháy
+        # một khung của detector, thứ chiếm phần lớn báo động giả.
+        for object_alert_type in proctoring_alert_policy.OBJECT_ALERT_TYPES:
+            candidate = object_candidates.get(object_alert_type)
+            if candidate is None:
+                proctoring_alert_policy.reset_streak(session_id, object_alert_type)
+                proctoring_alert_policy.clear_alert(session_id, object_alert_type)
+                continue
+
+            object_label, object_confidence = candidate
+            if (
+                proctoring_alert_policy.condition_confirmed(session_id, object_alert_type)
+                and proctoring_alert_policy.should_emit_alert(session_id, object_alert_type)
+            ):
+                events.append(
+                    webrtc_session.build_event(
+                        event_type=object_alert_type,
+                        object=object_label,
+                        confidence=object_confidence,
+                        message=f"Phát hiện vật thể nghi vấn: {object_label}",
+                    )
+                )
 
         if person_count == 0:
             if (

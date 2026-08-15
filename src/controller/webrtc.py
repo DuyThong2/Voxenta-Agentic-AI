@@ -69,16 +69,23 @@ async def offer(request: Request):
             content={"error": "Invalid WebRTC offer. Body must include 'sdp' and 'type'."},
         )
 
-    # Endpoint này có HAI bên gọi, gửi hai bộ metadata khác nhau, và trước đây chỉ một bên được đọc:
+    # Endpoint này có HAI bên gọi, gửi hai bộ metadata khác nhau:
     #
     #   1. client WPF nối thẳng  -> {"exam_attempt_id"}
-    #   2. relay từ vox-streaming -> {"scheduleId", "participantId", "streamId", "streamType"}
+    #   2. relay từ vox-streaming -> {"sessionId", "scheduleId", "participantId", "streamId", "streamType"}
     #
-    # Bên thứ hai gửi sẵn candidate id - đúng thứ giao diện giám sát cần - nhưng chỗ này chỉ tìm mỗi
-    # khoá "exam_attempt_id", không thấy, nên rơi vào uuid4() và cả phiên relay chạy dưới một id
-    # ngẫu nhiên không liên quan tới ai. Cảnh báo sinh ra từ đó được định tuyến theo chính id ngẫu
-    # nhiên ấy, tới một kênh không màn hình nào đang nghe.
-    session_id = str(params.get("exam_attempt_id") or params.get("sessionId") or uuid.uuid4())
+    # Ở đây có HAI khoá, cố ý tách rời:
+    #
+    # - session_id là khoá CỤC BỘ của riêng kết nối này: peer connection, sổ sự kiện, SSE và trạng
+    #   thái streak/cooldown của alert policy đều tra theo nó, nên nó phải duy nhất theo TỪNG KẾT
+    #   NỐI. Một thí sinh relay cả camera lẫn screen là hai kết nối; lấy id phiên thi làm khoá chung
+    #   thì kết nối sau đè lên kết nối trước trong session_map, danh tính luồng này gắn nhầm sang
+    #   luồng kia, và cooldown của hai luồng trộn làm một.
+    # - exam_session_id là khoá ĐỐI NGOẠI, đi kèm mọi cảnh báo bắn sang vox-streaming. Trước đây
+    #   đường relay không gửi khoá nào cả nên cảnh báo chạy dưới chính uuid4 cục bộ: nhánh live rơi
+    #   vào một kênh Redis không màn hình nào nghe, nhánh durable thì Java tra không ra phiên thi
+    #   rồi bỏ qua. Cảnh báo vẫn được phát đủ, chỉ là không tới được ai.
+    session_id = str(params.get("exam_attempt_id") or uuid.uuid4())
     pc = RTCPeerConnection(configuration=build_ice_servers())
     proctoring_session.pcs.add(pc)
     proctoring_session.session_map[session_id] = pc
@@ -86,6 +93,7 @@ async def offer(request: Request):
     # rỗng, và vox-streaming sẽ tự tra bù từ session registry của nó.
     proctoring_session.register_identity(
         session_id,
+        exam_session_id=params.get("sessionId") or params.get("exam_attempt_id") or "",
         participant_id=params.get("participantId") or "",
         schedule_id=params.get("scheduleId") or "",
         stream_id=params.get("streamId") or "",

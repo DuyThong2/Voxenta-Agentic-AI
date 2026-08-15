@@ -34,16 +34,44 @@ _alert_last_emitted_at: Dict[str, Dict[str, float]] = defaultdict(dict)
 # session_id -> {alert_type: consecutive processed-frame count the condition has held}
 _condition_streak: Dict[str, Dict[str, int]] = defaultdict(dict)
 
-_ALERT_TYPE_MAP = {
-    "PERSON_MISSING": "PERSON_MISSING",
-    "MULTIPLE_PERSONS": "MULTIPLE_PERSONS",
-}
+# Vật thể YOLO tìm nhưng KHÔNG đáng cảnh báo. Bàn phím và chuột gần như luôn nằm trong khung: app
+# thi chạy trên desktop Windows, thí sinh đang ngồi trước bàn phím. Gộp chúng vào một cảnh báo vật
+# thể cấm nghĩa là MỌI phiên thi đều có cảnh báo đỏ -- và một mức CRITICAL bật ở mọi phiên thì giám
+# thị học cách bỏ qua nó, tức là mất luôn tác dụng của mức cao nhất với những ca đáng báo thật.
+_BENIGN_OBJECTS = {"keyboard", "mouse"}
+_PHONE_OBJECTS = {"cell phone"}
+
+# Các loại cảnh báo sinh ra từ vật thể. Bên gọi lặp qua đúng danh sách này để áp hai cổng và để
+# xoá streak khi vật thể biến mất -- giữ ở đây để nó nằm cùng chỗ với object_alert_type, thứ duy
+# nhất quyết định một nhãn sẽ thành loại nào.
+OBJECT_ALERT_TYPES = ("PHONE_DETECTED", "PROHIBITED_OBJECT")
+
+
+def object_alert_type(label: str) -> str:
+    """Nhãn YOLO -> loại cảnh báo, hoặc chuỗi rỗng nếu vật thể đó không đáng báo.
+
+    Mặc định là ĐÁNG BÁO: chỉ những nhãn nằm trong danh sách vô hại mới bị bỏ qua. Detector vốn chỉ
+    tìm đúng một danh sách nhãn cố định do người viết chọn, nên một nhãn được thêm vào đó về sau là
+    thứ ai đó CỐ Ý muốn thấy -- im lặng bỏ qua nó sẽ là cái im lặng không ai phát hiện ra.
+    """
+    normalized = str(label or "").strip().lower()
+    if not normalized or normalized in _BENIGN_OBJECTS:
+        return ""
+    if normalized in _PHONE_OBJECTS:
+        return "PHONE_DETECTED"
+    return "PROHIBITED_OBJECT"
 
 
 def map_alert_type(event: dict) -> str:
-    if event.get("type") == "OBJECT_DETECTED":
-        return "PHONE_DETECTED" if event.get("object") == "cell phone" else "OBJECT_DETECTED"
-    return _ALERT_TYPE_MAP.get(str(event.get("type") or ""), str(event.get("type") or ""))
+    """Sự kiện SSE -> loại cảnh báo.
+
+    Giờ là ánh xạ đồng nhất: proctoring_frame_processor đã dựng sự kiện bằng đúng từ vựng cảnh báo
+    (PHONE_DETECTED/PROHIBITED_OBJECT/PERSON_MISSING/MULTIPLE_PERSONS), nên không còn phép dịch nào
+    ở đây nữa. Trước kia chỗ này phải dịch OBJECT_DETECTED sang loại thật, và việc dịch muộn như thế
+    là lý do hai cổng hysteresis/cooldown không áp được cho vật thể -- bên gọi lúc đó chưa biết cảnh
+    báo sắp mang tên gì để mà gộp.
+    """
+    return str(event.get("type") or "")
 
 
 def should_emit_alert(session_id: str, alert_type: str) -> bool:
@@ -94,10 +122,16 @@ def schedule_alert(session_id: str, event: dict) -> None:
     # bịa thì nó không phân biệt nổi với id thật.
     identity = proctoring_session.get_identity(session_id)
 
+    # session_id ở đây là khoá CỤC BỘ của kết nối, và với đường relay nó là uuid4 tự sinh -- không
+    # bên nào ngoài process này tra ra nổi. Khoá đối ngoại nằm trong sổ danh tính (register_identity
+    # ghi lúc bắt tay). Rơi về khoá cục bộ chỉ khi sổ trống, và đúng cho đường WPF nối thẳng: ở đó
+    # khoá cục bộ vốn đã là exam_attempt_id.
+    exam_session_id = identity.get("exam_session_id") or session_id
+
     try:
         asyncio.get_running_loop().create_task(
             push_alert(
-                session_id=session_id,
+                session_id=exam_session_id,
                 participant_id=identity.get("participant_id", ""),
                 stream_id=identity.get("stream_id", ""),
                 alert_type=alert_type,

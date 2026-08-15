@@ -380,7 +380,11 @@ def _resolve_edge_case_decision(state: Dict[str, Any], llm_decision: Dict[str, A
         }
 
     if action == "uncooperative_move_on":
-        _schedule_alert(state, alert_type="CRITICAL_VIOLATION")
+        # Tên nói SỰ VIỆC, không nói mức độ. Tên cũ CRITICAL_VIOLATION tự khoá mức của chính nó:
+        # muốn hạ xuống WARNING -- đúng mức của nó, vì đây là phán đoán của LLM về thái độ chứ không
+        # phải bằng chứng gian lận, và bài thi đã tự xử lý xong bằng cách chuyển câu -- là sinh ra
+        # bản ghi mâu thuẫn ngay trong một dòng. Mức do vox-streaming.DefaultAlertLevel quyết.
+        _schedule_alert(state, alert_type="UNCOOPERATIVE_CANDIDATE")
         return {
             "repeat_recovery_edge_case_handled": True,
             "repeat_recovery_decision": _decision_payload(

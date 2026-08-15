@@ -18,6 +18,9 @@ from typing import Dict, Set
 
 from config.webrtc_config import settings
 from infra.alert_client import push_alert
+# Một chiều, không tạo vòng: proctoring_session cố ý không import ngược lại module này (nó nhận
+# on_cleanup từ bên gọi chính vì lý do đó), nên phía quyết định được phép đọc sổ danh tính của nó.
+from infra.webrtc import proctoring_session
 
 logger = logging.getLogger(__name__)
 
@@ -85,14 +88,22 @@ def schedule_alert(session_id: str, event: dict) -> None:
     if not alert_type:
         return
 
+    # Lấy danh tính đã ghi lúc bắt tay WebRTC, thay vì nhân bản session_id ra cả ba trường như trước.
+    # Đó là lý do màn hình giám sát in ra UUID chỗ đáng lẽ là tên học viên - và tệ hơn, là lý do cảnh
+    # báo AI không gắn được vào ô nào trên lưới. Thiếu thì để rỗng: vox-streaming tra bù được, còn id
+    # bịa thì nó không phân biệt nổi với id thật.
+    identity = proctoring_session.get_identity(session_id)
+
     try:
         asyncio.get_running_loop().create_task(
             push_alert(
-                room_id=session_id,
-                participant_id=session_id,
-                stream_id=session_id,
+                session_id=session_id,
+                participant_id=identity.get("participant_id", ""),
+                stream_id=identity.get("stream_id", ""),
                 alert_type=alert_type,
                 confidence=float(event.get("confidence") or 1.0),
+                stream_type=identity.get("stream_type", ""),
+                detail=str(event.get("message") or ""),
             )
         )
     except RuntimeError:

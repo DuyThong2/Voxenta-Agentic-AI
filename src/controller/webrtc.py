@@ -69,10 +69,28 @@ async def offer(request: Request):
             content={"error": "Invalid WebRTC offer. Body must include 'sdp' and 'type'."},
         )
 
-    session_id = str(params.get("exam_attempt_id") or uuid.uuid4())
+    # Endpoint này có HAI bên gọi, gửi hai bộ metadata khác nhau, và trước đây chỉ một bên được đọc:
+    #
+    #   1. client WPF nối thẳng  -> {"exam_attempt_id"}
+    #   2. relay từ vox-streaming -> {"scheduleId", "participantId", "streamId", "streamType"}
+    #
+    # Bên thứ hai gửi sẵn candidate id - đúng thứ giao diện giám sát cần - nhưng chỗ này chỉ tìm mỗi
+    # khoá "exam_attempt_id", không thấy, nên rơi vào uuid4() và cả phiên relay chạy dưới một id
+    # ngẫu nhiên không liên quan tới ai. Cảnh báo sinh ra từ đó được định tuyến theo chính id ngẫu
+    # nhiên ấy, tới một kênh không màn hình nào đang nghe.
+    session_id = str(params.get("exam_attempt_id") or params.get("sessionId") or uuid.uuid4())
     pc = RTCPeerConnection(configuration=build_ice_servers())
     proctoring_session.pcs.add(pc)
     proctoring_session.session_map[session_id] = pc
+    # Ghi lại đúng những gì bên gọi biết, không hơn. Đường WPF không cầm candidate id nên chỗ đó sẽ
+    # rỗng, và vox-streaming sẽ tự tra bù từ session registry của nó.
+    proctoring_session.register_identity(
+        session_id,
+        participant_id=params.get("participantId") or "",
+        schedule_id=params.get("scheduleId") or "",
+        stream_id=params.get("streamId") or "",
+        stream_type=params.get("streamType") or "",
+    )
 
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():

@@ -28,10 +28,42 @@ session_map: Dict[str, RTCPeerConnection] = {}
 session_events: Dict[str, List[dict]] = defaultdict(list)
 # session_id -> set of SSE subscribers (asyncio.Queue)
 session_subscribers: Dict[str, Set[asyncio.Queue]] = defaultdict(set)
+# session_id -> {"participant_id", "stream_id", "stream_type", "schedule_id"}
+session_identity: Dict[str, Dict[str, str]] = {}
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def register_identity(
+    session_id: str,
+    *,
+    participant_id: str = "",
+    stream_id: str = "",
+    stream_type: str = "",
+    schedule_id: str = "",
+) -> None:
+    """Ghi nhớ phiên này thuộc về THÍ SINH nào và LUỒNG nào.
+
+    Toàn bộ đường xử lý khung hình chỉ mang theo đúng ``session_id`` - hợp lý, vì đó là khoá của mọi
+    trạng thái per-session. Nhưng khi bắn cảnh báo ra ngoài thì chỉ mình nó là không đủ: giám thị cần
+    biết ĐÂY LÀ AI, và câu trả lời đó chỉ có ở lúc bắt tay WebRTC. Sổ này giữ nó lại từ lúc đó.
+
+    Bên gọi không phải lúc nào cũng biết - client WPF nối thẳng vào đây chỉ cầm mỗi exam attempt id -
+    nên các trường đều có mặc định rỗng. Rỗng là câu trả lời hợp lệ và đúng đắn: vox-streaming tra
+    lại được, còn một id bịa thì nó không phát hiện được.
+    """
+    session_identity[session_id] = {
+        "participant_id": str(participant_id or "").strip(),
+        "schedule_id": str(schedule_id or "").strip(),
+        "stream_id": str(stream_id or "").strip(),
+        "stream_type": str(stream_type or "").strip(),
+    }
+
+
+def get_identity(session_id: str) -> Dict[str, str]:
+    return session_identity.get(session_id) or {}
 
 
 def build_event(event_type: str, message: str, confidence: float = 0.9, **extra):
@@ -80,6 +112,7 @@ async def cleanup_session(session_id: str, *, on_cleanup: Optional[Callable[[str
     # blip mid-session) still replays correctly, since this only clears once
     # the session is genuinely over.
     session_events.pop(session_id, None)
+    session_identity.pop(session_id, None)
 
     if on_cleanup is not None:
         on_cleanup(session_id)

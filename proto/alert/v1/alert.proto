@@ -1,5 +1,17 @@
 syntax = "proto3";
 
+// Bản sao của proto do vox-streaming sở hữu (vox-streaming/proto/alert/v1/alert.proto).
+// Nơi đó là NGUỒN CHUẨN; file này chỉ mô tả lại để đọc, và mọi thay đổi phải bắt đầu từ bên kia.
+//
+// Trước đây bản sao này đã trôi khỏi bản gốc: field 1 tên là `roomId` trong khi bên kia là
+// `session_id`, và thiếu hẳn field 7-10. Vì số hiệu field mới là thứ đi trên dây nên nó vẫn chạy
+// đúng một cách tình cờ - kiểu trôi tệ nhất, vì không có gì hỏng để mà phát hiện ra.
+//
+// Stub Python trong src/infra/grpc_stubs/alert/v1/ được VIẾT TAY chứ không do protoc sinh, và đó là
+// lựa chọn có chủ đích: nó nhỏ, đọc được trong diff, chỉ có phía client, và không kéo theo
+// grpcio-tools. Sửa file này thì sửa stub kèm theo bằng tay. Đừng chạy protoc đè lên: bản
+// grpcio-tools hiện hành sinh code đòi protobuf >= 5.x, còn service đang ghim protobuf 4.25.x nên
+// file sinh ra sẽ hỏng ngay lúc import.
 package alert.v1;
 
 option go_package = "pkg/pb/alert/v1;alertv1";
@@ -9,12 +21,16 @@ service AlertService {
 }
 
 message PushAlertRequest {
-  string roomId = 1;
-  string participantId = 2;
-  string streamId = 3;
-  string alertType = 4;
+  string session_id = 1;
+  string participant_id = 2;
+  string stream_id = 3;
+  string alert_type = 4;
   float confidence = 5;
-  int64 capturedAtMs = 6;
+  int64 captured_at_ms = 6;
+  string event_id = 7;
+  string stream_type = 8;
+  string detail = 9;
+  int64 sequence_no = 10;
 }
 
 message PushAlertResponse {

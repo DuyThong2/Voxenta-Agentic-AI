@@ -84,6 +84,7 @@ class VoiceLiveClient:
         self._conn = None
         self._cm = None
         self._consume_task: Optional[asyncio.Task] = None
+        self._input_audio_bytes_since_flush = 0
 
     async def start(self) -> None:
         self._cm = connect(
@@ -120,7 +121,17 @@ class VoiceLiveClient:
         not require a fixed frame size per append call."""
         if self._conn is None or not pcm16_bytes:
             return
+        self._input_audio_bytes_since_flush += len(pcm16_bytes)
         await self._conn.input_audio_buffer.append(audio=base64.b64encode(pcm16_bytes).decode("ascii"))
+
+    def pop_input_audio_duration_ms(self) -> float:
+        """Trả về + reset số ms audio input đã push kể từ lần pop trước -- dùng để ƯỚC LƯỢNG chi
+        phí Voice Live input (xem ai_usage_pricing.py: "azure_voice_live_input", và cảnh báo về
+        độ chính xác trong đó -- đây là suy từ tỷ lệ OpenAI công bố, KHÔNG phải số Azure thực báo
+        cáo). 16kHz/16-bit mono = 32000 bytes/giây (EXPECTED_SAMPLE_RATE * 2 bytes/sample)."""
+        bytes_count = self._input_audio_bytes_since_flush
+        self._input_audio_bytes_since_flush = 0
+        return (bytes_count / (EXPECTED_SAMPLE_RATE * 2)) * 1000
 
     async def _consume_loop(self) -> None:
         try:

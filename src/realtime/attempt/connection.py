@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from infra import practice_session_client
+from infra.message_broker import ai_usage_tracker
 from infra.realtime_socket import RealtimeSocket
 from infra.voice_live_client import EXPECTED_SAMPLE_RATE, VoiceLiveClient, VoiceLiveServerEvent
 from node.followUpDecisionGraph.constants import CLOSING_REPLY, EXAM_FAREWELL_TEXT
@@ -122,6 +123,12 @@ class AttemptConnection:
         answered_prompt = (
             answered_session.current_prompt_text if answered_session is not None else None
         )
+        if answered_session is not None:
+            duration_ms = self.voice_live_client.pop_input_audio_duration_ms()
+            if duration_ms > 0:
+                ai_usage_tracker.record_duration_usage(
+                    answered_session.answer_id, "azure_voice_live_input", duration_ms
+                )
 
         result = await self.questions.process_turn(message)
         if result is None:

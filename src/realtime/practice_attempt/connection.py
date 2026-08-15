@@ -394,6 +394,9 @@ class PracticeAttemptConnection:
         de co audit ledger (ai_usage_record ben Java) giong het exam."""
         if not answer_id:
             return 0.0
+        duration_ms = self.voice_live_client.pop_input_audio_duration_ms()
+        if duration_ms > 0:
+            ai_usage_tracker.record_duration_usage(answer_id, "azure_voice_live_input", duration_ms)
         usage_events = ai_usage_tracker.pop_usage(answer_id)
         if not usage_events:
             return 0.0

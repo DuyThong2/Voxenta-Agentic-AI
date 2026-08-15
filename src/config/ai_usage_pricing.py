@@ -29,6 +29,13 @@ class LlmUnitPrice(NamedTuple):
     # là bước sửa tạm để không còn tính cache ở giá full nữa. Thay bằng số derive thật khi có
     # Admin key (spikes/check_claude_cost.py, spikes/derive_openai_unit_price.py).
     cached_input_per_mtok: Optional[float] = None
+    # $/1M cache-WRITE (cache_creation) input token -- KHÁC cache-READ ở trên, giá thường ĐẮT
+    # hơn input thường chứ không rẻ hơn. None = fallback về input_per_mtok (đúng hành vi thật
+    # cho OpenAI: viết cache không tính phí thêm, chỉ đọc cache mới được giảm giá -- xem comment
+    # tại chỗ khai báo LLM_PRICING). Verify 2026-08-15: cache_creation_input_tokens = 0 trên MỌI
+    # row ai_usage_record thật tính đến nay (cả OpenAI lẫn Anthropic) -- field này hiện KHÔNG ảnh
+    # hưởng cost_usd thật nào, chỉ là phòng trước cho lúc có ai bật cache_control cho Claude.
+    cache_creation_per_mtok: Optional[float] = None
 
 
 # Key khớp với tên model truyền vào ChatOpenAI(model=...)/ChatAnthropic(model=...) ở các call site
@@ -53,11 +60,22 @@ class LlmUnitPrice(NamedTuple):
 #   niêm yết Anthropic đang áp dụng, KHÔNG phải giá đã thật sự chi tiêu, nhưng đáng tin hơn hẳn số
 #   tự đoán trước đó. Trang này không có JSON API ổn định để tự động hoá (khác Azure Retail Prices)
 #   -- re-check thủ công định kỳ nếu Anthropic đổi giá.
+# cache_creation_per_mtok: OpenAI (gpt-5.4/gpt-4o/gpt-4o-mini) để None -- OpenAI KHÔNG tính phí
+#   thêm khi ghi cache (platform.openai.com/docs/guides/prompt-caching: "no additional cost for
+#   writing to the cache"), nên fallback về input_per_mtok là đúng giá thật, không phải placeholder.
+#   claude-sonnet-4-6 = input*1.25 = $3.75 -- Anthropic tính cache-write đắt hơn input thường (1.25x
+#   cho TTL ephemeral mặc định 5 phút, 2x cho TTL mở rộng 1 giờ). Repo này KHÔNG dùng TTL 1 giờ
+#   (không có config `cache_control`/`ttl` nào trong code tại thời điểm viết, xác nhận bằng grep) --
+#   giữ nguyên 1.25x cho tới khi có chỗ nào bật extended cache. Verify 2026-08-15: field này = 0 ở
+#   MỌI row ai_usage_record thật hiện có (không nơi nào trong repo từng gọi cache_control cho
+#   Claude) -- số 3.75 hiện chưa ảnh hưởng cost_usd thật nào, chỉ là phòng trước.
 LLM_PRICING: Dict[str, LlmUnitPrice] = {
     "gpt-5.4": LlmUnitPrice(input_per_mtok=2.50, output_per_mtok=15.00, cached_input_per_mtok=0.25),
     "gpt-4o": LlmUnitPrice(input_per_mtok=2.4472, output_per_mtok=9.3945, cached_input_per_mtok=1.25),
     "gpt-4o-mini": LlmUnitPrice(input_per_mtok=0.15, output_per_mtok=0.60, cached_input_per_mtok=0.015),
-    "claude-sonnet-4-6": LlmUnitPrice(input_per_mtok=3.00, output_per_mtok=15.00, cached_input_per_mtok=0.30),
+    "claude-sonnet-4-6": LlmUnitPrice(
+        input_per_mtok=3.00, output_per_mtok=15.00, cached_input_per_mtok=0.30, cache_creation_per_mtok=3.75
+    ),
 }
 DEFAULT_LLM_PRICE = LlmUnitPrice(input_per_mtok=1.00, output_per_mtok=5.00, cached_input_per_mtok=0.10)
 
@@ -69,9 +87,20 @@ DEFAULT_LLM_PRICE = LlmUnitPrice(input_per_mtok=1.00, output_per_mtok=5.00, cach
 # "azure_tts" (Neural TTS rời thật ra tính theo KÍ TỰ, $/1M ký tự, không phải $/giây -- xem
 # spikes/fetch_azure_retail_prices.py). Giữ key tồn tại để duration_price_per_second_for() không
 # lỗi nếu lỡ có call site gọi nhầm, nhưng PLACEHOLDER 0.006 này sai đơn vị hoàn toàn nếu dùng thật.
+# azure_voice_live_input: ƯỚC LƯỢNG (không phải giá Azure thực báo cáo) -- Voice Live
+# (infra/voice_live_client.py) chỉ dùng cho STT+VAD (turn_detection.create_response=False), nên
+# SDK không bao giờ bắn event response.done mang usage/token thật (event đó chỉ fire khi model
+# tự tạo response). Suy từ: (a) tỷ lệ OpenAI công bố cho model nền -- 1 audio input token / 100ms
+# = 10 token/giây (developers.openai.com/api/docs/guides/realtime-costs, fetch 2026-08-14) -- CHƯA
+# xác nhận độc lập là đúng y hệt cho Azure Voice Live; (b) giá thật "Voice Live API Std - Standard
+# Speech Audio Input Tokens" = $0.015/1K token (Azure Retail Prices API, region southeastasia,
+# xác nhận 2026-08-14). => 10 * 0.015 / 1000 = $0.00015/giây. Tính trên TOÀN BỘ byte audio đã push
+# qua push_audio() kể cả khoảng lặng (app không gate VAD phía client trước khi gửi) -- có thể lệch
+# so với cách Azure thực sự tokenize im lặng. Xem VoiceLiveClient.pop_input_audio_duration_ms().
 DURATION_PRICING_PER_SECOND: Dict[str, float] = {
     "azure_stt": 0.00027778,
     "azure_tts": 0.006,
+    "azure_voice_live_input": 0.00015,
 }
 DEFAULT_DURATION_PRICE_PER_SECOND = 0.006
 

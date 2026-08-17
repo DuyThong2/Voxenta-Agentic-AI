@@ -56,7 +56,26 @@ def _elapsed_speech_seconds(resume_state: dict | None) -> float:
         )
     except (TypeError, ValueError):
         checkpointed = 0.0
-    return max(checkpointed, sum(durations_by_turn.values()))
+
+    # Moc checkpoint la giay NOI -- client gui len moi khi so giay noi tang them 1
+    # (QuestionFlowRunner.HandleBudgetProgress), nen sai so toi da 1 giay.
+    #
+    # Tong duration cua cac luot thi KHONG cung don vi. Luot ket thuc tu te ghi bang hieu cua
+    # chinh ngan sach (giay noi), nhung luot bi CAT GIUA CHUNG duoc cuu tu bo dem va ghi bang
+    # stopwatch treo tuong cua recorder (TurnAudioRecorder.GetTurnBufferAndReset) -- dong ho do
+    # chay tu luc mo mic toi luc bi rut ruot, khong dung khi thi sinh im lang cung khong dung
+    # trong suot khoang bi cam.
+    #
+    # Ban truoc lay max() nen so treo tuong luon thang. Do duoc 2026-08-17: thi sinh dang o
+    # 0:32/1:30 thi bi buoc ket thuc, go cam vao lai thi dong ho da nhay len 1:20/1:30 -- mat
+    # gan 48 giay ngan sach ma chua noi them chu nao. Cam du lau thi vao lai la ngan sach het
+    # ngay, AI cat cau luon.
+    #
+    # Giu sum(durations) lam phuong an du phong cho truong hop chua co moc nao (client cu, hoac
+    # bi cat truoc khi kip gui moc dau tien) -- chi bo viec de no DE LEN mot moc da dung.
+    if checkpointed > 0:
+        return checkpointed
+    return sum(durations_by_turn.values())
 
 
 @router.get("/attempts/{exam_attempt_id}/current-answer")

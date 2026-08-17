@@ -94,6 +94,10 @@ class AttemptConnection:
             await self._handle_resume(message)
         elif message_type == "focus_lost":
             await self._handle_focus_lost(message)
+        elif message_type == "camera_signal_lost":
+            await self._handle_camera_signal_lost(message)
+        elif message_type == "camera_signal_restored":
+            await self._handle_camera_signal_restored(message)
         elif message_type == "exam_end":
             self._speak(EXAM_FAREWELL_TEXT)
             await self.socket.send_json({"type": "exam_end_ack"})
@@ -281,6 +285,76 @@ class AttemptConnection:
                 stream_id="",
                 alert_type="WINDOW_FOCUS_LOST",
                 confidence=1.0,
+            )
+        )
+
+    async def _handle_camera_signal_lost(self, message: dict) -> None:
+        """Camera ngừng gửi khung hình quá ngưỡng (WPF CameraSignalGuard).
+
+        Phát hiện nằm ở máy trạm chứ không ở vox-streaming, và đó là chủ ý: vox-streaming chỉ
+        thấy "không có media" nên không phân biệt nổi camera bị rút với đường truyền của học
+        viên chết. Máy trạm thì biết -- nó thấy khung hình đứng lại trong khi tiến trình vẫn
+        khoẻ. Hai lời buộc tội rất khác nhau, gộp lại là bất công với học viên mạng kém.
+
+        Như focus_lost, KHÔNG đi qua should_emit_alert/cooldown: việc gộp theo điều kiện kéo dài
+        đã làm ở đầu WPF bằng hai ngưỡng (banner tại chỗ trước, cảnh báo sau), nên tới được đây
+        nghĩa là đã qua bộ lọc rồi. Lọc thêm lần nữa chỉ làm mất cảnh báo.
+        """
+        never_delivered = bool(message.get("neverDelivered"))
+        logger.warning(
+            "[attempt_connection] camera_signal_lost exam_attempt_id=%s captured_at=%s never_delivered=%s",
+            self.exam_attempt_id,
+            message.get("capturedAt"),
+            never_delivered,
+        )
+        detail = (
+            "Camera chưa gửi được khung hình nào kể từ đầu phiên"
+            if never_delivered
+            else "Camera ngừng gửi khung hình"
+        )
+        spawn(
+            push_alert(
+                session_id=self.exam_attempt_id,
+                # Rỗng chứ không nhét exam_attempt_id vào -- xem _handle_focus_lost.
+                participant_id="",
+                stream_id="",
+                alert_type="CAMERA_SIGNAL_LOST",
+                confidence=1.0,
+                stream_type="camera",
+                detail=detail,
+            )
+        )
+
+    async def _handle_camera_signal_restored(self, message: dict) -> None:
+        """Khung hình đã trở lại sau một lần mất ĐÃ được cảnh báo.
+
+        Tồn tại để đóng KHOẢNG chứ không phải để báo tin vui. Với người chấm, "mất camera lúc
+        10:32" gần như vô dụng: hai mươi giây hay suốt phần còn lại của bài thi là hai kết luận
+        hoàn toàn khác nhau. INFO chứ không WARNING -- lúc này sự cố đã qua, không còn gì để
+        giám thị can thiệp; nó chỉ cần nằm trong sổ cho người chấm.
+        """
+        outage_seconds = message.get("outageSeconds")
+        logger.info(
+            "[attempt_connection] camera_signal_restored exam_attempt_id=%s captured_at=%s outage=%ss",
+            self.exam_attempt_id,
+            message.get("capturedAt"),
+            outage_seconds,
+        )
+        try:
+            outage_text = f"{float(outage_seconds):.0f}s"
+        except (TypeError, ValueError):
+            # Client cũ hoặc payload méo. Vẫn phát cảnh báo: biết "đã phục hồi" mà không biết bao
+            # lâu vẫn hơn hẳn việc để khoảng trống trong sổ không bao giờ được đóng lại.
+            outage_text = "không rõ"
+        spawn(
+            push_alert(
+                session_id=self.exam_attempt_id,
+                participant_id="",
+                stream_id="",
+                alert_type="CAMERA_SIGNAL_RESTORED",
+                confidence=1.0,
+                stream_type="camera",
+                detail=f"Camera có hình trở lại sau {outage_text}",
             )
         )
 

@@ -202,6 +202,25 @@ class AttemptConnection:
         """
         audio_path = await asyncio.to_thread(_write_turn_wav, pcm16_bytes)
         if audio_path is None:
+            # _write_turn_wav chỉ trả None khi pcm16_bytes RỖNG, tức bộ đệm audio của lượt trống
+            # đúng lúc turn_end tới. Lượt vẫn có transcript (Voice Live ghi thẳng xuống Postgres
+            # theo answer_id), nên nhìn từ ngoài thì bài "có nói mà không có bản ghi âm".
+            #
+            # Trước bản này chỗ này return im lặng, không một dòng log -- nên khi chuyện đó xảy ra
+            # thật (2026-08-18, answer c65800d0 turn 1: 15 giây, 37 từ, audio_url null) không có
+            # cách nào truy vì sao. Ghi lại đủ số để lần sau đối chiếu được.
+            #
+            # Bộ đệm là trạng thái trong RAM của MỘT đối tượng AttemptConnection, còn transcript
+            # thì bền trong DB. Nên mọi việc thay/đặt lại kết nối (client reconnect giữa câu) hoặc
+            # một message question_start tới muộn (_handle_question_start clear buffer) đều cho ra
+            # đúng dấu hiệu này.
+            logger.warning(
+                "[attempt_connection] bo dem audio RONG luc turn_end -- mat ban ghi am, "
+                "van con transcript. answer_id=%s turn_order=%s duration_seconds=%s",
+                session.answer_id,
+                turn_order,
+                duration_seconds,
+            )
             return
 
         try:

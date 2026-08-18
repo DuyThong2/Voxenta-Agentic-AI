@@ -386,7 +386,7 @@ def _build_topic_context(request_payload: Any) -> TopicContext:
 def _build_initial_state(
     request_event: ExamAttemptEvaluationRequestedEvent,
     turn: Any,
-    local_audio_path: str,
+    local_audio_path: Optional[str],
     conversation_transcript: str,
     raw_payload: Dict[str, Any],
     realtime_transcript: Optional[str],

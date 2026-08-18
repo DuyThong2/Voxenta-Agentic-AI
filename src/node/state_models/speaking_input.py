@@ -81,7 +81,19 @@ class SpeakingInput(BaseModel):
     exam_attempt_id: Optional[str] = None
     answer_id: Optional[str] = None
     question_id: Optional[str] = None
-    audio_path: str
+    # None khi lượt nói không có bản ghi âm -- KHÔNG phải lỗi.
+    #
+    # Bên thi giữ lại lượt nói dù audio không tới được S3, nên
+    # exam_item_response_turns.audio_url có thể rỗng. Cả chuỗi phía sau đã lo cho việc đó:
+    # StartNode chấm theo transcript realtime và bỏ qua phiên âm, pronunciation_eval_node trả
+    # pronunciation_error thay vì làm hỏng graph, answer_length_analysis_node chỉ đo SNR khi có
+    # đường dẫn, và practiceEvalGraph/StartNode còn tự gán None vào chính field này.
+    #
+    # Khai báo `str` bắt buộc là mắt xích duy nhất chưa theo. Đo được 2026-08-18: một lượt im
+    # lặng (không audio) làm pydantic ném ngay lúc dựng SpeakingInput, TRƯỚC khi tới những nhánh
+    # đã xử lý sẵn -- retry 4 lần đều hỏng y hệt vì payload không đổi, rồi bài bị đánh
+    # ExamAttemptEvaluationFailed. Cùng loại "message độc chặn hàng đợi" đã xảy ra 2026-08-15.
+    audio_path: Optional[str] = None
     reference_text: Optional[str] = None
     transcribed_text: Optional[str] = None
     conversation_transcript: Optional[str] = None

@@ -125,6 +125,13 @@ async def get_attempt_resume_state(
     turns = (resume_state or {}).get("turns") or []
     elapsed_speech_seconds = _elapsed_speech_seconds(resume_state)
     if not turns:
+        # Chua luot nao xong ⇒ vao lai se chay LAI ca cau hoi: phat lai media tu dau roi chuan bi
+        # lai (QuestionFlowRunner.PresentInitialAsync + RunPreparationAsync). Nen tra ve moc dong ho
+        # luc cau nay bat dau de client hoan lai phan da tieu o lan vao truoc -- khong hoan thi thi
+        # sinh tra tien hai lan cho cung mot doan bang va cung mot khoang chuan bi.
+        #
+        # CHI tra o nhanh nay. Da co luot xong thi vao lai di nhanh resume: media khong phat lai,
+        # chuan bi khong chay lai, nen khong co gi de hoan.
         return {
             "answerId": answer_id,
             "paperItemId": (resume_state or {}).get("paper_item_id"),
@@ -132,6 +139,9 @@ async def get_attempt_resume_state(
             "activePromptText": None,
             "hasFollowUp": False,
             "elapsedSpeechSeconds": elapsed_speech_seconds,
+            "remainingSecondsAtQuestionStart": (resume_state or {}).get(
+                "remaining_seconds_at_question_start"
+            ),
         }
 
     turn_order = max(int(turn.get("turn_order") or 0) for turn in turns) + 1

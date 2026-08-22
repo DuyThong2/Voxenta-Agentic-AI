@@ -247,7 +247,18 @@ def validity_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     if speaking_input.question and speaking_input.question.asset:
         asset = speaking_input.question.asset
-        asset_details = asset.transcript or asset.description or asset.alt_text
+        # Ghep TAT CA cac truong co gia tri thay vi lay cai dau tien: transcript la NOI DUNG,
+        # description la BOI CANH -- chuoi `or` cu lam description cua AUDIO/VIDEO bien mat khoi
+        # prompt cham on-topic, dung luc no can nhat.
+        asset_details = "\n".join(
+            part
+            for part in (
+                f"Transcript: {asset.transcript}" if asset.transcript else None,
+                f"Description: {asset.description}" if asset.description else None,
+                f"Alt text: {asset.alt_text}" if asset.alt_text else None,
+            )
+            if part
+        )
         if asset_details:
             asset_context = (
                 f"Asset type: {asset.type}\n"

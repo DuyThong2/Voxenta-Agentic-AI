@@ -58,6 +58,10 @@ class QuestionSessionCoordinator:
         )
         language = message.get("language", "en-US")
         remaining_graded_seconds = message.get("remaining_graded_seconds")
+        # Moc dong ho luc cau nay bat dau -- xem archive_store.persist_question_snapshot.
+        remaining_seconds_at_question_start = message.get(
+            "remaining_seconds_at_question_start"
+        )
 
         self.active_session = QuestionSession(
             answer_id=answer_id,
@@ -78,6 +82,7 @@ class QuestionSessionCoordinator:
             language=language,
             prompt_text=prompt_text,
             remaining_graded_seconds=remaining_graded_seconds,
+            remaining_seconds_at_question_start=remaining_seconds_at_question_start,
         )
         await archive_store.set_current_answer_id(
             self.archive_graph,

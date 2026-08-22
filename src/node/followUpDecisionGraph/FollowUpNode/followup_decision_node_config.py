@@ -152,11 +152,13 @@ def _format_asset(question: QuestionContext | Dict[str, Any] | None) -> str:
     if asset_type:
         parts.append(f"Asset type: {asset_type}")
     asset_text = transcript or description or alt_text
+    # Lay TAT CA cac truong co gia tri -- xem ghi chu o LanguageQualityEvalNode: chuoi elif cu
+    # lam description cua AUDIO/VIDEO khong bao gio toi duoc prompt.
     if transcript:
         parts.append(f"Asset transcript: {transcript}")
-    elif description:
+    if description:
         parts.append(f"Asset description: {description}")
-    elif alt_text:
+    if alt_text:
         parts.append(f"Asset alt text: {alt_text}")
     if not asset_text and asset_type:
         parts.append("Asset details: unavailable")

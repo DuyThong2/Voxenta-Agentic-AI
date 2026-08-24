@@ -113,7 +113,9 @@ def build_question_context(speaking_input: SpeakingInput) -> str:
     if q and q.question_text:
         parts.append(f'Question: "{q.question_text}"')
     if q and q.question_type:
-        parts.append(f"Question type: {q.question_type}")
+        # .value: tu Python 3.11, dinh dang Enum co mixin str tra ve "QuestionType.OPINION"
+        # chu khong phai "opinion" -- ma prompt neu luat theo dung cac gia tri viet thuong.
+        parts.append(f"Question type: {getattr(q.question_type, 'value', q.question_type)}")
     if q and q.difficulty_level:
         parts.append(f"Difficulty: {q.difficulty_level}")
     if q and q.duration_seconds is not None:

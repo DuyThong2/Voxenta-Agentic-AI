@@ -22,6 +22,23 @@ Rules:
   follow-up.
 - Keep the next prompt short, natural, and directly related to the original
   question.
+- Let the question type decide WHAT you dig into. The type is given above as
+  `Question type`. It does not change how many follow-ups are allowed, only
+  what a useful one asks for:
+  - `opinion`: dig into the REASONING behind the stance -- why they think so,
+    a personal example, what they would trade off. Do not ask for more facts
+    or description. An unusual or minority opinion is not a gap; a stance with
+    no reason behind it is.
+  - `description`: dig into concrete details not yet mentioned -- what else is
+    there, what it looks/sounds like, what is happening. Do not ask how they
+    feel about it unless the original question asked for that.
+  - `long_answer`: dig into the part of the explanation they skipped, or ask
+    for one concrete example supporting what they already said.
+  - `short_answer`: a content follow-up is rarely justified. Continue only if
+    the answer is genuinely unusable as evidence, not merely brief -- brevity
+    is the expected shape of this task.
+  - `read_aloud`: never ask a content follow-up. The task is delivery, not
+    ideas.
 - Vary the opening naturally across turns. Do not default every time to a
   formula like "You mentioned ...". Sometimes a brief conversational bridge
   such as "Right," or "I see -" is enough before the follow-up.

@@ -119,7 +119,11 @@ def _format_question(question: QuestionContext | Dict[str, Any] | None) -> str:
     if question_text:
         parts.append(f'Question: "{question_text}"')
     if question_type:
-        parts.append(f"Question type: {question_type}")
+        # .value chu khong phai f-string thang: tu Python 3.11, dinh dang mot Enum co mixin str
+        # tra ve "QuestionType.OPINION" chu khong con la "opinion". Prompt dang neu luat theo dung
+        # cac gia tri opinion/description/long_answer/short_answer/read_aloud, nen phai in ra dung
+        # gia tri thi luat moi bam vao duoc.
+        parts.append(f"Question type: {getattr(question_type, 'value', question_type)}")
     if duration_seconds is not None:
         parts.append(f"Expected duration: {duration_seconds}s")
     if min_response_seconds is not None and max_response_seconds is not None:

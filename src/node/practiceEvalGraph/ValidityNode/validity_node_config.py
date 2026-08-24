@@ -121,7 +121,9 @@ def _build_llm_prompt(
         parts.append(asset_context)
 
     if question_type:
-        parts.append(f"Question type: {question_type}")
+        # .value: tu Python 3.11, dinh dang Enum co mixin str tra ve "QuestionType.OPINION"
+        # chu khong phai "opinion" -- ma prompt neu luat theo dung cac gia tri viet thuong.
+        parts.append(f"Question type: {getattr(question_type, 'value', question_type)}")
 
     if mode:
         parts.append(f"Mode: {mode}")

@@ -1,3 +1,4 @@
+import logging
 import subprocess
 import tempfile
 from pathlib import Path
@@ -7,14 +8,39 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
+from config import ai_usage_pricing as pricing
 from events.question_asset_analysis_requested import QuestionAssetAnalysisRequestedEvent
 from infra.storage.audio_storage import download_from_s3
 from utils.speech_client import transcribe
+
+logger = logging.getLogger(__name__)
 
 
 class AssetAnalysisResult(BaseModel):
     transcript: Optional[str] = None
     description: Optional[str] = None
+
+
+def _log_llm_cost(response, *, site: str) -> None:
+    """Log-only chi phí gpt-4o cho asset analysis -- KHÔNG gọi ai_usage_tracker.record_llm_usage:
+    chi phí này thuộc về việc soạn câu hỏi (1 lần/asset), không gắn với answer_id/phiên thi-luyện
+    nào, nên không có chỗ trong ledger ai_usage_record hiện tại (khoá cứng theo examSessionId+
+    turnId). Đây chỉ để nhìn thấy được chi phí trong log, không phải nguồn trừ quota.
+
+    Đơn giản hoá: không trừ cache tokens như ai_usage_tracker.py làm cho luồng thi/luyện -- các lời
+    gọi ở đây là one-off, không có prompt lặp lại đủ dài để cache thật sự phát sinh.
+    """
+    usage_metadata = getattr(response, "usage_metadata", None)
+    if not usage_metadata:
+        return
+    input_tokens = usage_metadata.get("input_tokens") or 0
+    output_tokens = usage_metadata.get("output_tokens") or 0
+    price = pricing.llm_price_for("gpt-4o")
+    cost_usd = (input_tokens / 1_000_000) * price.input_per_mtok + (output_tokens / 1_000_000) * price.output_per_mtok
+    logger.info(
+        "[asset_analysis] gpt-4o cost site=%s input_tokens=%d output_tokens=%d cost_usd=%.6f",
+        site, input_tokens, output_tokens, cost_usd,
+    )
 
 
 _SYSTEM_PROMPT = """You analyze question assets for an English speaking exam authoring system.
@@ -79,14 +105,16 @@ def analyze_asset_request(event: QuestionAssetAnalysisRequestedEvent) -> AssetAn
 
 
 def _describe_image(*, asset_url: str, question_text: Optional[str], evaluation_guide) -> str:
-    llm = ChatOpenAI(model="gpt-4o", temperature=0).with_structured_output(AssetAnalysisResult)
+    llm = ChatOpenAI(model="gpt-4o", temperature=0).with_structured_output(
+        AssetAnalysisResult, include_raw=True
+    )
     prompt = _build_description_prompt(
         question_text=question_text,
         evaluation_guide=evaluation_guide,
         focus="Describe only what is visibly present in the image. Do not infer a single correct meaning.",
         source_label="image",
     )
-    result = llm.invoke([
+    response = llm.invoke([
         SystemMessage(content=_SYSTEM_PROMPT),
         HumanMessage(
             content=[
@@ -95,6 +123,10 @@ def _describe_image(*, asset_url: str, question_text: Optional[str], evaluation_
             ]
         ),
     ])
+    _log_llm_cost(response["raw"], site="describe_image")
+    result = response["parsed"]
+    if result is None:
+        raise ValueError(f"gpt-4o structured output parsing failed: {response.get('parsing_error')}")
     return (result.description or "").strip()
 
 
@@ -114,7 +146,9 @@ def _describe_transcript(
     evaluation_guide,
     asset_type: str,
 ) -> str:
-    llm = ChatOpenAI(model="gpt-4o", temperature=0).with_structured_output(AssetAnalysisResult)
+    llm = ChatOpenAI(model="gpt-4o", temperature=0).with_structured_output(
+        AssetAnalysisResult, include_raw=True
+    )
     focus = (
         "Summarize the media objectively from the transcript. Do not invent missing visuals or claim one correct interpretation."
         if asset_type in {"VIDEO", "AUDIO"}
@@ -124,10 +158,14 @@ def _describe_transcript(
         f"{_build_description_prompt(question_text=question_text, evaluation_guide=evaluation_guide, focus=focus, source_label=asset_type.lower())}\n\n"
         f"## Source Transcript\n{transcript_text}"
     )
-    result = llm.invoke([
+    response = llm.invoke([
         SystemMessage(content=_SYSTEM_PROMPT),
         HumanMessage(content=prompt),
     ])
+    _log_llm_cost(response["raw"], site="describe_transcript")
+    result = response["parsed"]
+    if result is None:
+        raise ValueError(f"gpt-4o structured output parsing failed: {response.get('parsing_error')}")
     return (result.description or "").strip()
 
 

@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from infra.alert_client import push_alert
+from infra.message_broker import ai_usage_tracker
 from node.followUpDecisionGraph.RepeatRecoveryNode.repeat_recovery_node_helper import (
     build_decline_repair_text,
     build_offtopic_redirect_text,
@@ -428,6 +429,10 @@ def repeat_recovery_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     try:
         response = llm.invoke(messages)
+        try:
+            ai_usage_tracker.record_llm_usage(state.get("answer_id"), "openai", "gpt-4o", response)
+        except Exception:
+            logger.exception("[ai_usage_tracker] failed to record LLM usage, ignoring")
         content = response.content.strip()
         if content.startswith("```"):
             lines = [line for line in content.splitlines() if not line.strip().startswith("```")]

@@ -55,15 +55,19 @@ class TurnSubmitOutcome:
     status: str
     spoken_seconds: Optional[int]
     budget_seconds: Optional[int]
+    # Vi nao can khi status="quota_exceeded" -- "SCHOOL" hay "PERSONAL" (xem
+    # ConsumeQuotaUseCase.Scope ben Java). None khi khong ap dung hoac Java ban cu chua gui.
+    scope: Optional[str] = None
 
     @classmethod
     def of(cls, status: str, body: Any) -> "TurnSubmitOutcome":
         if not isinstance(body, dict):
-            return cls(status, None, None)
+            return cls(status, None, None, None)
         return cls(
             status,
             body.get("sessionSpokenSeconds"),
             body.get("sessionBudgetSeconds"),
+            body.get("quotaExhaustedScope"),
         )
 
 
@@ -303,7 +307,11 @@ class PracticeAttemptConnection:
                 # pool_exhausted (mục 2.9), just a different reason for the summary screen to
                 # explain.
                 await self.socket.send_json(
-                    {"type": "practice_session_ended", "reason": submit_outcome.status}
+                    {
+                        "type": "practice_session_ended",
+                        "reason": submit_outcome.status,
+                        "scope": submit_outcome.scope,
+                    }
                 )
                 return
 

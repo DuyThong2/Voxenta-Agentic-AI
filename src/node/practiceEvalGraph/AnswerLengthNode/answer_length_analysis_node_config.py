@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 
+from infra.message_broker import ai_usage_tracker
 from node.practiceEvalGraph.AnswerLengthNode.answer_length_analysis_prompt import SYSTEM_PROMPT
 from node.practiceEvalGraph.AnswerLengthNode.answer_length_node_helper import (
     build_question_context,
@@ -80,6 +81,7 @@ def call_llm_length_judgment(
     expected_min_words: int,
     length_ratio: Optional[float],
     actual_response_seconds: Optional[float] = None,
+    answer_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     llm = ChatOpenAI(model="gpt-5.4", reasoning_effort="medium")
 
@@ -94,6 +96,10 @@ def call_llm_length_judgment(
 
     with llm_call_slot():
         response = llm.invoke(messages)
+    try:
+        ai_usage_tracker.record_llm_usage(answer_id, "openai", "gpt-5.4", response)
+    except Exception:
+        logger.exception("[ai_usage_tracker] failed to record LLM usage, ignoring")
     content = response.content.strip()
 
     if content.startswith("```"):
@@ -174,6 +180,7 @@ def answer_length_analysis_node(state: Dict[str, Any]) -> Dict[str, Any]:
                 speaking_input, transcript, word_count, sentence_count,
                 expected_min_words, length_ratio,
                 actual_response_seconds=actual_response_seconds,
+                answer_id=answer_id,
             )
             llm_length_judgment = llm_response
             length_category = llm_response.get("length_category", length_category)

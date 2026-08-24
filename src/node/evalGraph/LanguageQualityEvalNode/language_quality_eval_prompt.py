@@ -48,6 +48,12 @@ this list is discarded after scoring, so it is wasted output.
 Judge lexical range, accuracy, appropriacy, repetition, collocation, topic vocabulary, and
 paraphrase.
 - Accurate simple words can retain a high accuracy score even when range is limited.
+- Topic fit is judged against what the question actually asked about. When a
+  `## Question Asset` section is present, its content defines that topic.
+- Description tasks reward concrete, specific vocabulary (qualities, positions,
+  actions); opinion tasks reward stance and hedging language ("I'd say", "in my
+  view", "on balance"). Judge range against the kind of language the task calls
+  for, not one generic scale.
 - Off-topic content lowers topic fit and the overall vocabulary judgment, but does not make every
   correctly used word wrong.
 - Sustained Vietnamese code-switching reduces both available English range and accuracy.
@@ -66,6 +72,13 @@ development, connector use, and task fulfillment.
 - A short direct answer is acceptable for a short-answer task.
 - An underdeveloped answer should lose coherence points for a long-answer, opinion, or description
   task.
+- Opinion and description cohere DIFFERENTLY; do not judge one by the other's shape.
+  An opinion answer is organised by ARGUMENT (stance, then reasons, then support).
+  A description is organised by ORDER (overview then detail, or a consistent spatial
+  or temporal sweep). A well-ordered description that contains no explicit reasoning
+  is not underdeveloped.
+- When a `## Question Asset` section is present, use it to judge task relevance: the
+  topic is what the asset is about, not only what the question sentence names.
 - Use dialogue context only to understand the actual question and follow-ups.
 - In scripted/read-aloud mode, coherence is diagnostic only.
 

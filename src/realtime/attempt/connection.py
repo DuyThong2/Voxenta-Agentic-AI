@@ -98,6 +98,8 @@ class AttemptConnection:
             await self._handle_camera_signal_lost(message)
         elif message_type == "camera_signal_restored":
             await self._handle_camera_signal_restored(message)
+        elif message_type == "asset_playback_failed":
+            self._handle_asset_playback_failed(message)
         elif message_type == "exam_end":
             self._speak(EXAM_FAREWELL_TEXT)
             await self.socket.send_json({"type": "exam_end_ack"})
@@ -110,6 +112,26 @@ class AttemptConnection:
 
     async def _handle_question_start(self, message: dict) -> None:
         # Câu mới thì audio còn sót của câu trước không còn ý nghĩa gì.
+        #
+        # Clear vô điều kiện là CÓ CHỦ ĐÍCH. question_start chỉ được gửi từ hai chỗ ở client:
+        # PresentInitialAsync (câu mới -- đệm đang chứa tiếng thừa của câu trước, clear là đúng) và
+        # PresentResumeAsync (vào lại giữa câu -- kết nối vừa lập nên đệm đã rỗng, clear là no-op).
+        # Để nó phá audio thật thì message này phải tới SAU khi thí sinh bắt đầu trả lời, mà thứ tự
+        # phía client chặn: question_start -> AI đọc đề -> mới mở cửa sổ mic.
+        #
+        # Làm nó có điều kiện ("chỉ clear khi answer_id đổi") là đổi rủi ro lấy rủi ro: tiếng còn
+        # sót từ trước sẽ lẫn vào lượt mới. Nên thay vì đoán, ĐO: log lại mỗi lần clear vứt đi một
+        # bộ đệm không rỗng. Thấy dòng này kèm số byte lớn nghĩa là lập luận trên có lỗ -- lúc đó
+        # mới có căn cứ để đổi.
+        discarded_bytes = len(self._turn_audio_buffer)
+        if discarded_bytes > 0:
+            logger.info(
+                "[attempt_connection] question_start xoa bo dem audio con %d byte "
+                "exam_attempt_id=%s answer_id=%s",
+                discarded_bytes,
+                self.exam_attempt_id,
+                message.get("answer_id"),
+            )
         self._turn_audio_buffer.clear()
         result = await self.questions.start_question(message)
         await self.socket.send_json(
@@ -305,6 +327,25 @@ class AttemptConnection:
                 alert_type="WINDOW_FOCUS_LOST",
                 confidence=1.0,
             )
+        )
+
+    def _handle_asset_playback_failed(self, message: dict) -> None:
+        """Tài nguyên audio/video của câu hỏi không phát được ở máy thí sinh, kể cả sau một lần
+        thử lại (WPF ExamViewModel.NotifyQuestionAssetMediaFailed).
+
+        Hệ quả cần biết: thí sinh sẽ được hỏi -- và bị chấm -- về đoạn ghi âm họ CHƯA TỪNG NGHE.
+        Luồng thi vẫn đi tiếp có chủ ý (chặn lại thì hỏng cả buổi thi), nên chỗ này tồn tại để lần
+        sau có người khiếu nại "em không nghe thấy gì" thì còn tra được.
+
+        CỐ Ý không gọi push_alert như focus_lost/camera_signal_lost: kênh cảnh báo dành cho hành vi
+        của thí sinh, còn đây là lỗi kỹ thuật. Trộn hai loại vào nhau là cách nhanh nhất khiến giám
+        thị ngừng tin những cảnh báo thật.
+        """
+        logger.warning(
+            "[attempt_connection] asset_playback_failed exam_attempt_id=%s question=%s reason=%s",
+            self.exam_attempt_id,
+            message.get("questionNumber"),
+            message.get("reason"),
         )
 
     async def _handle_camera_signal_lost(self, message: dict) -> None:

@@ -1,16 +1,20 @@
 name: CD Test
 
-# Bản CD riêng cho nhánh test hiện tại (personalizePrototype) -- tách khỏi cd.yml
+# Bản CD riêng cho nhánh test hiện tại (assetShowing) -- tách khỏi cd.yml
 # (chỉ chạy cho `main`) để không đụng pipeline chính. Trigger thẳng trên push, không
 # qua workflow_run: workflow_run chỉ fire khi file workflow đã tồn tại trên nhánh MẶC
 # ĐỊNH của repo, nên một nhánh test sẽ không bao giờ kích được nó -- và im lặng chứ
 # không báo lỗi. Đổi lại: không có cổng CI trước khi build/push ECR, chấp nhận được
 # cho mục đích test nhanh, không dùng cho nhánh production. Cùng pattern với
 # vox/cd-test.yml và vox-streaming/cd-test.yml.
+#
+# ⚠️ TÊN NHÁNH DƯỚI ĐÂY PHẢI KHỚP NHÁNH ĐANG LÀM VIỆC, nếu không workflow không
+# chạy lần nào và KHÔNG BÁO LỖI GÌ -- push xong chỉ thấy im lặng, rất dễ tưởng
+# CI hỏng. Cập nhật 2026-08-19: personalizePrototype -> assetShowing.
 on:
   push:
     branches:
-      - personalizePrototype
+      - assetShowing
 
 jobs:
   docker-build-push:

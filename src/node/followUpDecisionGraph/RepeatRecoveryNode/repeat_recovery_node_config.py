@@ -70,7 +70,9 @@ def _format_question(question: Any) -> str:
     if question_text:
         parts.append(f'Question: "{question_text}"')
     if question_type:
-        parts.append(f"Question type: {question_type}")
+        # .value: tu Python 3.11, dinh dang Enum co mixin str tra ve "QuestionType.OPINION"
+        # chu khong phai "opinion" -- ma prompt neu luat theo dung cac gia tri viet thuong.
+        parts.append(f"Question type: {getattr(question_type, 'value', question_type)}")
     if duration_seconds is not None:
         parts.append(f"Expected duration: {duration_seconds}s")
     if min_response_seconds is not None and max_response_seconds is not None:
@@ -100,11 +102,13 @@ def _format_asset(question: Any) -> str:
     if asset_type:
         parts.append(f"Asset type: {asset_type}")
     asset_text = transcript or description or alt_text
+    # Lay TAT CA cac truong co gia tri -- xem ghi chu o LanguageQualityEvalNode: chuoi elif cu
+    # lam description cua AUDIO/VIDEO khong bao gio toi duoc prompt.
     if transcript:
         parts.append(f"Asset transcript: {transcript}")
-    elif description:
+    if description:
         parts.append(f"Asset description: {description}")
-    elif alt_text:
+    if alt_text:
         parts.append(f"Asset alt text: {alt_text}")
     if not asset_text and asset_type:
         parts.append("Asset details: unavailable")

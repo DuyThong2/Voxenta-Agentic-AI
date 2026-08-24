@@ -95,6 +95,7 @@ async def persist_question_snapshot(
     language: str,
     prompt_text,
     remaining_graded_seconds=None,
+    remaining_seconds_at_question_start=None,
 ) -> None:
     """Durably snapshots the question payload for answer_id, once, right when
     AttemptConnection._handle_question_start first receives it. This is what
@@ -104,13 +105,27 @@ async def persist_question_snapshot(
     time it's ever sent. Safe to call every question_start unconditionally:
     a genuinely new question just writes its own fresh values; the same
     question resumed via a fresh question_start (rather than `resume`)
-    overwrites with identical values."""
+    overwrites with identical values.
+
+    remaining_seconds_at_question_start la MOC DONG HO luc cau hoi nay bat dau. Dung de HOAN GIO
+    khi thi sinh bi ngat giua chung: vao lai ma cau chua co luot nao xong thi ca media lan thoi gian
+    chuan bi deu chay LAI TU DAU (QuestionFlowRunner: PresentInitialAsync roi RunPreparationAsync),
+    nen phan da tieu o lan vao truoc phai duoc tra lai -- neu khong thi sinh tra tien hai lan cho
+    cung mot doan bang va cung mot khoang chuan bi.
+
+    Ghi de moi lan question_start la DUNG y do: lan phat lai gui len chinh moc vua duoc khoi phuc,
+    nen bi ngat lan hai van tra ve dung diem cu. Khong farm duoc vi chi hoan dung phan da tieu.
+
+    Co y KHONG dung chung voi remaining_graded_seconds ngay tren: truong do co ngu nghia rieng --
+    FollowUpNode doc no de quyet dinh con hoi tiep hay khong (<= 0 la dung). Nhoi so dong ho vao do
+    se doi hanh vi cua AI, la viec khac."""
     await aupdate_state(archive_graph, archive_config(answer_id), {
         "question": question,
         "paper_item_id": paper_item_id,
         "language": language,
         "prompt_text": prompt_text,
         "remaining_graded_seconds": remaining_graded_seconds,
+        "remaining_seconds_at_question_start": remaining_seconds_at_question_start,
     })
 
 
@@ -256,5 +271,8 @@ async def get_resume_state(archive_graph, answer_id: str) -> dict | None:
         "realtime_transcripts": list(values.get("realtime_transcripts") or []),
         "speech_budget_elapsed_seconds": values.get(
             "speech_budget_elapsed_seconds"
+        ),
+        "remaining_seconds_at_question_start": values.get(
+            "remaining_seconds_at_question_start"
         ),
     }

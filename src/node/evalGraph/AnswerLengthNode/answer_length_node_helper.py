@@ -20,11 +20,18 @@ def _format_asset_context(speaking_input: SpeakingInput) -> list[str]:
     parts = ["\n## Question Asset"]
     if asset.type:
         parts.append(f"Asset type: {asset.type}")
+    # Lay TAT CA cac truong co gia tri, khong phai cai dau tien.
+    #
+    # Truoc day day la chuoi if/elif nen voi AUDIO/VIDEO -- loai luon co transcript -- thi
+    # description bi bo qua hoan toan. Nguoi soan de van dien no vi form co o do, roi khong hieu
+    # sao AI khong biet gi ve boi canh minh da mo ta. Hai truong noi hai chuyen khac nhau:
+    # transcript la NOI DUNG (loi thoai / doan van), description la BOI CANH (canh gi, giong ai,
+    # dinh dang ra sao). Ca hai deu co ich.
     if asset.transcript:
         parts.append(f"Asset transcript: {asset.transcript}")
-    elif asset.description:
+    if asset.description:
         parts.append(f"Asset description: {asset.description}")
-    elif asset.alt_text:
+    if asset.alt_text:
         parts.append(f"Asset alt text: {asset.alt_text}")
     if asset.transcript or asset.description or asset.alt_text:
         parts.append(
@@ -106,7 +113,9 @@ def build_question_context(speaking_input: SpeakingInput) -> str:
     if q and q.question_text:
         parts.append(f'Question: "{q.question_text}"')
     if q and q.question_type:
-        parts.append(f"Question type: {q.question_type}")
+        # .value: tu Python 3.11, dinh dang Enum co mixin str tra ve "QuestionType.OPINION"
+        # chu khong phai "opinion" -- ma prompt neu luat theo dung cac gia tri viet thuong.
+        parts.append(f"Question type: {getattr(q.question_type, 'value', q.question_type)}")
     if q and q.difficulty_level:
         parts.append(f"Difficulty: {q.difficulty_level}")
     if q and q.duration_seconds is not None:

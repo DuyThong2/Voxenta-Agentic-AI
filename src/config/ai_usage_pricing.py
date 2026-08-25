@@ -90,17 +90,22 @@ DEFAULT_LLM_PRICE = LlmUnitPrice(input_per_mtok=1.00, output_per_mtok=5.00, cach
 # azure_voice_live_input: ƯỚC LƯỢNG (không phải giá Azure thực báo cáo) -- Voice Live
 # (infra/voice_live_client.py) chỉ dùng cho STT+VAD (turn_detection.create_response=False), nên
 # SDK không bao giờ bắn event response.done mang usage/token thật (event đó chỉ fire khi model
-# tự tạo response). Suy từ: (a) tỷ lệ OpenAI công bố cho model nền -- 1 audio input token / 100ms
-# = 10 token/giây (developers.openai.com/api/docs/guides/realtime-costs, fetch 2026-08-14) -- CHƯA
-# xác nhận độc lập là đúng y hệt cho Azure Voice Live; (b) giá thật "Voice Live API Std - Standard
-# Speech Audio Input Tokens" = $0.015/1K token (Azure Retail Prices API, region southeastasia,
-# xác nhận 2026-08-14). => 10 * 0.015 / 1000 = $0.00015/giây. Tính trên TOÀN BỘ byte audio đã push
-# qua push_audio() kể cả khoảng lặng (app không gate VAD phía client trước khi gửi) -- có thể lệch
-# so với cách Azure thực sự tokenize im lặng. Xem VoiceLiveClient.pop_input_audio_duration_ms().
+# tự tạo response). Suy từ: (a) tỷ lệ 10 token/giây audio input cho model nền Azure OpenAI --
+# giờ đã là số CHÍNH THỨC của chính docs Voice Live (learn.microsoft.com/.../voice-live#pricing,
+# bảng "Token usage and cost estimation", xác nhận 2026-08-19), không còn là mượn tạm từ OpenAI
+# Realtime API nữa; (b) giá thật "Voice Live API Pro - Standard Speech Audio Input Tokens" =
+# $0.017/1K token (Azure Retail Prices API, region southeastasia, xác nhận 2026-08-19) -- tier
+# PRO, không phải Std/Basic, vì AZURE_VOICELIVE_MODEL=gpt-realtime trong .env thật (KHÔNG phải
+# default "gpt-realtime-mini" trong code -- gpt-realtime thuộc tier Pro, gpt-realtime-mini mới
+# thuộc Std/Basic; đợt 2026-08-14 verify nhầm theo default code nên ra tier Std/$0.015, đã sửa).
+# => 10 * 0.017 / 1000 = $0.00017/giây. Tính trên TOÀN BỘ byte audio đã push qua push_audio() kể
+# cả khoảng lặng (app không gate VAD phía client trước khi gửi) -- có thể lệch so với cách Azure
+# thực sự tokenize im lặng. Xem VoiceLiveClient.pop_input_audio_duration_ms(). Nếu AZURE_VOICELIVE_
+# MODEL đổi sang model khác tier (vd gpt-realtime-mini) thì số này cần re-derive theo tier mới.
 DURATION_PRICING_PER_SECOND: Dict[str, float] = {
     "azure_stt": 0.00027778,
     "azure_tts": 0.006,
-    "azure_voice_live_input": 0.00015,
+    "azure_voice_live_input": 0.00017,
 }
 DEFAULT_DURATION_PRICE_PER_SECOND = 0.006
 

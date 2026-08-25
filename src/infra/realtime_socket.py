@@ -6,6 +6,7 @@ live here; those stay in realtime.attempt_connection.AttemptConnection.
 """
 
 import json
+import asyncio
 import logging
 from typing import Any, AsyncIterator, Tuple
 
@@ -20,6 +21,11 @@ class RealtimeSocket:
 
     def __init__(self, websocket: WebSocket) -> None:
         self._websocket = websocket
+        # Tuan tu hoa moi lan gui: socket nay co NHIEU nguoi ghi chay song song -- vong xu ly
+        # message chinh, cac task nen do _speak sinh ra qua spawn(), va nhip tim. Gui chong nhau
+        # tren cung mot WebSocket cua Starlette la khong an toan, ma send_json ben duoi lai nuot
+        # moi ngoai le nen loi kieu do se bien mat lang le, keo theo mat mot ack hoac mot decision.
+        self._send_lock = asyncio.Lock()
 
     async def accept(self) -> None:
         await self._websocket.accept()
@@ -35,7 +41,8 @@ class RealtimeSocket:
         handling, which already just logs and continues -- so this is the
         same effective behavior, just consolidated in one place)."""
         try:
-            await self._websocket.send_json(payload)
+            async with self._send_lock:
+                await self._websocket.send_json(payload)
         except Exception:
             logger.exception(
                 "[realtime_socket] failed to send payload type=%s",

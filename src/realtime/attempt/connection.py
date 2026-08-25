@@ -18,6 +18,10 @@ from realtime.background import spawn
 
 logger = logging.getLogger(__name__)
 
+# Nhip tim 5 giay: client coi la mat ket noi khi qua 3 nhip (15 giay) khong nghe thay gi. Dat thua
+# du so voi tan suat nay de mot goi ping tre khong lam dong ho dung oan.
+HEARTBEAT_INTERVAL_SECONDS = 5
+
 
 def _write_turn_wav(pcm16_bytes: bytes) -> Optional[str]:
     """Ghi audio thô của lượt ra WAV tạm, 16kHz/16-bit/mono.
@@ -68,6 +72,11 @@ class AttemptConnection:
         # Cửa chờ này trước đây nằm ở WPF (TurnArchiveQueue.DrainAsync). Từ khi audio do Python
         # lưu, hàng đợi bên WPF luôn rỗng nên chờ ở đó là chờ hư không: việc thật chạy ở đây.
         self._pending_archives: set = set()
+        # Nhip tim gui xuong client. Xem _heartbeat_loop.
+        #
+        # GIU THAM CHIEU vao self: event loop chi giu tham chieu YEU toi task, nen mot task chi
+        # duoc `create_task(...)` roi vut di co the bi thu gom giua chung -- khong loi, khong log.
+        self._heartbeat_task: Optional[asyncio.Task] = None
 
     @property
     def pending_archive_count(self) -> int:
@@ -75,6 +84,31 @@ class AttemptConnection:
 
     async def start(self) -> None:
         await self.voice_live_client.start()
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+
+    async def _heartbeat_loop(self) -> None:
+        """Bao cho client biet ket noi con song, deu dan va vo dieu kien.
+
+        Vi sao can: giao thuc nay im lang mot cach HOP LE trong luc thi sinh dang nghi -- server
+        chi noi khi co viec (ack, su kien VAD, quyet dinh follow-up). Nen phia client khong the
+        lay "khong nhan duoc gi" lam dau hieu mat mang, va no cung khong the tin vao trang thai
+        socket: rut day mang thi TCP van giu socket "mo" cho toi khi het thoi gian truyen lai, co
+        the hang phut.
+
+        Co nhip tim thi client phan biet duoc hai kieu im lang, va dung dong ho thi khi mat ket
+        noi thay vi tru oan thoi gian cua thi sinh (ExamViewModel doc IsRealtimeAlive).
+        """
+        try:
+            while True:
+                await asyncio.sleep(HEARTBEAT_INTERVAL_SECONDS)
+                await self.socket.send_json({"type": "ping"})
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            # Socket dut la chuyen binh thuong o day; vong lap ket thuc, khong can bao dong.
+            logger.debug(
+                "[attempt_connection] heartbeat dung exam_attempt_id=%s", self.exam_attempt_id
+            )
 
     async def handle_audio_frame(self, data: bytes) -> None:
         self._turn_audio_buffer.extend(data)
@@ -482,5 +516,8 @@ class AttemptConnection:
         await self.socket.close(code=1000)
 
     async def close(self) -> None:
+        if self._heartbeat_task is not None:
+            self._heartbeat_task.cancel()
+            self._heartbeat_task = None
         self.questions.clear()
         await self.voice_live_client.close()

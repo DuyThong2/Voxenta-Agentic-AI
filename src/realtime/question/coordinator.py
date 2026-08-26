@@ -144,6 +144,44 @@ class QuestionSessionCoordinator:
 
     async def resume(self, message: Dict[str, Any]) -> ResumeResult:
         answer_id = message.get("answer_id")
+
+        # CHỈ GHI LOG, KHÔNG CHẶN -- cột mốc để bắt tận tay việc resume kéo phiên về câu cũ.
+        #
+        # Đo thật 2026-08-26, ca 01a03cb8: thí sinh đứt mạng ở câu 2, nối lại, rồi trả lời câu 2 --
+        # nhưng bản ghi lại nằm ở câu 1:
+        #     paper_item 01a03c55  lượt 1 MAIN     "How important is entertainment..."  -> giải trí
+        #     paper_item 01a03c55  lượt 2 FOLLOWUP "Take 25 seconds to think..."        -> tả bức ảnh
+        # Cùng một paper_item_id. Câu trả lời của câu 2 thành lượt follow-up của câu 1, còn câu 2
+        # thì rỗng. Hỏng cả hai câu, và hỏng im lặng -- không lỗi, không log, chỉ sai bản ghi.
+        #
+        # GỐC nằm ở WPF, không phải ở đây: QuestionFlowRunner chỉ gọi SetResumeCheckpoint ở nhánh
+        # vào-lại và sau khi một lượt có quyết định, KHÔNG gọi khi bắt đầu câu mới. Nên từ lúc sang
+        # câu mới tới lúc xong lượt đầu, checkpoint vẫn trỏ câu trước, và `resume` khai sai câu.
+        # Bản vá thật là thêm một lời gọi ở nhánh câu mới bên đó.
+        #
+        # VÌ SAO CHỈ GHI LOG MÀ KHÔNG CHẶN -- đã cân nhắc chặn rồi bỏ:
+        # `start_question` là thứ ĐẶT `current_answer_id`. Nên trong khe giữa lúc client đặt
+        # checkpoint câu mới và lúc `question_start` tới được server, client đã trỏ câu 2 trong khi
+        # `current_answer_id` còn là câu 1. Chặn ở đó là từ chối oan một resume ĐÚNG, giữ phiên lại
+        # câu cũ -- tự tay dựng lại đúng lỗi đang chữa. Ghi log thì có bằng chứng mà không thêm
+        # đường hỏng nào.
+        #
+        # Ba giá trị dưới đây là đủ để lần ra bên nào sai: client khai gì, phiên đang giữ gì, và
+        # trạng thái bền ghi gì.
+        current_answer_id = await archive_store.get_current_answer_id(
+            self.archive_graph,
+            self.exam_attempt_id,
+        )
+        if answer_id and current_answer_id and answer_id != current_answer_id:
+            logger.warning(
+                "[question_coordinator] RESUME LECH CAU exam_attempt_id=%s client_khai=%s "
+                "phien_dang_giu=%s trang_thai_ben=%s -- van cho qua, xem chu thich",
+                self.exam_attempt_id,
+                answer_id,
+                self.active_session.answer_id if self.active_session else None,
+                current_answer_id,
+            )
+
         session = await QuestionSession.create_from_archive(
             answer_id=answer_id,
             exam_attempt_id=self.exam_attempt_id,

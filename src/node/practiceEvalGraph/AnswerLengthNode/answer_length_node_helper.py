@@ -43,6 +43,14 @@ def _format_asset_context(speaking_input: SpeakingInput) -> list[str]:
             "reasonably argued -- do not mark it off-topic or incorrect just because it "
             "diverges from this description.)"
         )
+    # Ban sao co chu dich cua evalGraph/AnswerLengthNode -- sua o day phai sua ca hai.
+    if (asset.type or "").upper() == "TEXT_PASSAGE":
+        parts.append(
+            "IMPORTANT -- this asset is a TEXT_PASSAGE the learner could read on screen while "
+            "speaking. When judging whether the answer is long enough to assess, count only what "
+            "the learner produced themselves: an answer that is mostly the passage read back "
+            "aloud is NOT a substantial answer no matter how many words it contains."
+        )
     return parts
 
 

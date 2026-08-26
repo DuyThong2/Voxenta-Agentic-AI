@@ -91,7 +91,12 @@ async def get_current_answer(request: Request, exam_attempt_id: str):
 
 
 @router.get("/attempts/{exam_attempt_id}/pending-archives")
-async def get_pending_archives(exam_attempt_id: str):
+async def get_pending_archives(
+    request: Request,
+    exam_attempt_id: str,
+    answer_id: str | None = None,
+    turn_order: int | None = None,
+):
     """Còn bao nhiêu lượt đang được lưu (upload S3 + phiên âm Azure) cho bài thi này.
 
     Client gọi TRƯỚC khi nộp bài, thay cho cửa chờ cũ nằm bên trong nó
@@ -101,9 +106,50 @@ async def get_pending_archives(exam_attempt_id: str):
     Đếm theo tiến trình, cố ý: nếu pod đã restart thì chẳng còn task nào đang chạy, và trả 0 là
     ĐÚNG -- không còn gì để chờ nữa. Không tìm thấy phiên cũng trả 0 vì cùng lý do: client
     không được kẹt ở màn nộp bài chỉ vì WebSocket đã đóng trước đó.
+
+    `answer_id` + `turn_order` (tuỳ chọn) trả thêm `archived` cho ĐÚNG lượt đó, đọc từ trạng thái
+    BỀN chứ không phải bộ đếm trong RAM. Có nó vì `pending` một mình không phân biệt được hai
+    chuyện ngược nhau: "đã lưu xong" và "chưa kịp bắt đầu" -- cả hai đều bằng 0. Lượt CUỐI luôn rơi
+    vào vế sau, nên client thấy 0 rồi nộp bài ngay, Java chấm đồng bộ, và câu cuối mất phần chấm
+    phát âm vì `audio_url` còn rỗng.
+
+    `archived` gộp HAI nguồn, vì một mình trạng thái bền không đủ:
+
+    - lượt CÓ audio: đọc từ checkpoint, nên vẫn đúng sau khi pod restart hoặc WebSocket đã đóng;
+    - lượt KHÔNG có audio (bộ đệm rỗng lúc turn_end): không bao giờ vào được checkpoint, phải hỏi
+      dấu trong RAM của kết nối. Mất dấu này khi pod restart, nhưng lúc đó `connection` cũng đã là
+      None nên trường này rơi về vế đầu -- client tự có trần chờ riêng, không kẹt.
+
+    Không truyền hai tham số này thì phản hồi y như cũ, để client bản cũ không đổi hành vi.
     """
     connection = get_attempt_connection(exam_attempt_id)
-    return {"pending": 0 if connection is None else connection.pending_archive_count}
+    payload = {"pending": 0 if connection is None else connection.pending_archive_count}
+
+    if answer_id and turn_order is not None:
+        try:
+            turn = await archive_store.wait_for_turn_once(
+                request.app.state.archive_graph, answer_id, turn_order
+            )
+            # Lượt không có bản ghi âm KHÔNG BAO GIỜ vào được `turns`: đường ghi vào đó nằm sau
+            # chỗ thoát sớm trong _archive_turn. Chỉ đọc trạng thái bền thì mọi bài thi kết thúc
+            # bằng một lượt im lặng đều bị giữ ở màn "đang lưu" cho tới hết hạn chờ.
+            #
+            # `archived` ở đây trả lời đúng câu client đang hỏi -- "còn phải chờ lượt này nữa
+            # không" -- nên hết audio để chờ cũng là xong.
+            payload["archived"] = turn is not None or (
+                connection is not None
+                and connection.is_resolved_without_audio(answer_id, turn_order)
+            )
+        except Exception:
+            # Hỏi được thì tốt, không hỏi được thì KHÔNG chặn nộp bài: bỏ trường đi để client rơi
+            # về cách đếm cũ, thay vì trả `archived=false` và giữ thí sinh ở màn "đang lưu".
+            logger.exception(
+                "[realtime] khong doc duoc trang thai luu tru exam_attempt_id=%s turn_order=%s",
+                exam_attempt_id,
+                turn_order,
+            )
+
+    return payload
 
 
 @router.get("/attempts/{exam_attempt_id}/resume-state")
@@ -168,11 +214,41 @@ async def realtime_attempt_socket(websocket: WebSocket, exam_attempt_id: str):
     socket = RealtimeSocket(websocket)
     await socket.accept()
 
+    # MỘT lượt thi chỉ được có MỘT kết nối sống. Đuổi kết nối cũ TRƯỚC khi dựng cái mới.
+    #
+    # Đo thật 2026-08-26: vòng lặp sự kiện đứng 9 giây làm WebSocket chết với mã 1006, client nối
+    # lại lúc 04:40:06 nhưng phiên cũ tới 04:40:14 mới dọn xong -- TÁM GIÂY hai kết nối cùng sống,
+    # mỗi cái một VoiceLiveClient riêng, cùng nói vào cùng một lượt thi. Thí sinh nghe hai câu hỏi
+    # chồng lên nhau.
+    #
+    # Phải đuổi TRƯỚC `AttemptConnection(...)` và `.start()`: `start()` mở phiên Azure Voice Live,
+    # nên dựng trước rồi mới đuổi vẫn có một khoảnh khắc hai phiên Voice Live cùng tồn tại.
+    #
+    # `await previous.close()` chứ không `spawn`: phải chờ dọn xong mới nhận lượt tiếp, nếu không
+    # đúng vấn đề cũ chỉ bị đẩy lùi vài trăm mili giây.
+    previous = get_attempt_connection(exam_attempt_id)
+    carried_delivery_state = None
+    if previous is not None:
+        logger.warning(
+            "[realtime] evicting stale connection exam_attempt_id=%s -- ket noi moi den khi cai cu "
+            "chua dong",
+            exam_attempt_id,
+        )
+        carried_delivery_state = previous.export_delivery_state()
+        unregister_attempt_connection(previous)
+        try:
+            await previous.close()
+        except Exception:
+            logger.exception(
+                "[realtime] failed to close stale connection exam_attempt_id=%s", exam_attempt_id
+            )
+
     connection = AttemptConnection(
         exam_attempt_id=exam_attempt_id,
         socket=socket,
         archive_graph=websocket.app.state.archive_graph,
         text_followup_graph=websocket.app.state.text_followup_graph,
+        delivery_state=carried_delivery_state,
     )
 
     try:

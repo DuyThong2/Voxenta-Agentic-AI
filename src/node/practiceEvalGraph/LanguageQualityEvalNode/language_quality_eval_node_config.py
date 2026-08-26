@@ -43,6 +43,24 @@ def _format_asset_context(speaking_input: SpeakingInput) -> list[str]:
             "This is factual context about the asset, not a model answer. A different "
             "interpretation remains valid when it engages with the asset and is reasonably argued."
         )
+    # Ban sao co chu dich cua evalGraph/LanguageQualityEvalNode -- xem khoi chu thich dai o do ve
+    # ly do TEXT_PASSAGE phai tach rieng. Giu hai duong thi/luyen doc lap la co y (doi mot ben
+    # khong duoc keo theo ben kia), nen sua o day phai sua ca hai.
+    if (asset.type or "").upper() == "TEXT_PASSAGE":
+        parts.append(
+            "IMPORTANT -- this asset is a TEXT_PASSAGE, which the learner could read on screen "
+            "while speaking. Unlike an image or audio clip, the wording above was AVAILABLE to "
+            "them. Score the learner's OWN language, not the passage's:\n"
+            "- Stretches lifted near-verbatim from the passage are NOT evidence of the learner's "
+            "vocabulary or grammatical range. Discount them when judging lexical/grammatical "
+            "scores, and say so in the feedback.\n"
+            "- Reformulating a passage idea in the learner's own words IS evidence of range, and "
+            "is worth more than reproducing the original phrasing.\n"
+            "- Do not penalise reuse of unavoidable topic keywords (the subject noun, proper "
+            "names, technical terms). Only sustained borrowed phrasing counts.\n"
+            "- Judge coherence on how the answer is BUILT (position stated, reasons ordered, "
+            "examples attached), not on whether it echoes the passage's structure."
+        )
     return parts
 
 

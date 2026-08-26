@@ -43,6 +43,31 @@ def _format_asset_context(speaking_input: SpeakingInput) -> list[str]:
             "This is factual context about the asset, not a model answer. A different "
             "interpretation remains valid when it engages with the asset and is reasonably argued."
         )
+    # TEXT_PASSAGE nguoc han cac loai con lai, va cham nham o day la cham SAI theo huong ROI RA.
+    #
+    # Voi IMAGE/AUDIO/VIDEO, hoc sinh KHONG duoc doc phan chu -- transcript/description chi ton tai
+    # cho AI. Nen mo ta lai noi dung chinh la nhiem vu, va trung tu ngu voi phan mo ta la binh
+    # thuong.
+    #
+    # Voi TEXT_PASSAGE thi doan van nam ngay TREN MAN HINH cua hoc sinh trong luc noi. Cheo lai
+    # nguyen cau khong chung to nang luc ngon ngu nao ca -- do la doc chinh ta. Khong tach bach
+    # dieu nay thi mot bai chi doc lai doan van van an diem tu vung/ngu phap cao, con bai tu dat
+    # cau bang von tu that cua minh lai thua -- dung nguoc voi thu ky thi nay do.
+    if (asset.type or "").upper() == "TEXT_PASSAGE":
+        parts.append(
+            "IMPORTANT -- this asset is a TEXT_PASSAGE, which the student could read on screen "
+            "while speaking. Unlike an image or audio clip, the wording above was AVAILABLE to "
+            "them. Score the student's OWN language, not the passage's:\n"
+            "- Stretches lifted near-verbatim from the passage are NOT evidence of the student's "
+            "vocabulary or grammatical range. Discount them when judging lexical/grammatical "
+            "scores, and say so in the feedback.\n"
+            "- Reformulating a passage idea in the student's own words IS evidence of range, and "
+            "is worth more than reproducing the original phrasing.\n"
+            "- Do not penalise a student for reusing unavoidable topic keywords (the subject "
+            "noun, proper names, technical terms). Only sustained borrowed phrasing counts.\n"
+            "- Judge coherence on how the answer is BUILT (position stated, reasons ordered, "
+            "examples attached), not on whether it echoes the passage's structure."
+        )
     return parts
 
 

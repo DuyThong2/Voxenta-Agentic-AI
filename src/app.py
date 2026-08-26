@@ -88,6 +88,41 @@ async def lifespan(app: FastAPI):
     logger.info("[app] Starting up...")
     logger.info(f"[langsmith] {get_langsmith_status()}")
 
+    # Bắt thủ phạm giữ vòng lặp sự kiện. Tắt mặc định, bật bằng biến môi trường.
+    #
+    # VÌ SAO CẦN: đo thật 2026-08-26, vòng lặp đứng 9 giây giữa một phiên thi. Hệ quả dây chuyền:
+    # Kafka loại toàn bộ consumer vì quá hạn heartbeat (session.timeout.ms = 10s), WebSocket chết
+    # với mã 1006, thí sinh thấy "mất kết nối", và mỗi lần nối lại còn đốt thêm một lượt của câu
+    # hỏi. Nhìn từ log thường thì chỉ thấy một khoảng trống -- không có tên hàm nào để lần theo.
+    #
+    # VÌ SAO KHÔNG DÙNG THẲNG PYTHONASYNCIODEBUG=1: nó bật chế độ gỡ lỗi với ngưỡng cứng 0.1 giây.
+    # Ứng dụng này chạy YOLO liên tục nên sẽ vượt ngưỡng đó suốt, log ngập và chôn mất tín hiệu
+    # thật. Ở đây cho khai ngưỡng, đặt 1.0-2.0 giây là chỉ còn những lần đáng ngờ thật.
+    #
+    # uvloop có tôn trọng cả `set_debug` lẫn `slow_callback_duration` (đang chạy uvloop -- xem
+    # traceback `uvloop/cbhandles.pyx` trong log sự cố).
+    #
+    # ⚠️ Chế độ gỡ lỗi có phí tổn (theo dõi coroutine, kiểm tra thêm mỗi callback). Bật để chẩn
+    # đoán, tắt lại khi xong -- đừng để chạy dài hạn trên môi trường thi thật.
+    slow_callback_seconds = os.getenv("ASYNCIO_SLOW_CALLBACK_SECONDS")
+    if slow_callback_seconds:
+        try:
+            threshold = float(slow_callback_seconds)
+        except ValueError:
+            logger.warning(
+                "[app] ASYNCIO_SLOW_CALLBACK_SECONDS=%r khong phai so, bo qua",
+                slow_callback_seconds,
+            )
+        else:
+            loop = asyncio.get_running_loop()
+            loop.set_debug(True)
+            loop.slow_callback_duration = threshold
+            logger.warning(
+                "[app] asyncio debug BAT, nguong callback cham = %.2fs. Co phi ton hieu nang, "
+                "nho tat lai sau khi chan doan xong.",
+                threshold,
+            )
+
     # 1) Setup checkpointer
     with psycopg.connect(pg_settings.PG_URI, autocommit=True) as conn:
         checkpointer_setup = PostgresSaver(conn)

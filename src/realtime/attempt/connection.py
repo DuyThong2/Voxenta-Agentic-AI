@@ -4,6 +4,7 @@ import asyncio
 import logging
 import tempfile
 import wave
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
@@ -21,6 +22,20 @@ logger = logging.getLogger(__name__)
 # Nhip tim 5 giay: client coi la mat ket noi khi qua 3 nhip (15 giay) khong nghe thay gi. Dat thua
 # du so voi tan suat nay de mot goi ping tre khong lam dong ho dung oan.
 HEARTBEAT_INTERVAL_SECONDS = 5
+
+
+@dataclass(frozen=True)
+class DeliveryState:
+    """Thứ cần mang sang khi một kết nối bị thay bằng kết nối mới của cùng lượt thi.
+
+    CHỈ sống trong tiến trình. Nếu client nối lại trúng pod khác (agents chạy nhiều replica, và
+    sticky session của ALB dựa vào cookie nên client không phải trình duyệt sẽ trượt) thì trạng
+    thái này mất và câu hỏi vẫn có thể bị phát lại một lần. Bản vá bền vững cần client gửi kèm
+    `last_heard_turn_order` trong bản tin resume -- chỉ client mới biết cái gì thật sự phát ra loa.
+    """
+
+    sequence: int
+    last_delivered_prompt: Optional[str]
 
 
 def _write_turn_wav(pcm16_bytes: bytes) -> Optional[str]:
@@ -50,6 +65,7 @@ class AttemptConnection:
         socket: RealtimeSocket,
         archive_graph: Any,
         text_followup_graph: Any,
+        delivery_state: Optional["DeliveryState"] = None,
     ) -> None:
         self.exam_attempt_id = exam_attempt_id
         self.socket = socket
@@ -59,7 +75,20 @@ class AttemptConnection:
             text_followup_graph=text_followup_graph,
         )
         self.voice_live_client = VoiceLiveClient(on_event=self._on_voice_live_event)
-        self._utterance_sequence = 0
+        # Nối tiếp bộ đếm của kết nối vừa bị đuổi, KHÔNG bắt đầu lại từ 0.
+        #
+        # `sequence` là thứ duy nhất client có để loại câu nói trùng. Đếm lại từ 1 ở mỗi kết nối
+        # nghĩa là cùng một câu tới client dưới dạng `sequence=1` ở kết nối A và `sequence=1` ở
+        # kết nối B -- client không có cách nào phân biệt bản trùng với câu mới. Đo thật
+        # 2026-08-26: đúng tình huống đó, hai câu hỏi giống hệt cùng mang sequence=1.
+        self._utterance_sequence = delivery_state.sequence if delivery_state else 0
+        # Câu đã GỬI ĐI THÀNH CÔNG gần nhất, để lần resume sau không phát lại y nguyên.
+        #
+        # Ghi sau khi `send_json` trả về, KHÔNG ghi lúc sắp gửi: ca hỏng thật là `send_json` ném
+        # ClientDisconnected -- câu đó chưa từng tới tai thí sinh nên PHẢI được phát lại.
+        self._last_delivered_prompt: Optional[str] = (
+            delivery_state.last_delivered_prompt if delivery_state else None
+        )
         # Chính những byte đang đẩy sang Voice Live, giữ lại một bản cho tới hết lượt.
         #
         # Trước đây hàm dưới chuyển tiếp rồi quên luôn, nên khi cần audio để phiên âm lại thì
@@ -488,9 +517,36 @@ class AttemptConnection:
             next_prompt = decision.get("next_prompt_text") or (
                 None if decision.get("should_continue") else CLOSING_REPLY
             )
-            self._speak(next_prompt)
         else:
-            self._speak(result.prompt_to_speak)
+            next_prompt = result.prompt_to_speak
+
+        # Resume KHÔNG được phát lại câu thí sinh đã nghe rồi.
+        #
+        # `recovered_decision` không phải câu do LLM sinh mới -- nó là quyết định ĐÃ LƯU của lượt
+        # cuối (turn_processor.recover_pending, nhánh dự phòng). Nhánh cũ ở đây gọi `_speak(...)`
+        # vô điều kiện, nên mỗi lần nối lại là phát lại nguyên văn câu cũ. Đo thật 2026-08-26: hai
+        # lần nối lại trong CÙNG một giây -> cùng một câu hỏi phát hai lần, cách nhau chưa tới một
+        # giây, chồng tiếng lên nhau.
+        #
+        # Hậu quả nặng hơn phần âm thanh: mỗi vòng như vậy đẩy `turn_order` lên, và ngạch lượt của
+        # câu hỏi bị đốt hết (2 -> 3 -> 4 -> "Thank you for your answer. Let's move on.") trong khi
+        # thí sinh CHƯA trả lời được câu nào. Mất điểm, không phải chỉ khó chịu.
+        if next_prompt and next_prompt == self._last_delivered_prompt:
+            logger.info(
+                "[attempt_connection] bo qua phat lai cau da gui exam_attempt_id=%s text=%r",
+                self.exam_attempt_id,
+                next_prompt,
+            )
+            return
+
+        self._speak(next_prompt)
+
+    def export_delivery_state(self) -> DeliveryState:
+        """Ảnh chụp để kết nối thay thế nối tiếp, xem DeliveryState."""
+        return DeliveryState(
+            sequence=self._utterance_sequence,
+            last_delivered_prompt=self._last_delivered_prompt,
+        )
 
     def _speak(self, text: Optional[str], *, slow: bool = False) -> None:
         self._utterance_sequence += 1
@@ -516,6 +572,11 @@ class AttemptConnection:
                 "rate": "-20%" if slow else None,
             }
         )
+        # Chỉ ghi nhận SAU khi gửi trót lọt. `send_json` ném ClientDisconnected khi socket đã chết,
+        # và câu đó chưa từng tới thí sinh -- đánh dấu ở đây thì lần resume sau sẽ im lặng bỏ qua
+        # đúng câu cần phát lại. Đây là lý do dòng này nằm sau `await`, không phải trước.
+        if text:
+            self._last_delivered_prompt = text
 
     async def _on_voice_live_event(self, event: VoiceLiveServerEvent) -> None:
         routed = self.questions.route_voice_event(event)

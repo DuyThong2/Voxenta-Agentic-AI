@@ -214,11 +214,41 @@ async def realtime_attempt_socket(websocket: WebSocket, exam_attempt_id: str):
     socket = RealtimeSocket(websocket)
     await socket.accept()
 
+    # MỘT lượt thi chỉ được có MỘT kết nối sống. Đuổi kết nối cũ TRƯỚC khi dựng cái mới.
+    #
+    # Đo thật 2026-08-26: vòng lặp sự kiện đứng 9 giây làm WebSocket chết với mã 1006, client nối
+    # lại lúc 04:40:06 nhưng phiên cũ tới 04:40:14 mới dọn xong -- TÁM GIÂY hai kết nối cùng sống,
+    # mỗi cái một VoiceLiveClient riêng, cùng nói vào cùng một lượt thi. Thí sinh nghe hai câu hỏi
+    # chồng lên nhau.
+    #
+    # Phải đuổi TRƯỚC `AttemptConnection(...)` và `.start()`: `start()` mở phiên Azure Voice Live,
+    # nên dựng trước rồi mới đuổi vẫn có một khoảnh khắc hai phiên Voice Live cùng tồn tại.
+    #
+    # `await previous.close()` chứ không `spawn`: phải chờ dọn xong mới nhận lượt tiếp, nếu không
+    # đúng vấn đề cũ chỉ bị đẩy lùi vài trăm mili giây.
+    previous = get_attempt_connection(exam_attempt_id)
+    carried_delivery_state = None
+    if previous is not None:
+        logger.warning(
+            "[realtime] evicting stale connection exam_attempt_id=%s -- ket noi moi den khi cai cu "
+            "chua dong",
+            exam_attempt_id,
+        )
+        carried_delivery_state = previous.export_delivery_state()
+        unregister_attempt_connection(previous)
+        try:
+            await previous.close()
+        except Exception:
+            logger.exception(
+                "[realtime] failed to close stale connection exam_attempt_id=%s", exam_attempt_id
+            )
+
     connection = AttemptConnection(
         exam_attempt_id=exam_attempt_id,
         socket=socket,
         archive_graph=websocket.app.state.archive_graph,
         text_followup_graph=websocket.app.state.text_followup_graph,
+        delivery_state=carried_delivery_state,
     )
 
     try:

@@ -72,6 +72,21 @@ class AttemptConnection:
         # Cửa chờ này trước đây nằm ở WPF (TurnArchiveQueue.DrainAsync). Từ khi audio do Python
         # lưu, hàng đợi bên WPF luôn rỗng nên chờ ở đó là chờ hư không: việc thật chạy ở đây.
         self._pending_archives: set = set()
+        # Các lượt đã lưu trữ xong nhưng KHÔNG có bản ghi âm (bộ đệm rỗng lúc turn_end).
+        #
+        # Có mặt ở đây vì client cần phân biệt "chưa lưu xong" với "vĩnh viễn không có audio", mà
+        # trạng thái bền không trả lời được: đường ghi vào `turns` nằm SAU chỗ thoát sớm trong
+        # _archive_turn, nên lượt kiểu này không bao giờ xuất hiện ở đó. Không có dấu này thì
+        # client hỏi tới hết hạn rồi mới chịu nộp bài -- xem get_pending_archives.
+        #
+        # KHÔNG ghi vào `turns` để đánh dấu: pha 2 của turn_publisher.publish_turn_if_new đang
+        # chờ đúng danh sách đó rồi publish ĐÈ lên bản sơ bộ, nên một lượt tổng hợp không audio
+        # sẽ ghi đè transcript realtime đang tốt bằng chuỗi rỗng (ca đã đo: 15 giây, 37 từ,
+        # audio_url null). Mất dữ liệu thật, đổi lấy việc đỡ chờ -- không đáng.
+        #
+        # Khoá theo (answer_id, turn_order) chứ không riêng turn_order: một kết nối chạy qua
+        # nhiều câu hỏi, mà turn_order đếm lại từ 1 ở mỗi câu.
+        self._turns_without_audio: set[tuple[str, int]] = set()
         # Nhip tim gui xuong client. Xem _heartbeat_loop.
         #
         # GIU THAM CHIEU vao self: event loop chi giu tham chieu YEU toi task, nen mot task chi
@@ -81,6 +96,15 @@ class AttemptConnection:
     @property
     def pending_archive_count(self) -> int:
         return len(self._pending_archives)
+
+    def is_resolved_without_audio(self, answer_id: str, turn_order: int) -> bool:
+        """Lượt này đã lưu trữ xong và chắc chắn KHÔNG có bản ghi âm hay chưa.
+
+        Chỉ đúng trong tiến trình này; pod restart là mất. Chấp nhận được vì cùng lúc đó
+        get_attempt_connection cũng trả None và endpoint bỏ hẳn phần trả lời -- client rơi về
+        cách đếm cũ chứ không kẹt.
+        """
+        return (answer_id, turn_order) in self._turns_without_audio
 
     async def start(self) -> None:
         await self.voice_live_client.start()
@@ -277,6 +301,9 @@ class AttemptConnection:
                 turn_order,
                 duration_seconds,
             )
+            # Đánh dấu TRƯỚC khi thoát: từ đây trở đi lượt này chắc chắn không còn audio nào tới
+            # nữa, nên client không được chờ thêm vì nó. Xem _turns_without_audio.
+            self._turns_without_audio.add((session.answer_id, turn_order))
             return
 
         try:

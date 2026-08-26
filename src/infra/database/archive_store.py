@@ -56,10 +56,49 @@ def archive_config(answer_id: str) -> dict:
 # recognition (fixing a truncation bug in recognize_once()), so archival runs proportionally
 # to real audio length instead of near-instant -- a long turn can take tens of seconds to
 # actually land in Postgres, which the original ~6.6s total ceiling did not anticipate.
+# Đuôi CHIA ĐỀU 2 giây thay vì leo tới 20, vì cái đuôi cũ lệch pha với client.
+#
+# Client chờ PostArchiveSettleSeconds = 3 giây sau khi thấy lượt đã lưu rồi mới nộp bài, mà Java
+# chấm ĐỒNG BỘ ngay trong lần PATCH đó. Với đuôi cũ, vòng dò có thể đang ngủ giữa một nhịp 10-20
+# giây đúng lúc audio vào checkpoint, nên publish muộn hơn lúc nộp bài -- dòng dữ liệu tồn tại
+# nhưng không bao giờ được chấm. Đúng triệu chứng "câu cuối chấm được 3 tiêu chí, thiếu mỗi phát
+# âm": 3 tiêu chí kia đi ở pha 1 ngay lập tức, phát âm cần audio ở pha 2.
+#
+# Trần 2 giây < 3 giây của client, nên hai bên khớp nhau. Rẻ hơn nâng settle -- nâng settle là bắt
+# MỌI thí sinh chờ thêm, kể cả tuyệt đại đa số ca lưu nhanh.
+#
+# TÁM MỤC ĐẦU GIỮ NGUYÊN TỪNG CHỮ (xem cảnh báo ngay trên): chúng vốn đã ≤ 1.5 giây nên trần này
+# không đụng tới chúng. Ca lưu nhanh -- tức gần hết -- chạy trọn trong tám mục đó và hành vi không
+# đổi một chút nào.
+#
+# Tổng vẫn ~90 giây như cũ (6.6 + 84.0), chỉ chia nhỏ ra: 51 lần đọc thay vì 18.
+#
+# CHI PHÍ Ở CA IM LẶNG, đã cân nhắc: lượt không có audio KHÔNG BAO GIỜ vào `turns` (_archive_turn
+# thoát sớm), nên vòng dò luôn chạy cạn cả bảng rồi mới bỏ cuộc. Chia nhỏ làm nó tốn 51 lần đọc
+# thay vì 18 cho một thứ chắc chắn vô vọng. Vẫn nhận: trải trên 90 giây là chưa tới 0,6 lần
+# đọc/giây cho mỗi lượt im lặng, và hành vi không đổi (vẫn trả None, vẫn log đúng cảnh báo cũ,
+# bản sơ bộ đã sang Java từ pha 1). Muốn bỏ hẳn phần lãng phí này thì phải cho pha 2 biết lượt nào
+# vô vọng -- hiện dấu đó nằm trong RAM của AttemptConnection, mà turn/processor.py không với tới
+# được; bắc cầu sang phải thêm khoá mới vào checkpoint, đắt hơn nhiều so với thứ tiết kiệm được.
 _ARCHIVE_CATCHUP_RETRY_DELAYS_SECONDS = [
     0.3, 0.3, 0.5, 0.5, 1.0, 1.0, 1.5, 1.5,
-    2.0, 3.0, 5.0, 5.0, 10.0, 10.0, 15.0, 15.0, 20.0,
+    *([2.0] * 42),
 ]
+
+
+async def wait_for_turn_once(archive_graph, answer_id: str, turn_order: int) -> dict | None:
+    """Doc MOT LAN xem luot da duoc luu tru chua -- khong ngu, khong thu lai.
+
+    Tach khoi wait_for_turn vi hai noi goi can hai hanh vi nguoc nhau: turn_publisher cho duoc
+    (no chay nen), con endpoint HTTP thi khong -- wait_for_turn ngu toi ~90 giay, goi trong mot
+    request la treo ca request do.
+
+    Tra ve ban ghi luot neu da luu tru, None neu chua. "Da luu tru" = luot da co mat trong `turns`
+    cua trang thai ben, tuc audio da len xong.
+    """
+    archived_state = await aget_state(archive_graph, archive_config(answer_id))
+    turns = (archived_state.values or {}).get("turns") or []
+    return next((t for t in turns if (t or {}).get("turn_order") == turn_order), None)
 
 
 async def wait_for_turn(archive_graph, answer_id: str, turn_order: int) -> dict | None:

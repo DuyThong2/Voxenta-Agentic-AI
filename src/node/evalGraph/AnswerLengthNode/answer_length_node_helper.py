@@ -43,6 +43,17 @@ def _format_asset_context(speaking_input: SpeakingInput) -> list[str]:
             "reasonably argued -- do not mark it off-topic or incorrect just because it "
             "diverges from this description.)"
         )
+    # Xem khoi chu thich dai trong LanguageQualityEvalNode/language_quality_eval_node_config.py
+    # ve ly do TEXT_PASSAGE phai tach rieng. O nut nay hau qua khac: no do DO DAI cau tra loi, ma
+    # doan van nam san tren man hinh nen mot bai doc lai nguyen doan van se dat moi nguong do dai
+    # -- dai that, nhung khong phai hoc sinh noi.
+    if (asset.type or "").upper() == "TEXT_PASSAGE":
+        parts.append(
+            "IMPORTANT -- this asset is a TEXT_PASSAGE the student could read on screen while "
+            "speaking. When judging whether the answer is long enough to assess, count only what "
+            "the student produced themselves: an answer that is mostly the passage read back "
+            "aloud is NOT a substantial answer no matter how many words it contains."
+        )
     return parts
 
 

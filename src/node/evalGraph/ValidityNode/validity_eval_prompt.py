@@ -65,6 +65,21 @@ answer that engages with the asset but reaches a DIFFERENT conclusion/feeling/th
 than the asset description is still ON-TOPIC. Only trigger off_topic_full if the
 answer shows no genuine connection to the asset/question at all.
 
+When the asset type is TEXT_PASSAGE, the passage was visible to the student while they
+spoke, so on-topic judgement works differently from image/audio assets:
+- DISAGREEING with the passage is fully on-topic. These questions normally ask "do you
+  agree?", so a well-argued rejection of the passage's claim is a correct answer, not a
+  departure from the topic. Never trigger off_topic_full merely because the student's
+  position is the opposite of the passage's.
+- Reading the passage back, or paraphrasing it without taking any position, is ON-TOPIC
+  but hollow. Do NOT trigger off_topic_full for it -- let content/coherence scoring mark
+  it down. Off-topic and empty-but-relevant are different failures.
+- Answering about a subject the passage never raises IS off_topic_full, even if the
+  student opens with "I agree with the passage". Judge the body of the answer against
+  what the passage is actually about, not the opening sentence. (Measured 2026-08-26: an
+  answer opening "I think I agree with the passage" then arguing about lifelong learning,
+  against a passage on personal environmental responsibility -- correctly rejected.)
+
 Key principle: When in doubt, do NOT trigger off_topic_full.
 Let coherence/content scoring handle weak or underdeveloped answers later.
 

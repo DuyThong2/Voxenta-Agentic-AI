@@ -90,6 +90,50 @@ async def broadcast_event(session_id: str, event: dict):
         await queue.put(event)
 
 
+def is_current_connection(session_id: str, pc: RTCPeerConnection) -> bool:
+    """``pc`` có còn là kết nối ĐANG ĐƯỢC ĐĂNG KÝ cho phiên này không.
+
+    Tồn tại để một kết nối ĐÃ BỊ THAY THẾ không kéo theo kết nối thay thế nó khi nó chết. Khoá phiên
+    ở đây là ``exam_attempt_id`` (xem controller/webrtc.py), nên máy thi nối lại sau khi rớt mạng dùng
+    LẠI ĐÚNG khoá đó -- và handler ``connectionstatechange`` của peer cũ vẫn còn sống, vẫn trỏ vào
+    cùng ``session_id``. Peer cũ chuyển sang ``disconnected`` sau khi peer mới đã đăng ký là
+    ``cleanup_session`` chạy trên khoá đó và đóng nhầm peer MỚI.
+
+    Thứ tự đó không phải trường hợp hiếm mà là trường hợp THƯỜNG: máy thi là bên phát hiện mất mạng
+    trước (nó đang chủ động theo dõi) nên nó nối lại chỉ sau một hai giây, trong khi aiortc phía server
+    còn phải chờ ICE consent hết hạn mới biết. Không có chốt này thì bản vá nối lại phía máy thi tạo ra
+    một vòng lặp: nối lại được, vài giây sau bị peer cũ giết, lại nối lại.
+
+    Cùng một ý với ``RemoveIfSame`` bên vox-streaming (transport/webrtc/handler.go).
+    """
+    return session_map.get(session_id) is pc
+
+
+async def evict_previous_connection(session_id: str) -> bool:
+    """Đóng kết nối cũ của phiên này, GIỮ NGUYÊN sổ sự kiện và danh tính.
+
+    Khác ``cleanup_session`` ở đúng chỗ quan trọng nhất: nối lại giữa bài KHÔNG phải là kết thúc
+    phiên. Chạy dọn dẹp đầy đủ ở đây sẽ bắn ``SESSION_ENDED`` cho các SSE đang nghe, xoá sổ sự kiện và
+    xoá luôn trạng thái streak/cooldown của alert policy -- tức là mỗi lần rớt mạng lại reset bộ nhớ
+    chống trùng lặp cảnh báo, và cảnh báo cũ sẽ bắn lại từ đầu.
+
+    Pop TRƯỚC khi đóng, có chủ ý: ``close()`` kích hoạt ``connectionstatechange`` của chính peer cũ, và
+    lúc đó ``is_current_connection`` phải đã trả về False để nó tự bỏ qua.
+    """
+    previous = session_map.pop(session_id, None)
+    if previous is None:
+        return False
+
+    pcs.discard(previous)
+    try:
+        await previous.close()
+    except Exception:
+        logger.exception("[WEBRTC] Đóng kết nối cũ thất bại session=%s", session_id)
+
+    logger.info("[WEBRTC] Đã đuổi kết nối cũ của session %s để nhận kết nối mới", session_id)
+    return True
+
+
 async def cleanup_session(session_id: str, *, on_cleanup: Optional[Callable[[str], None]] = None):
     """Clean up a session's peer connection and resources.
 

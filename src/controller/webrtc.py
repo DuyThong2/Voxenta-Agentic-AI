@@ -52,15 +52,6 @@ async def offer(request: Request):
     WebRTC signaling: browser sends SDP offer, server returns SDP answer.
     Creates a new proctoring session with YOLO video analysis.
     """
-    if len(proctoring_session.pcs) >= MAX_CONNECTIONS:
-        return JSONResponse(
-            status_code=503,
-            content={
-                "error": f"Max connections ({MAX_CONNECTIONS}) reached. Try again later.",
-                "active_connections": len(proctoring_session.pcs),
-            },
-        )
-
     params = await request.json()
 
     if "sdp" not in params or "type" not in params:
@@ -86,6 +77,34 @@ async def offer(request: Request):
     #   vào một kênh Redis không màn hình nào nghe, nhánh durable thì Java tra không ra phiên thi
     #   rồi bỏ qua. Cảnh báo vẫn được phát đủ, chỉ là không tới được ai.
     session_id = str(params.get("exam_attempt_id") or uuid.uuid4())
+
+    # Đuổi kết nối cũ TRƯỚC khi dựng cái mới -- cùng lý do và cùng thứ tự với
+    # realtime_controller.py. Máy thi nối lại sau khi rớt mạng gửi lại ĐÚNG exam_attempt_id, tức đúng
+    # session_id này, nên nếu không đuổi thì hai peer cùng sống dưới một khoá: peer cũ vẫn giữ handler
+    # trỏ vào khoá đó và sẽ dọn dẹp NHẦM peer mới khi nó chết. Xem is_current_connection.
+    #
+    # Giữ sổ sự kiện và trạng thái alert policy (evict_previous_connection, không phải
+    # cleanup_session): nối lại giữa bài không phải là kết thúc phiên thi.
+    reconnected = await proctoring_session.evict_previous_connection(session_id)
+
+    # Kiểm tra hạn mức SAU khi đuổi: peer đã chết của chính thí sinh này vẫn nằm trong `pcs` cho tới
+    # lúc đó, nên đếm trước khi đuổi có thể từ chối đúng cái kết nối đang đi sửa một sự cố mạng --
+    # hỏng đúng vào lúc hệ thống đang bận nhất.
+    if len(proctoring_session.pcs) >= MAX_CONNECTIONS:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": f"Max connections ({MAX_CONNECTIONS}) reached. Try again later.",
+                "active_connections": len(proctoring_session.pcs),
+            },
+        )
+
+    logger.info(
+        "[WEBRTC] %s session %s",
+        "Nối lại" if reconnected else "Mở",
+        session_id,
+    )
+
     pc = RTCPeerConnection(configuration=build_ice_servers())
     proctoring_session.pcs.add(pc)
     proctoring_session.session_map[session_id] = pc
@@ -103,8 +122,21 @@ async def offer(request: Request):
     @pc.on("connectionstatechange")
     async def on_connectionstatechange():
         logger.info("[WEBRTC] Session %s state: %s", session_id, pc.connectionState)
-        if pc.connectionState in ("failed", "closed", "disconnected"):
-            await _cleanup_session(session_id)
+        if pc.connectionState not in ("failed", "closed", "disconnected"):
+            return
+
+        # Chốt danh tính: chỉ peer ĐANG được đăng ký mới được phép dọn dẹp khoá này. Peer đã bị
+        # thay thế chết sau đó là chuyện bình thường -- nó vừa bị đuổi -- và nó KHÔNG được kéo theo
+        # peer đang thay nó phục vụ. Xem is_current_connection.
+        if not proctoring_session.is_current_connection(session_id, pc):
+            logger.info(
+                "[WEBRTC] Bỏ qua teardown của kết nối đã bị thay thế session=%s state=%s",
+                session_id,
+                pc.connectionState,
+            )
+            return
+
+        await _cleanup_session(session_id)
 
     @pc.on("track")
     def on_track(track):
